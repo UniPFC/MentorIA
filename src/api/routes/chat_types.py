@@ -12,6 +12,8 @@ from src.api.schemas.chat_type import (
     ChatTypeResponse,
     ChatTypeListResponse
 )
+from src.api.dependencies import get_current_active_user
+from shared.database.models.user import User
 from shared.qdrant.client import QdrantManager
 from config.logger import logger
 
@@ -21,7 +23,8 @@ router = APIRouter(prefix="/chat-types", tags=["chat-types"])
 @router.post("/", response_model=ChatTypeResponse, status_code=status.HTTP_201_CREATED)
 def create_chat_type(
     chat_type_data: ChatTypeCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Create a new ChatType.
@@ -44,7 +47,7 @@ def create_chat_type(
             name=chat_type_data.name,
             description=chat_type_data.description,
             is_public=chat_type_data.is_public,
-            owner_id=chat_type_data.owner_id,
+            owner_id=current_user.id,  # Usar ID do usuário autenticado
             collection_name=collection_name
         )
         
@@ -76,7 +79,8 @@ def list_chat_types(
     owner_id: int = None,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     List all chat types with optional filtering.

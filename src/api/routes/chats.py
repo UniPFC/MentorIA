@@ -9,6 +9,7 @@ from shared.database.session import get_db
 from shared.database.models.chat import Chat
 from shared.database.models.chat_type import ChatType
 from shared.database.models.message import Message, MessageRole
+from shared.database.models.user import User
 from src.api.schemas.chat import (
     ChatCreate,
     ChatResponse,
@@ -17,6 +18,7 @@ from src.api.schemas.chat import (
     SendMessageResponse,
     MessageResponse
 )
+from src.api.dependencies import get_current_active_user
 from config.logger import logger
 
 router = APIRouter(prefix="/chats", tags=["chats"])
@@ -57,7 +59,8 @@ def verify_chat_ownership(chat_id: int, user_id: int, db: Session) -> Chat:
 @router.post("/", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
 def create_chat(
     chat_data: ChatCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Create a new chat session.
@@ -73,7 +76,7 @@ def create_chat(
         
         # Create chat
         chat = Chat(
-            user_id=chat_data.user_id or 1,  # Temporary default user
+            user_id=current_user.id,  # Usar ID do usuário autenticado
             chat_type_id=chat_data.chat_type_id,
             title=chat_data.title
         )

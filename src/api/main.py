@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from config.logger import logger
 from shared.database.migration import run_migrations
-from src.api.routes import chat_types, chats, upload, jobs
+from src.api.routes import chat_types, chats, upload, jobs, auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,6 +19,7 @@ app = FastAPI(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(chat_types.router, prefix="/api/v1")
 app.include_router(chats.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
