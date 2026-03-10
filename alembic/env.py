@@ -13,6 +13,7 @@ from shared.database.models.chat import Chat
 from shared.database.models.message import Message
 from shared.database.models.knowledge_chunk import KnowledgeChunk
 from shared.database.models.ingestion_job import IngestionJob
+from shared.database.models.user_token import UserToken
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -5,7 +5,7 @@ import os
 class Settings(BaseSettings):
 
     # Project Configuration
-    PROJECT_NAME: str = "XXX"
+    PROJECT_NAME: str = "Techstein RAG Portal"
     LOG_LEVEL: str
     
     # Directories

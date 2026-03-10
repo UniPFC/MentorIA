@@ -5,12 +5,13 @@ Pydantic schemas for ingestion job endpoints.
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 
 class IngestionJobResponse(BaseModel):
     """Schema for ingestion job response."""
-    id: int
-    chat_type_id: int
+    id: UUID
+    chat_type_id: UUID
     filename: str
     status: str
     total_chunks: int
@@ -26,7 +27,7 @@ class IngestionJobResponse(BaseModel):
 
 class UploadResponseAsync(BaseModel):
     """Schema for async upload response."""
-    job_id: int
-    chat_type_id: int
+    job_id: UUID
+    chat_type_id: UUID
     message: str
     status_url: str

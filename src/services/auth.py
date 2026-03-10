@@ -4,6 +4,8 @@ from jose import JWTError, jwt
 import hashlib
 import base64
 import bcrypt
+import uuid
+from uuid import UUID
 from sqlalchemy.orm import Session
 from config.settings import settings
 from shared.database.models.user import User
@@ -108,26 +110,24 @@ class AuthService:
             logger.warning(f"JWT error: {str(e)}")
             return None
 
-    def authenticate_user(self, db: Session, username: str, password: str) -> Optional[User]:
-        """Autentica usuário com username/email e senha"""
-        # Buscar por username ou email
-        user = db.query(User).filter(
-            (User.username == username) | (User.email == username)
-        ).first()
+    def authenticate_user(self, user_repo: Any, email: str, password: str) -> Optional[User]:
+        """Autentica usuário com email e senha"""
+        # Buscar por email
+        user = user_repo.get_by_email(email)
         
         if not user:
-            logger.warning(f"User not found: {username}")
+            logger.warning(f"User not found: {email}")
             return None
         
         if not self.verify_password(password, user.password_hash):
-            logger.warning(f"Invalid password for user: {username}")
+            logger.warning(f"Invalid password for user: {email}")
             return None
             
-        logger.info(f"User authenticated successfully: {username}")
+        logger.info(f"User authenticated successfully: {email}")
         return user
 
-    def create_user_tokens(self, user: User) -> Dict[str, Any]:
-        """Cria tokens de acesso e refresh para o usuário"""
+    def create_user_tokens(self, user: User, user_repo: Any) -> Dict[str, Any]:
+        """Cria tokens de acesso e refresh para o usuário e os registra no banco"""
         access_data = {
             "sub": str(user.id),
             "username": user.username,
@@ -139,8 +139,26 @@ class AuthService:
             "username": user.username
         }
         
-        access_token = self.create_access_token(access_data)
+        access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
+        refresh_token_expires = timedelta(days=self.refresh_token_expire_days)
+        
+        access_token = self.create_access_token(access_data, expires_delta=access_token_expires)
         refresh_token = self.create_refresh_token(refresh_data)
+        
+        # Registrar no banco de dados
+        now = datetime.now(timezone.utc)
+        user_repo.create_token(
+            user_id=user.id,
+            token=access_token,
+            token_type="access",
+            expires_at=now + access_token_expires
+        )
+        user_repo.create_token(
+            user_id=user.id,
+            token=refresh_token,
+            token_type="refresh",
+            expires_at=now + refresh_token_expires
+        )
         
         return {
             "access_token": access_token,
@@ -149,8 +167,13 @@ class AuthService:
             "expires_in": self.access_token_expire_minutes * 60
         }
 
-    def refresh_access_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
-        """Gera novo access token usando refresh token"""
+    def refresh_access_token(self, refresh_token: str, user_repo: Any) -> Optional[Dict[str, Any]]:
+        """Gera novo access token usando refresh token, verificando no banco"""
+        # Verificar se o refresh token existe e está ativo no banco
+        stored_token = user_repo.get_token(refresh_token)
+        if not stored_token or stored_token.token_type != "refresh":
+            return None
+
         payload = self.verify_token(refresh_token, "refresh")
         if not payload:
             return None
@@ -162,7 +185,16 @@ class AuthService:
             "email": payload.get("email", "")
         }
         
-        new_access_token = self.create_access_token(access_data)
+        access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
+        new_access_token = self.create_access_token(access_data, expires_delta=access_token_expires)
+        
+        # Registrar novo access token no banco
+        user_repo.create_token(
+            user_id=stored_token.user_id,
+            token=new_access_token,
+            token_type="access",
+            expires_at=datetime.now(timezone.utc) + access_token_expires
+        )
         
         return {
             "access_token": new_access_token,
@@ -170,8 +202,14 @@ class AuthService:
             "expires_in": self.access_token_expire_minutes * 60
         }
 
-    def get_current_user_from_token(self, token: str, db: Session) -> Optional[User]:
-        """Obtém usuário atual a partir do token"""
+    def get_current_user_from_token(self, token: str, user_repo: Any) -> Optional[User]:
+        """Obtém usuário atual a partir do token, verificando se está ativo no banco"""
+        # Verificar se o token existe e está ativo no banco
+        stored_token = user_repo.get_token(token)
+        if not stored_token or not stored_token.is_active:
+            logger.warning("Attempt to use inactive or non-existent token")
+            return None
+
         payload = self.verify_token(token, "access")
         if not payload:
             return None
@@ -180,8 +218,14 @@ class AuthService:
         if user_id is None:
             return None
         
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        return user
+        try:
+            # Convert string to UUID
+            user_uuid = UUID(user_id)
+            user = user_repo.get_by_id(user_uuid)
+            return user
+        except ValueError:
+            logger.warning(f"Invalid UUID in token sub: {user_id}")
+            return None
 
 
 # Instância global do serviço

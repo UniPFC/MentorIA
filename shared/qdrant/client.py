@@ -13,6 +13,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, Fi
 from config.settings import settings
 from config.logger import logger
 import uuid
+from uuid import UUID
 
 
 class QdrantManager:
@@ -33,13 +34,13 @@ class QdrantManager:
             logger.error(f"Failed to connect to Qdrant: {e}")
             raise
     
-    def get_collection_name(self, chat_type_id: int) -> str:
+    def get_collection_name(self, chat_type_id: UUID) -> str:
         """Generate collection name for a chat type."""
         return f"chat_type_{chat_type_id}"
     
     def create_collection(
         self, 
-        chat_type_id: int, 
+        chat_type_id: UUID, 
         vector_size: int = 1024,
         distance: Distance = Distance.COSINE
     ) -> bool:
@@ -78,7 +79,7 @@ class QdrantManager:
             logger.error(f"Failed to create collection '{collection_name}': {e}")
             raise
     
-    def delete_collection(self, chat_type_id: int) -> bool:
+    def delete_collection(self, chat_type_id: UUID) -> bool:
         """
         Delete a collection for a ChatType.
         
@@ -100,7 +101,7 @@ class QdrantManager:
     
     def insert_chunks(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         chunks: List[Dict[str, Any]],
         embeddings: List[List[float]]
     ) -> List[str]:
@@ -156,7 +157,7 @@ class QdrantManager:
     
     def search(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         query_embedding: List[float],
         limit: int = 10,
         score_threshold: Optional[float] = None
@@ -200,7 +201,7 @@ class QdrantManager:
             logger.error(f"Failed to search in collection '{collection_name}': {e}")
             raise
     
-    def get_collection_info(self, chat_type_id: int) -> Optional[Dict[str, Any]]:
+    def get_collection_info(self, chat_type_id: UUID) -> Optional[Dict[str, Any]]:
         """
         Get information about a collection.
         

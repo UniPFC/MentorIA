@@ -7,6 +7,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV UV_CACHE_DIR=/root/.cache/uv
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libpq-dev \
@@ -15,7 +16,8 @@ RUN apt-get update \
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv sync --frozen --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project
 
 COPY src ./src
 

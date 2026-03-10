@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.database.models.user import User
+from src.repositories.user import UserRepository
 from src.api.schemas.auth import (
-    UserRegister, UserLogin, Token, TokenRefresh, 
+    UserRegister, UserLogin, Token, TokenRefresh, TokenVerifyResponse,
     UserResponse, LogoutResponse, PasswordReset, AdminPasswordReset
 )
-from src.api.dependencies import get_current_active_user
+from src.api.dependencies import get_current_active_user, security
 from src.services.auth import auth_service
 from config.logger import logger
 
@@ -19,8 +21,10 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """
     Registra um novo usuário
     """
+    user_repo = UserRepository(db)
+
     # Verificar se username já existe
-    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    existing_user = user_repo.get_by_username(user_data.username)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -28,7 +32,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         )
     
     # Verificar se email já existe
-    existing_email = db.query(User).filter(User.email == user_data.email).first()
+    existing_email = user_repo.get_by_email(user_data.email)
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -43,9 +47,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         password_hash=hashed_password
     )
     
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    user_repo.create(new_user)
     
     logger.info(f"User registered successfully: {new_user.username}")
     return new_user
@@ -56,14 +58,14 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """
     Autentica usuário e retorna tokens JWT
     """
-    user = db.query(User).filter(
-        (User.username == user_credentials.username) | (User.email == user_credentials.username)
-    ).first()
+    user_repo = UserRepository(db)
+    
+    user = auth_service.authenticate_user(user_repo, user_credentials.email, user_credentials.password)
     
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nome de usuário ou senha incorretos",
+            detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -75,29 +77,23 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer", "X-Password-Reset-Required": "true"},
         )
     
-    if not auth_service.verify_password(user_credentials.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nome de usuário ou senha incorretos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
     # Atualizar último login
     from datetime import datetime, timezone
     user.last_login = datetime.now(timezone.utc)
-    db.commit()
+    user_repo.update(user)
     
-    tokens = auth_service.create_user_tokens(user)
+    tokens = auth_service.create_user_tokens(user, user_repo)
     logger.info(f"User logged in successfully: {user.username}")
     return tokens
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(token_data: TokenRefresh):
+async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
     """
     Atualiza o token de acesso usando refresh token
     """
-    new_tokens = auth_service.refresh_access_token(token_data.refresh_token)
+    user_repo = UserRepository(db)
+    new_tokens = auth_service.refresh_access_token(token_data.refresh_token, user_repo)
     if not new_tokens:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -115,11 +111,18 @@ async def refresh_token(token_data: TokenRefresh):
 
 
 @router.post("/logout", response_model=LogoutResponse)
-async def logout(current_user: User = Depends(get_current_active_user)):
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """
-    Realiza logout do usuário
-    (Em implementações mais complexas, aqui poderia invalidar tokens)
+    Realiza logout do usuário invalidando o token no banco de dados
     """
+    token = credentials.credentials
+    user_repo = UserRepository(db)
+    user_repo.invalidate_token(token)
+    
     logger.info(f"User logged out: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}
 
@@ -132,7 +135,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
     return current_user
 
 
-@router.post("/verify-token")
+@router.post("/verify-token", response_model=TokenVerifyResponse)
 async def verify_token(current_user: User = Depends(get_current_active_user)):
     """
     Verifica se o token é válido
@@ -162,7 +165,8 @@ async def reset_password(
     
     # Atualizar senha
     current_user.password_hash = auth_service.get_password_hash(password_data.new_password)
-    db.commit()
+    user_repo = UserRepository(db)
+    user_repo.update(current_user)
     
     logger.info(f"Password reset successfully for user: {current_user.username}")
     return {"message": "Senha atualizada com sucesso", "success": True}
@@ -177,15 +181,17 @@ async def admin_reset_password(
     """
     Reset de senha por administrador (apenas user ID 1 pode usar)
     """
-    # Verificar se é admin (simplificado - apenas user ID 1)
-    if current_user.id != 1:
+    user_repo = UserRepository(db)
+
+    # Verificar se é admin (simplificado - apenas user admin)
+    if current_user.username != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Apenas administradores podem resetar senhas de outros usuários"
         )
     
     # Buscar usuário
-    user = db.query(User).filter(User.id == password_data.user_id).first()
+    user = user_repo.get_by_id(password_data.user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -194,7 +200,7 @@ async def admin_reset_password(
     
     # Atualizar senha
     user.password_hash = auth_service.get_password_hash(password_data.new_password)
-    db.commit()
+    user_repo.update(user)
     
     logger.info(f"Admin reset password for user: {user.username} by admin: {current_user.username}")
     return {"message": f"Senha do usuário '{user.username}' atualizada com sucesso", "success": True}

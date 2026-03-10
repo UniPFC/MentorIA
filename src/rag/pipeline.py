@@ -5,6 +5,7 @@ Adapted from SoulsborneRAG to work with dynamic chat_type_id.
 
 import os
 from typing import List, Dict, Any, Optional
+from uuid import UUID
 from config.logger import logger
 from config.settings import settings
 from src.rag.retriever import KnowledgeRetriever
@@ -92,7 +93,7 @@ class RAGPipeline:
     
     def run(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         query: str,
         chat_history: Optional[List[Dict[str, str]]] = None,
         k_retrieval: int = None,

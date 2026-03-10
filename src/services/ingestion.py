@@ -5,6 +5,7 @@ Handles: Excel/CSV upload → parsing → embedding → Qdrant storage.
 
 from typing import List, Dict, Any, Tuple
 import pandas as pd
+from uuid import UUID
 from io import BytesIO
 from config.logger import logger
 from shared.qdrant.client import QdrantManager
@@ -85,7 +86,7 @@ class ChunkIngestionService:
     
     def ingest_chunks(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         chunks: List[Dict[str, Any]],
         batch_size: int = 32
     ) -> Tuple[List[str], int]:
@@ -132,7 +133,7 @@ class ChunkIngestionService:
     
     def ingest_from_file(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         file_content: bytes,
         filename: str,
         question_col: str = "question",

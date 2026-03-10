@@ -3,6 +3,7 @@ Knowledge retriever for semantic search in Qdrant.
 """
 
 from typing import List, Dict, Any
+from uuid import UUID
 from config.logger import logger
 from shared.qdrant.client import QdrantManager
 from src.ai.embedding import EmbeddingEngine
@@ -27,7 +28,7 @@ class KnowledgeRetriever:
     
     def search(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         query: str,
         limit: int = 10,
         score_threshold: float = None
@@ -65,7 +66,7 @@ class KnowledgeRetriever:
     
     def search_many(
         self,
-        chat_type_id: int,
+        chat_type_id: UUID,
         queries: List[str],
         limit_per_query: int = 10
     ) -> List[Dict[str, Any]]:

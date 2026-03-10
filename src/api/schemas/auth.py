@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class UserRegister(BaseModel):
@@ -8,7 +9,8 @@ class UserRegister(BaseModel):
     email: EmailStr = Field(..., description="Email válido")
     password: str = Field(..., min_length=6, max_length=100, description="Senha (mínimo 6 caracteres)")
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def validate_password_length(cls, v):
         """Valida se a senha não excede limites seguros para processamento"""
         if len(v.encode('utf-8')) > 1000:  # Limite seguro para processamento
@@ -17,10 +19,11 @@ class UserRegister(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str = Field(..., description="Nome de usuário ou email")
+    email: EmailStr = Field(..., description="Email do usuário")
     password: str = Field(..., description="Senha")
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def validate_password_length(cls, v):
         """Valida se a senha não excede limites seguros para processamento"""
         if len(v.encode('utf-8')) > 1000:  # Limite seguro para processamento
@@ -40,7 +43,7 @@ class TokenRefresh(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int
+    id: UUID
     username: str
     email: str
     created_at: datetime
@@ -58,7 +61,8 @@ class PasswordReset(BaseModel):
     current_password: str = Field(..., description="Senha atual")
     new_password: str = Field(..., min_length=6, max_length=100, description="Nova senha (mínimo 6 caracteres)")
     
-    @validator('current_password', 'new_password')
+    @field_validator('current_password', 'new_password')
+    @classmethod
     def validate_password_length(cls, v):
         """Valida se a senha não excede limites seguros para processamento"""
         if len(v.encode('utf-8')) > 1000:  # Limite seguro para processamento
@@ -67,12 +71,19 @@ class PasswordReset(BaseModel):
 
 
 class AdminPasswordReset(BaseModel):
-    user_id: int = Field(..., description="ID do usuário")
+    user_id: UUID = Field(..., description="ID do usuário")
     new_password: str = Field(..., min_length=6, max_length=100, description="Nova senha temporária")
     
-    @validator('new_password')
+    @field_validator('new_password')
+    @classmethod
     def validate_password_length(cls, v):
         """Valida se a senha não excede limites seguros para processamento"""
         if len(v.encode('utf-8')) > 1000:  # Limite seguro para processamento
             raise ValueError('Senha muito longa. Máximo 1000 bytes.')
         return v
+
+
+class TokenVerifyResponse(BaseModel):
+    valid: bool
+    user_id: UUID
+    username: str

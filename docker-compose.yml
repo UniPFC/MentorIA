@@ -7,6 +7,11 @@ services:
     container_name: rag_web
     ports:
       - "3000:80"
+    volumes:
+      - ./src/web/pages:/usr/share/nginx/html
+      - ./src/web/css:/usr/share/nginx/html/css
+      - ./src/web/js:/usr/share/nginx/html/js
+      - ./src/web/assets:/usr/share/nginx/html/assets
     networks:
       - rag_network
     depends_on:

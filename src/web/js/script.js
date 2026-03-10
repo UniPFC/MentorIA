@@ -4,6 +4,34 @@ class LoginManager {
         this.initializeElements();
         this.attachEventListeners();
         this.checkRememberedUser();
+        this.checkIfAlreadyLoggedIn();
+    }
+
+    async checkIfAlreadyLoggedIn() {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            try {
+                // Verify token validity
+                const response = await fetch(`${this.apiBaseUrl}/auth/verify-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.valid) {
+                        window.location.href = '/dashboard.html';
+                    }
+                }
+            } catch (error) {
+                // Token invalid or API error, stay on login page
+                console.log('Session check failed, staying on login page');
+                localStorage.removeItem('authToken'); // Cleanup invalid token
+            }
+        }
     }
 
     initializeElements() {
@@ -43,7 +71,6 @@ class LoginManager {
         this.microsoftBtn.addEventListener('click', () => this.handleSocialLogin('microsoft'));
         
         // Other links
-        this.signupLink.addEventListener('click', (e) => this.handleSignup(e));
         this.forgotPasswordLink.addEventListener('click', (e) => this.handleForgotPassword(e));
         
         // Remember me functionality
@@ -127,62 +154,50 @@ class LoginManager {
         try {
             this.setLoadingState(true);
             
-            // Simulate API call - replace with actual API endpoint
-            const response = await this.mockApiCall(formData);
-            
-            if (response.success) {
-                this.handleSuccessfulLogin(response.data);
+            const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: formData.email,
+                    password: formData.password
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Fetch user details after successful login
+                const userResponse = await fetch(`${this.apiBaseUrl}/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${data.access_token}`
+                    }
+                });
+                
+                if (userResponse.ok) {
+                    const userData = await userResponse.json();
+                    this.handleSuccessfulLogin({
+                        token: data.access_token,
+                        user: userData
+                    });
+                } else {
+                    this.handleLoginError('Erro ao obter dados do usuário.');
+                }
             } else {
-                this.handleLoginError(response.error);
+                this.handleLoginError(data.detail || 'E-mail ou senha incorretos');
             }
         } catch (error) {
-            this.handleLoginError('Erro de conexão. Tente novamente.');
+            console.error('Login error:', error);
+            this.handleLoginError('Erro de conexão. Verifique se a API está rodando.');
         } finally {
             this.setLoadingState(false);
         }
     }
 
     async mockApiCall(formData) {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Mock authentication logic
-        if (formData.email === 'admin@portal.com' && formData.password === 'admin123') {
-            return {
-                success: true,
-                data: {
-                    user: {
-                        id: 1,
-                        name: 'Administrador',
-                        email: formData.email,
-                        role: 'admin'
-                    },
-                    token: 'mock-jwt-token',
-                    expiresIn: 3600
-                }
-            };
-        }
-        
-        if (formData.email === 'user@portal.com' && formData.password === 'user123') {
-            return {
-                success: true,
-                data: {
-                    user: {
-                        id: 2,
-                        name: 'Usuário Teste',
-                        email: formData.email,
-                        role: 'user'
-                    },
-                    token: 'mock-jwt-token',
-                    expiresIn: 3600
-                }
-            };
-        }
-        
-        return {
-            success: false,
-            error: 'E-mail ou senha incorretos'
-        };
+        // Deprecated - using real API
+        return { success: false, error: 'Deprecated' };
     }
 
     handleSuccessfulLogin(data) {
@@ -259,14 +274,6 @@ class LoginManager {
 
     handleSignup(e) {
         e.preventDefault();
-        this.showToast('Página de cadastro em desenvolvimento', 'error');
-        
-        // Future implementation
-        // window.location.href = '/signup.html';
-    }
-
-    handleForgotPassword(e) {
-        e.preventDefault();
         this.showToast('Recuperação de senha em desenvolvimento', 'error');
         
         // Future implementation
@@ -319,7 +326,7 @@ class LoginManager {
     logout() {
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
-        window.location.href = '/index.html';
+        window.location.href = '/login.html';
     }
 
     isAuthenticated() {

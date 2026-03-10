@@ -5,6 +5,7 @@ Chat endpoints for managing chat sessions and messages.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from uuid import UUID
 from shared.database.session import get_db
 from shared.database.models.chat import Chat
 from shared.database.models.chat_type import ChatType
@@ -24,7 +25,7 @@ from config.logger import logger
 router = APIRouter(prefix="/chats", tags=["chats"])
 
 
-def verify_chat_ownership(chat_id: int, user_id: int, db: Session) -> Chat:
+def verify_chat_ownership(chat_id: UUID, user_id: UUID, db: Session) -> Chat:
     """
     Verify that a chat belongs to the specified user.
     
@@ -101,11 +102,11 @@ def create_chat(
 
 @router.get("/", response_model=List[ChatResponse])
 def list_chats(
-    user_id: int = None,
-    chat_type_id: int = None,
+    chat_type_id: UUID = None,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     List chats with optional filtering.
@@ -113,8 +114,8 @@ def list_chats(
     try:
         query = db.query(Chat)
         
-        if user_id is not None:
-            query = query.filter(Chat.user_id == user_id)
+        # Filter by current user (always)
+        query = query.filter(Chat.user_id == current_user.id)
         
         if chat_type_id is not None:
             query = query.filter(Chat.chat_type_id == chat_type_id)
@@ -132,29 +133,29 @@ def list_chats(
 
 @router.get("/{chat_id}", response_model=ChatWithMessagesResponse)
 def get_chat(
-    chat_id: int,
-    user_id: int,  # TODO: Replace with authenticated user from JWT token
-    db: Session = Depends(get_db)
+    chat_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Get a chat with all its messages.
     Only the chat owner can access it.
     """
-    chat = verify_chat_ownership(chat_id, user_id, db)
+    chat = verify_chat_ownership(chat_id, current_user.id, db)
     return chat
 
 
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_chat(
-    chat_id: int,
-    user_id: int,  # TODO: Replace with authenticated user from JWT token
-    db: Session = Depends(get_db)
+    chat_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Delete a chat and all its messages.
     """
     try:
-        chat = verify_chat_ownership(chat_id, user_id, db)
+        chat = verify_chat_ownership(chat_id, current_user.id, db)
         db.delete(chat)
         db.commit()
         
@@ -173,10 +174,10 @@ def delete_chat(
 
 @router.post("/{chat_id}/messages", response_model=SendMessageResponse)
 def send_message(
-    chat_id: int,
+    chat_id: UUID,
     message_data: SendMessageRequest,
-    user_id: int,  # TODO: Replace with authenticated user from JWT token
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Send a message and get RAG-powered response.
@@ -185,7 +186,7 @@ def send_message(
     """
     try:
         # Verify ownership and get chat
-        chat = verify_chat_ownership(chat_id, user_id, db)
+        chat = verify_chat_ownership(chat_id, current_user.id, db)
         
         # Create user message
         user_message = Message(

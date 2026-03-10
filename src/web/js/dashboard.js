@@ -62,16 +62,46 @@ class DashboardManager {
         });
     }
 
-    checkAuthentication() {
+    async checkAuthentication() {
         const token = localStorage.getItem('authToken');
         if (!token) {
-            this.showToast('Sessão expirada. Faça login novamente.', 'error');
-            setTimeout(() => {
-                window.location.href = '/index.html';
-            }, 1500);
+            this.handleAuthFailure();
             return false;
         }
-        return true;
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/auth/verify-token`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Token inválido');
+            }
+
+            const data = await response.json();
+            if (!data.valid) {
+                throw new Error('Token inválido');
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Authentication check failed:', error);
+            this.handleAuthFailure();
+            return false;
+        }
+    }
+
+    handleAuthFailure() {
+        this.showToast('Sessão expirada. Faça login novamente.', 'error');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        setTimeout(() => {
+            window.location.href = '/login.html';
+        }, 1500);
     }
 
     loadUserData() {
@@ -83,11 +113,12 @@ class DashboardManager {
     }
 
     updateUserInfo(user) {
-        this.userName.textContent = user.name || 'Usuário';
+        this.userName.textContent = user.username || user.name || 'Usuário';
         this.userEmail.textContent = user.email || 'email@exemplo.com';
         
         // Create avatar initials
-        const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U';
+        const displayName = user.username || user.name || 'U';
+        const initials = displayName.substring(0, 2).toUpperCase();
         this.userAvatar.textContent = initials;
     }
 
@@ -378,7 +409,7 @@ class DashboardManager {
             this.showToast('Saindo...', 'success');
             
             setTimeout(() => {
-                window.location.href = '/index.html';
+                window.location.href = '/login.html';
             }, 1000);
         }
     }

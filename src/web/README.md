@@ -100,8 +100,8 @@ src/web/
 ### **Desenvolvimento Local**
 1. Clone o repositório
 2. Navegue até `src/web/`
-3. Abra `index.html` no navegador
-4. Use as credenciais de teste
+3. O arquivo `index.html` redirecionará para `login.html`
+4. Use as credenciais de teste ou cadastre um novo usuário
 
 ### **Com Docker**
 ```bash

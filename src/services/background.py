@@ -4,6 +4,7 @@ Background task handlers for long-running operations.
 
 import json
 from datetime import datetime, timezone
+from uuid import UUID
 from sqlalchemy.orm import Session
 from config.logger import logger
 from shared.database.models.ingestion_job import IngestionJob, IngestionStatus
@@ -12,8 +13,8 @@ from src.services.ingestion import ChunkIngestionService
 
 
 def process_ingestion_job(
-    job_id: int,
-    chat_type_id: int,
+    job_id: UUID,
+    chat_type_id: UUID,
     file_content: bytes,
     filename: str,
     question_col: str,

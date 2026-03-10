@@ -5,10 +5,12 @@ Upload endpoints for creating chat types from spreadsheets.
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
+from uuid import UUID
 from datetime import datetime, timezone
 from shared.database.session import get_db
 from shared.database.models.chat_type import ChatType
 from shared.database.models.ingestion_job import IngestionJob, IngestionStatus
+from shared.database.models.user import User
 from src.api.schemas.upload import UploadResponse
 from src.api.schemas.ingestion import UploadResponseAsync, IngestionJobResponse
 from src.services.ingestion import ChunkIngestionService
@@ -16,6 +18,7 @@ from src.services.background import process_ingestion_job
 from src.ai.loader import ModelLoader
 from src.ai.provider.embedding import HFEmbeddingProvider
 from src.ai.embedding import EmbeddingEngine
+from src.api.dependencies import get_current_active_user
 from shared.qdrant.client import QdrantManager
 from config.settings import settings
 from config.logger import logger
@@ -42,10 +45,10 @@ async def create_chat_type_from_file(
     name: str = Form(..., description="Name of the chat type"),
     description: Optional[str] = Form(None, description="Description"),
     is_public: bool = Form(False, description="Whether chat type is public"),
-    owner_id: Optional[int] = Form(None, description="Owner user ID"),
     question_column: str = Form("question", description="Column name for questions"),
     answer_column: str = Form("answer", description="Column name for answers"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
     ingestion_service: ChunkIngestionService = Depends(get_ingestion_service)
 ):
     """
@@ -84,7 +87,7 @@ async def create_chat_type_from_file(
             name=name,
             description=description,
             is_public=is_public,
-            owner_id=owner_id,
+            owner_id=current_user.id,
             collection_name=collection_name
         )
         
@@ -143,11 +146,12 @@ async def create_chat_type_from_file(
 
 @router.post("/{chat_type_id}/chunks", response_model=UploadResponse)
 async def add_chunks_to_chat_type(
-    chat_type_id: int,
+    chat_type_id: UUID,
     file: UploadFile = File(..., description="Excel or CSV file with questions and answers"),
     question_column: str = Form("question", description="Column name for questions"),
     answer_column: str = Form("answer", description="Column name for answers"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
     ingestion_service: ChunkIngestionService = Depends(get_ingestion_service)
 ):
     """
@@ -160,6 +164,13 @@ async def add_chunks_to_chat_type(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"ChatType with id {chat_type_id} not found"
+            )
+        
+        # Verify ownership
+        if chat_type.owner_id != current_user.id:
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to modify this chat type"
             )
         
         # Validate file type

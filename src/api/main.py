@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from config.logger import logger
 from shared.database.migration import run_migrations
 from src.api.routes import chat_types, chats, upload, jobs, auth
@@ -16,6 +17,15 @@ app = FastAPI(
     description="Multi-tenant RAG chat system with custom knowledge bases",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers

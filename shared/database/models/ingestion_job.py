@@ -2,9 +2,10 @@
 SQLAlchemy model for tracking ingestion jobs.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, Text, Enum as SQLEnum, Uuid
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
+import uuid
 import enum
 from shared.database.session import Base
 
@@ -23,8 +24,8 @@ class IngestionJob(Base):
     """
     __tablename__ = "ingestion_jobs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    chat_type_id = Column(Integer, nullable=False, index=True)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    chat_type_id = Column(Uuid(as_uuid=True), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     status = Column(SQLEnum(IngestionStatus), default=IngestionStatus.PENDING, nullable=False, index=True)
     total_chunks = Column(Integer, default=0)

@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Uuid
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+import uuid
 from shared.database.session import Base
 
 
@@ -12,8 +13,8 @@ class KnowledgeChunk(Base):
     """
     __tablename__ = "knowledge_chunks"
     
-    id = Column(Integer, primary_key=True, index=True)
-    chat_type_id = Column(Integer, ForeignKey("chat_types.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    chat_type_id = Column(Uuid(as_uuid=True), ForeignKey("chat_types.id", ondelete="CASCADE"), nullable=False, index=True)
     qdrant_point_id = Column(String(100), nullable=False, index=True)
     source_file = Column(String(255), nullable=True)
     row_number = Column(Integer, nullable=True)

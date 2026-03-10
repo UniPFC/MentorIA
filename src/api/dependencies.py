@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.database.models.user import User
+from src.repositories.user import UserRepository
 from src.services.auth import auth_service
 from config.logger import logger
 
@@ -26,7 +27,8 @@ def get_current_user(
     
     try:
         token = credentials.credentials
-        user = auth_service.get_current_user_from_token(token, db)
+        user_repo = UserRepository(db)
+        user = auth_service.get_current_user_from_token(token, user_repo)
         if user is None:
             raise credentials_exception
         return user
@@ -56,7 +58,8 @@ def get_optional_current_user(
     
     try:
         token = credentials.credentials
-        user = auth_service.get_current_user_from_token(token, db)
+        user_repo = UserRepository(db)
+        user = auth_service.get_current_user_from_token(token, user_repo)
         return user
     except Exception:
         return None
