@@ -85,7 +85,7 @@ class ModelLoader:
                 cache_dir=self.cache_dir,
                 token=self.token,
                 trust_remote_code=trust_remote_code,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+                dtype=torch.float16 if self.device == "cuda" else torch.float32
             ).to(self.device)
             
             model.eval()
@@ -127,7 +127,7 @@ class ModelLoader:
                 cache_dir=self.cache_dir,
                 token=self.token,
                 trust_remote_code=trust_remote_code,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+                dtype=torch.float16 if self.device == "cuda" else torch.float32
             ).to(self.device)
             
             model.eval()
@@ -176,7 +176,7 @@ class ModelLoader:
                 quantization_config=quant_config,
                 device_map="auto" if quantization else self.device,
                 trust_remote_code=True,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+                dtype=torch.float16 if self.device == "cuda" else torch.float32
             )
             
             logger.info(f"Successfully loaded LLM: {model_id}")

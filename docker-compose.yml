@@ -34,9 +34,6 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/rag_db
-      - QDRANT_URL=http://vector_db:6333
     volumes:
       - ./src:/app/src
       - ./logs:/app/logs

@@ -31,8 +31,8 @@ def get_job_status(
     - progress (processed_chunks / total_chunks)
     - error message if failed
     """
-    # Join with ChatType to verify ownership
-    job = db.query(IngestionJob).join(ChatType).filter(
+    # Get job
+    job = db.query(IngestionJob).filter(
         IngestionJob.id == job_id
     ).first()
     
@@ -66,7 +66,7 @@ def list_jobs(
     List ingestion jobs with optional filtering.
     Only returns jobs for chat types owned by the current user.
     """
-    query = db.query(IngestionJob).join(ChatType)
+    query = db.query(IngestionJob).select_from(IngestionJob).join(ChatType, IngestionJob.chat_type_id == ChatType.id)
     
     # Filter by user ownership
     query = query.filter(ChatType.owner_id == current_user.id)

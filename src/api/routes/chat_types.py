@@ -58,8 +58,18 @@ def create_chat_type(
         db.refresh(chat_type)
         
         # Create Qdrant collection
-        qdrant = QdrantManager()
-        qdrant.create_collection(chat_type.id, vector_size=1024)
+        try:
+            qdrant = QdrantManager()
+            qdrant.create_collection(chat_type.id, vector_size=1024)
+        except Exception as e:
+            logger.error(f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}")
+            # Rollback: delete the created chat_type
+            db.delete(chat_type)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create vector collection: {str(e)}"
+            )
         
         logger.info(f"Created ChatType: {chat_type.name} (id={chat_type.id})")
         return chat_type
