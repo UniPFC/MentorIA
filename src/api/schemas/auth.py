@@ -57,22 +57,21 @@ class LogoutResponse(BaseModel):
     success: bool = Field(default=True)
 
 
-class PasswordReset(BaseModel):
-    current_password: str = Field(..., description="Senha atual")
+
+
+class TokenVerifyResponse(BaseModel):
+    valid: bool
+    user_id: UUID
+    username: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr = Field(..., description="Email do usuário para reset de senha")
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(..., description="Token de reset recebido por email")
     new_password: str = Field(..., min_length=6, max_length=100, description="Nova senha (mínimo 6 caracteres)")
-    
-    @field_validator('current_password', 'new_password')
-    @classmethod
-    def validate_password_length(cls, v):
-        """Valida se a senha não excede limites seguros para processamento"""
-        if len(v.encode('utf-8')) > 1000:  # Limite seguro para processamento
-            raise ValueError('Senha muito longa. Máximo 1000 bytes.')
-        return v
-
-
-class AdminPasswordReset(BaseModel):
-    user_id: UUID = Field(..., description="ID do usuário")
-    new_password: str = Field(..., min_length=6, max_length=100, description="Nova senha temporária")
     
     @field_validator('new_password')
     @classmethod
@@ -81,9 +80,3 @@ class AdminPasswordReset(BaseModel):
         if len(v.encode('utf-8')) > 1000:  # Limite seguro para processamento
             raise ValueError('Senha muito longa. Máximo 1000 bytes.')
         return v
-
-
-class TokenVerifyResponse(BaseModel):
-    valid: bool
-    user_id: UUID
-    username: str

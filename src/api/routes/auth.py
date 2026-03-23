@@ -6,11 +6,14 @@ from shared.database.models.user import User
 from src.repositories.user import UserRepository
 from src.api.schemas.auth import (
     UserRegister, UserLogin, Token, TokenRefresh, TokenVerifyResponse,
-    UserResponse, LogoutResponse, PasswordReset, AdminPasswordReset
+    UserResponse, LogoutResponse, PasswordResetRequest, PasswordResetConfirm
 )
 from src.api.dependencies import get_current_active_user, security
 from src.services.auth import auth_service
+from src.services.email import email_service
 from config.logger import logger
+from config.settings import settings
+from datetime import datetime, timedelta, timezone
 
 
 router = APIRouter()
@@ -147,51 +150,64 @@ async def verify_token(current_user: User = Depends(get_current_active_user)):
     }
 
 
-@router.post("/reset-password")
-async def reset_password(
-    password_data: PasswordReset,
-    current_user: User = Depends(get_current_active_user),
+@router.post("/forgot-password")
+async def forgot_password(
+    request: PasswordResetRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Reset de senha do próprio usuário
+    Solicita reset de senha via email
     """
-    # Verificar senha atual
-    if not auth_service.verify_password(password_data.current_password, current_user.password_hash):
+    user_repo = UserRepository(db)
+    
+    # Buscar usuário por email
+    user = user_repo.get_by_email(request.email)
+    if not user:
+        # Por segurança, não revelamos se o email existe ou não
+        logger.info(f"Password reset requested for non-existent email: {request.email}")
+        return {"message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha", "success": True}
+    
+    # Gerar token de reset
+    reset_token = email_service.generate_reset_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    
+    # Salvar token no banco
+    user_repo.create_password_reset_token(user.id, reset_token, expires_at)
+    
+    # Enviar email
+    email_sent = email_service.send_password_reset_email(user.email, user.username, reset_token)
+    
+    if email_sent:
+        logger.info(f"Password reset email sent to user: {user.username}")
+        return {"message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha", "success": True}
+    else:
+        logger.error(f"Failed to send password reset email to user: {user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao enviar email de reset de senha. Tente novamente mais tarde."
+        )
+
+
+@router.post("/confirm-reset-password")
+async def confirm_reset_password(
+    request: PasswordResetConfirm,
+    db: Session = Depends(get_db)
+):
+    """
+    Confirma o reset de senha usando o token recebido por email
+    """
+    user_repo = UserRepository(db)
+    
+    # Validar token
+    reset_token_data = user_repo.get_password_reset_token(request.token)
+    if not reset_token_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Senha atual incorreta"
-        )
-    
-    # Atualizar senha
-    current_user.password_hash = auth_service.get_password_hash(password_data.new_password)
-    user_repo = UserRepository(db)
-    user_repo.update(current_user)
-    
-    logger.info(f"Password reset successfully for user: {current_user.username}")
-    return {"message": "Senha atualizada com sucesso", "success": True}
-
-
-@router.post("/admin-reset-password")
-async def admin_reset_password(
-    password_data: AdminPasswordReset,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Reset de senha por administrador (apenas user ID 1 pode usar)
-    """
-    user_repo = UserRepository(db)
-
-    # Verificar se é admin (simplificado - apenas user admin)
-    if current_user.username != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas administradores podem resetar senhas de outros usuários"
+            detail="Token inválido ou expirado"
         )
     
     # Buscar usuário
-    user = user_repo.get_by_id(password_data.user_id)
+    user = user_repo.get_by_id(reset_token_data.user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -199,8 +215,14 @@ async def admin_reset_password(
         )
     
     # Atualizar senha
-    user.password_hash = auth_service.get_password_hash(password_data.new_password)
+    user.password_hash = auth_service.get_password_hash(request.new_password)
     user_repo.update(user)
     
-    logger.info(f"Admin reset password for user: {user.username} by admin: {current_user.username}")
-    return {"message": f"Senha do usuário '{user.username}' atualizada com sucesso", "success": True}
+    # Invalidar token
+    user_repo.invalidate_password_reset_token(request.token)
+    
+    # Enviar email de confirmação
+    email_service.send_password_changed_email(user.email, user.username)
+    
+    logger.info(f"Password reset confirmed for user: {user.username}")
+    return {"message": "Senha alterada com sucesso", "success": True}

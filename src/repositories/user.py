@@ -1,9 +1,10 @@
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from shared.database.models.user import User
 from shared.database.models.user_token import UserToken
+from shared.database.models.password_reset_token import PasswordResetToken
 
 class UserRepository:
     def __init__(self, db: Session):
@@ -59,3 +60,35 @@ class UserRepository:
             UserToken.user_id == user_id
         ).update({"is_active": False})
         self.db.commit()
+
+    def create_password_reset_token(self, user_id: UUID, token: str, expires_at: datetime) -> PasswordResetToken:
+        # Invalidar tokens anteriores
+        self.db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user_id,
+            PasswordResetToken.is_active == True
+        ).update({"is_active": False})
+        
+        reset_token = PasswordResetToken(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+            is_active=True
+        )
+        self.db.add(reset_token)
+        self.db.commit()
+        self.db.refresh(reset_token)
+        return reset_token
+
+    def get_password_reset_token(self, token: str) -> Optional[PasswordResetToken]:
+        return self.db.query(PasswordResetToken).filter(
+            PasswordResetToken.token == token,
+            PasswordResetToken.is_active == True,
+            PasswordResetToken.expires_at > datetime.now(timezone.utc)
+        ).first()
+
+    def invalidate_password_reset_token(self, token: str):
+        reset_token = self.db.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+        if reset_token:
+            reset_token.is_active = False
+            reset_token.used_at = datetime.now(timezone.utc)
+            self.db.commit()
