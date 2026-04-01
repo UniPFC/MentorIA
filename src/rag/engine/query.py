@@ -49,12 +49,20 @@ class QueryEngine:
             logger.error(f"Failed to load prompt {prompt_name}: {e}")
             raise
 
-    def contextualize_query(self, query_text: str, chat_history: List[dict]) -> str:
+    def contextualize_query(self, query_text: str, chat_history: List[dict], provider: Optional[Provider] = None) -> str:
         """
         Rewrites the query to be standalone based on chat history.
+        
+        Args:
+            query_text: Original query text
+            chat_history: List of previous messages
+            provider: Optional custom LLM provider (uses primary_provider if not provided)
         """
         if not chat_history:
             return query_text
+        
+        # Use provided provider or fall back to primary provider
+        active_provider = provider or self.primary_provider
             
         # Format history string
         history_str = ""
@@ -74,10 +82,10 @@ class QueryEngine:
         ]
         
         try:
-            logger.info(f"Contextualizing query '{query_text}'...")
+            logger.info(f"Contextualizing query '{query_text}' using provider ({active_provider.model_name})...")
             
             # We use a simple string response here, not structured
-            response = self.primary_provider.generate(
+            response = active_provider.generate(
                 messages=messages,
                 temperature=0.3,
                 max_new_tokens=256
@@ -91,10 +99,17 @@ class QueryEngine:
             logger.error(f"Contextualization failed: {e}. Using original query.")
             return query_text
 
-    def expand_query(self, query_text: str) -> List[RAGQuery]:
+    def expand_query(self, query_text: str, provider: Optional[Provider] = None) -> List[RAGQuery]:
         """
         Generates a set of expanded queries for a single user query.
+        
+        Args:
+            query_text: Original query text
+            provider: Optional custom LLM provider (uses primary_provider if not provided)
         """
+        # Use provided provider or fall back to primary provider
+        active_provider = provider or self.primary_provider
+        
         count = max(1, settings.QUERY_EXPANSION_COUNT - 1)
         
         system_message = self.system_template.format(count=count)
@@ -106,10 +121,10 @@ class QueryEngine:
         ]
         
         try:
-            logger.info(f"Expanding query '{query_text}' using provider ({self.primary_provider.model_name}).")
+            logger.info(f"Expanding query '{query_text}' using provider ({active_provider.model_name}).")
             
-            if hasattr(self.primary_provider, "generate_structured"):
-                result = self.primary_provider.generate_structured(
+            if hasattr(active_provider, "generate_structured"):
+                result = active_provider.generate_structured(
                     messages=messages,
                     response_format=RAGQueries,
                     temperature=0.4
@@ -118,10 +133,10 @@ class QueryEngine:
                 if isinstance(result, RAGQueries):
                     return self._normalize_response(query_text, result.queries)
             
-            logger.warning("Primary provider returned unstructured response or failed. Attempting fallback/manual parse.")
+            logger.warning("Provider returned unstructured response or failed. Attempting fallback/manual parse.")
              
         except Exception as e:
-            logger.error(f"Primary expansion failed: {e}. Returning original query.")
+            logger.error(f"Query expansion failed: {e}. Returning original query.")
 
         return [RAGQuery(text=query_text)]
 

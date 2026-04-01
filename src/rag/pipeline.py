@@ -67,14 +67,14 @@ class RAGPipeline:
         
         logger.info("Initializing RAGPipeline...")
         
-        # Initialize LLM provider from settings
+        # Initialize default LLM provider from settings (will be overridden per chat if needed)
         self.llm_provider = Provider(
             model_name=settings.LLM_MODEL,
             provider_alias=settings.LLM_PROVIDER
         )
         
-        # Initialize Query Engine for expansion
-        self.query_engine = QueryEngine(primary_provider=self.llm_provider)
+        # Initialize Query Engine WITHOUT provider (will be set per request)
+        self.query_engine = QueryEngine(primary_provider=None)
         
         # Initialize model loader
         self.loader = ModelLoader()
@@ -103,7 +103,9 @@ class RAGPipeline:
         chat_history: Optional[List[Dict[str, str]]] = None,
         k_retrieval: int = None,
         top_k: int = None,
-        threshold: float = None
+        threshold: float = None,
+        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute RAG pipeline for a query.
@@ -115,6 +117,8 @@ class RAGPipeline:
             k_retrieval: Number of chunks to retrieve (default from settings)
             top_k: Number of chunks after reranking (default from settings)
             threshold: Minimum rerank score (default from settings)
+            llm_model: Optional LLM model override (e.g., 'gpt-4', 'llama3.1:8b')
+            llm_provider: Optional LLM provider override (ollama, openai, gemini)
             
         Returns:
             Dict with 'answer' and 'chunks' used
@@ -123,16 +127,19 @@ class RAGPipeline:
         top_k = top_k or settings.TOP_K
         threshold = threshold or settings.THRESHOLD
         
-        logger.info(f"Processing query for chat_type_id={chat_type_id}: '{query[:50]}...'")
+        logger.info(f"Processing query for chat_type_id={chat_type_id}: '{query[:50]}...' (model={llm_model}, provider={llm_provider})")
         
         try:
+            # Get the LLM provider for this request (custom or default)
+            request_provider = self._get_provider(llm_model, llm_provider)
+            
             # Step 0: Contextualize Query (if history exists)
             effective_query = query
             if chat_history:
-                effective_query = self.query_engine.contextualize_query(query, chat_history)
+                effective_query = self.query_engine.contextualize_query(query, chat_history, provider=request_provider)
 
-            # Step 1: Query Expansion
-            expanded_queries = self.query_engine.expand_query(effective_query)
+            # Step 1: Query Expansion (using custom model)
+            expanded_queries = self.query_engine.expand_query(effective_query, provider=request_provider)
             query_texts = [q.text for q in expanded_queries]
             logger.info(f"Generated {len(query_texts)} search queries: {query_texts}")
             
@@ -168,7 +175,7 @@ class RAGPipeline:
             logger.info(f"Selected {len(reranked_chunks)} chunks after reranking")
             
             # Step 4: Generate answer
-            answer = self._generate_answer(query, reranked_chunks, chat_history)
+            answer = self._generate_answer(query, reranked_chunks, chat_history, llm_model, llm_provider)
             
             return {
                 "answer": answer,
@@ -186,26 +193,41 @@ class RAGPipeline:
         chat_history: Optional[List[Dict[str, str]]] = None,
         k_retrieval: int = None,
         top_k: int = None,
-        threshold: float = None
+        threshold: float = None,
+        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None
     ):
         """
         Execute RAG pipeline with streaming response.
         Yields chunks of the generated answer.
+        
+        Args:
+            chat_type_id: ID of the ChatType to search in
+            query: User's question
+            chat_history: Optional chat history for context
+            k_retrieval: Number of chunks to retrieve (default from settings)
+            top_k: Number of chunks after reranking (default from settings)
+            threshold: Minimum rerank score (default from settings)
+            llm_model: Optional LLM model override
+            llm_provider: Optional LLM provider override
         """
         k_retrieval = k_retrieval or settings.K_RETRIEVAL
         top_k = top_k or settings.TOP_K
         threshold = threshold or settings.THRESHOLD
         
-        logger.info(f"Processing streaming query for chat_type_id={chat_type_id}")
+        logger.info(f"Processing streaming query for chat_type_id={chat_type_id} (model={llm_model}, provider={llm_provider})")
         
         try:
+            # Get the LLM provider for this request (custom or default)
+            request_provider = self._get_provider(llm_model, llm_provider)
+            
             # Step 0: Contextualize Query (if history exists)
             effective_query = query
             if chat_history:
-                effective_query = self.query_engine.contextualize_query(query, chat_history)
+                effective_query = self.query_engine.contextualize_query(query, chat_history, provider=request_provider)
 
-            # Step 1: Query Expansion
-            expanded_queries = self.query_engine.expand_query(effective_query)
+            # Step 1: Query Expansion (using custom model)
+            expanded_queries = self.query_engine.expand_query(effective_query, provider=request_provider)
             query_texts = [q.text for q in expanded_queries]
             
             # Step 2: Retrieve
@@ -243,7 +265,7 @@ class RAGPipeline:
             yield {"type": "sources", "content": formatted_sources}
             
             # Step 4: Generate Stream
-            yield from self._generate_answer_stream(query, reranked_chunks, chat_history)
+            yield from self._generate_answer_stream(query, reranked_chunks, chat_history, llm_model, llm_provider)
             
         except Exception as e:
             logger.error(f"RAG pipeline stream failed: {e}")
@@ -253,7 +275,9 @@ class RAGPipeline:
         self,
         query: str,
         chunks: List[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, str]]] = None
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None
     ):
         context_parts = []
         for i, chunk in enumerate(chunks, 1):
@@ -273,7 +297,9 @@ class RAGPipeline:
         messages.append({"role": "user", "content": query})
         
         try:
-            for token in self.llm_provider.generate_stream(
+            # Use custom model if provided, otherwise use default
+            provider = self._get_provider(llm_model, llm_provider)
+            for token in provider.generate_stream(
                 messages,
                 temperature=0.3,
                 max_new_tokens=1024
@@ -287,7 +313,9 @@ class RAGPipeline:
         self,
         query: str,
         chunks: List[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, str]]] = None
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None
     ) -> str:
         """
         Generate answer using LLM with retrieved context.
@@ -296,6 +324,8 @@ class RAGPipeline:
             query: User's question
             chunks: Retrieved and reranked chunks
             chat_history: Optional chat history
+            llm_model: Optional LLM model override
+            llm_provider: Optional LLM provider override
             
         Returns:
             Generated answer
@@ -322,8 +352,9 @@ class RAGPipeline:
         messages.append({"role": "user", "content": query})
         
         try:
-            logger.debug(f"Generating answer with {len(chunks)} chunks")
-            answer = self.llm_provider.generate(
+            logger.debug(f"Generating answer with {len(chunks)} chunks (model={llm_model}, provider={llm_provider})")
+            provider = self._get_provider(llm_model, llm_provider)
+            answer = provider.generate(
                 messages, 
                 temperature=0.3, 
                 max_new_tokens=1024
@@ -332,3 +363,25 @@ class RAGPipeline:
         except Exception as e:
             logger.error(f"Answer generation failed: {e}")
             return "Desculpe, ocorreu um erro ao gerar a resposta. Por favor, tente novamente."
+    
+    def _get_provider(self, llm_model: Optional[str] = None, llm_provider: Optional[str] = None) -> Provider:
+        """
+        Get LLM provider instance, using custom model/provider if specified.
+        
+        Args:
+            llm_model: Optional model name override
+            llm_provider: Optional provider name override
+            
+        Returns:
+            Provider instance configured with the specified or default model/provider
+        """
+        # Use custom model/provider if provided, otherwise use defaults
+        model = llm_model or settings.LLM_MODEL
+        provider_alias = llm_provider or settings.LLM_PROVIDER
+        
+        logger.debug(f"Getting provider: model={model}, provider={provider_alias}")
+        
+        return Provider(
+            model_name=model,
+            provider_alias=provider_alias
+        )

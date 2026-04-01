@@ -1,7 +1,8 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, Field
 import os
-from typing import Optional
+import json
+from typing import Optional, List, Dict, Any
 
 class Settings(BaseSettings):
 
@@ -80,5 +81,41 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+    
+    def get_available_models(self) -> List[Dict[str, Any]]:
+        """
+        Retorna os modelos LLM disponíveis para seleção.
+        O modelo padrão (LLM_MODEL + LLM_PROVIDER) é sempre incluído.
+        Configure modelos adicionais editando a lista abaixo.
+        """
+        additional_models = [
+            {
+                "model": "llama3.2:3b",
+                "provider": "ollama",
+                "description": "Llama 3.2 3B model via Ollama (local)"
+            },
+            {
+                "model": "llama3.1:8b",
+                "provider": "ollama",
+                "description": "Llama 3.1 8B model via Ollama (local)"
+            },
+        ]
+        
+        default_model = {
+            "model": self.LLM_MODEL,
+            "provider": self.LLM_PROVIDER,
+            "description": f"Default model ({self.LLM_MODEL} via {self.LLM_PROVIDER})"
+        }
+        
+        models = [default_model]
+        seen = {(self.LLM_MODEL, self.LLM_PROVIDER)}
+        
+        for model in additional_models:
+            key = (model["model"], model["provider"])
+            if key not in seen:
+                models.append(model)
+                seen.add(key)
+        
+        return models
 
 settings = Settings()
