@@ -28,8 +28,6 @@ class ChatCreate(BaseModel):
     """Schema for creating a new Chat."""
     chat_type_id: UUID = Field(..., description="ID of the chat type")
     title: str = Field(..., min_length=1, max_length=200, description="Chat title")
-    llm_model: Optional[str] = Field(None, description="LLM model to use (e.g., 'llama3.1:8b', 'gpt-4')")
-    llm_provider: Optional[str] = Field(None, description="LLM provider (ollama, openai, gemini)")
     user_id: Optional[UUID] = Field(None, description="User ID (temporary, will use auth later)")
 
 

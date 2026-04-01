@@ -120,13 +120,13 @@ def create_chat(
                 detail=f"ChatType with id {chat_data.chat_type_id} not found"
             )
         
-        # Create chat
+        # Create chat with default model
         chat = Chat(
             user_id=current_user.id,
             chat_type_id=chat_data.chat_type_id,
             title=chat_data.title,
-            llm_model=chat_data.llm_model,
-            llm_provider=chat_data.llm_provider
+            llm_model=settings.LLM_MODEL,
+            llm_provider=settings.LLM_PROVIDER
         )
         
         db.add(chat)
@@ -202,6 +202,7 @@ def update_chat_model(
     """
     Update the LLM model and/or provider for a chat.
     Can be changed at any time during the chat session.
+    Model must be one of the available models from settings.
     
     Args:
         chat_id: ID of the chat
@@ -210,6 +211,23 @@ def update_chat_model(
     try:
         chat = verify_chat_ownership(chat_id, current_user.id, db)
         
+        # Get available models for validation
+        available_models = settings.get_available_models()
+        available_model_pairs = {(m["model"], m["provider"]) for m in available_models}
+        
+        # Determine the new model and provider
+        new_model = model_update.llm_model if model_update.llm_model is not None else chat.llm_model
+        new_provider = model_update.llm_provider if model_update.llm_provider is not None else chat.llm_provider
+        
+        # Validate that the new model/provider combination is available
+        if (new_model, new_provider) not in available_model_pairs:
+            available_list = ", ".join([f"{m['model']} ({m['provider']})" for m in available_models])
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model '{new_model}' with provider '{new_provider}' is not available. Available models: {available_list}"
+            )
+        
+        # Update the chat
         if model_update.llm_model is not None:
             chat.llm_model = model_update.llm_model
         if model_update.llm_provider is not None:
