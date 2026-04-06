@@ -33,21 +33,34 @@ def seed_default_knowledge():
     try:
         logger.info(f"Scanning {DATA_DIR} for knowledge base initialization...")
         
-        # 1. Create/Get System User (Owner of default chats)
+        # 1. Create/Get System User 'MentorIA' (Owner of default chats)
         system_email = settings.SYSTEM_USER_EMAIL
-        system_user = db.query(User).filter(User.email == system_email).first()
+        system_username = "MentorIA"
+        
+        # Try to find by email or username
+        system_user = db.query(User).filter(
+            (User.email == system_email) | (User.username == system_username)
+        ).first()
         
         if not system_user:
-            logger.info("Creating system user...")
+            logger.info("Creating MentorIA system user...")
             system_user = User(
                 email=system_email,
                 password_hash=auth_service.get_password_hash(settings.SYSTEM_USER_PASSWORD),
-                username="System Admin",
+                username=system_username,
                 is_active=True
             )
             db.add(system_user)
             db.commit()
             db.refresh(system_user)
+            logger.info(f"MentorIA system user created with ID: {system_user.id}")
+        else:
+            # Ensure username is 'MentorIA' if found by email
+            if system_user.username != system_username:
+                logger.info(f"Updating system user username to '{system_username}'...")
+                system_user.username = system_username
+                db.commit()
+                db.refresh(system_user)
             
         # Services initialization (lazy loading)
         models_loaded = False

@@ -26,6 +26,13 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """
     user_repo = UserRepository(db)
 
+    # Verificar se username é reservado (camada extra de segurança)
+    if user_data.username.lower() == 'mentoria':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='O nome de usuário "MentorIA" é reservado para o sistema e não pode ser usado.'
+        )
+
     # Verificar se username já existe
     existing_user = user_repo.get_by_username(user_data.username)
     if existing_user:

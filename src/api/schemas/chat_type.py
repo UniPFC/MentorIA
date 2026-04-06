@@ -25,6 +25,7 @@ class ChatTypeResponse(ChatTypeBase):
     id: UUID
     is_public: bool
     owner_id: Optional[UUID]
+    owner_name: Optional[str] = Field(None, description="Owner username (system chat types show 'MentorIA')")
     collection_name: str
     created_at: datetime
     
@@ -36,3 +37,12 @@ class ChatTypeListResponse(BaseModel):
     """Schema for listing chat types."""
     chat_types: list[ChatTypeResponse]
     total: int
+
+
+class ChatTypeSearchParams(BaseModel):
+    """Schema for searching chat types."""
+    query: Optional[str] = Field(None, description="Search in name and description")
+    is_public: Optional[bool] = Field(None, description="Filter by public/private")
+    owner_id: Optional[UUID] = Field(None, description="Filter by owner")
+    skip: int = Field(0, ge=0, description="Number of records to skip")
+    limit: int = Field(100, ge=1, le=1000, description="Maximum number of records to return")

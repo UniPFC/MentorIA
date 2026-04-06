@@ -57,6 +57,14 @@ class UserRegister(BaseModel):
     email: EmailStr = Field(..., description="Email válido")
     password: str = Field(..., min_length=8, max_length=100, description="Senha (mínimo 8 caracteres, força média ou superior)")
     
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v):
+        """Valida username e bloqueia nomes reservados do sistema"""
+        if v.lower() == 'mentoria':
+            raise ValueError('O nome de usuário "MentorIA" é reservado para o sistema e não pode ser usado.')
+        return v
+    
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v):
