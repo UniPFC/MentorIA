@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Development Configuration
+    DEV_MODE: bool = False
+
     model_config = ConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

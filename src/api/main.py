@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from config.logger import logger
+from config.settings import settings
 from shared.database.migration import run_migrations
 from src.api.routes import chat_types, chats, upload, jobs, auth
 from src.services.seeder import seed_default_knowledge
@@ -16,8 +17,9 @@ async def lifespan(app: FastAPI):
     run_migrations()
     
     try:
-        logger.info("Running background seeder...")
-        await asyncio.to_thread(seed_default_knowledge)
+        if not settings.DEV_MODE:
+            logger.info("Running background seeder...")
+            await asyncio.to_thread(seed_default_knowledge)
     except Exception as e:
         logger.error(f"Seeder failed: {e}")
         
