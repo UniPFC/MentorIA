@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     LOGIN_BLOCK_MINUTES: int = 10
 
     # Development Configuration
-    DEV_MODE: bool = True
+    DEV_MODE: bool = False
 
     model_config = ConfigDict(
         env_file=".env",
