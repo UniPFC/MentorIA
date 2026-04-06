@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
     # Development Configuration
-    DEV_MODE: bool = False
+    DEV_MODE: bool = True
 
     model_config = ConfigDict(
         env_file=".env",
