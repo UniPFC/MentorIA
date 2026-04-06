@@ -114,7 +114,7 @@ async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db))
     logger.info("Access token refreshed successfully")
     return {
         "access_token": new_tokens["access_token"],
-        "refresh_token": token_data.refresh_token,  # Mantém o mesmo refresh token
+        "refresh_token": new_tokens["refresh_token"],  # Novo refresh token (rotation)
         "token_type": new_tokens["token_type"],
         "expires_in": new_tokens["expires_in"]
     }
@@ -127,13 +127,15 @@ async def logout(
     db: Session = Depends(get_db)
 ):
     """
-    Realiza logout do usuário invalidando o token no banco de dados
+    Realiza logout do usuário invalidando todos os seus tokens no banco de dados
     """
     token = credentials.credentials
     user_repo = UserRepository(db)
-    user_repo.invalidate_token(token)
     
-    logger.info(f"User logged out: {current_user.username}")
+    # Invalidar todos os tokens do usuário (access e refresh)
+    user_repo.invalidate_all_user_tokens(current_user.id)
+    
+    logger.info(f"User logged out and all tokens invalidated: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}
 
 

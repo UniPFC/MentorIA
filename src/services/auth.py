@@ -168,7 +168,7 @@ class AuthService:
         }
 
     def refresh_access_token(self, refresh_token: str, user_repo: Any) -> Optional[Dict[str, Any]]:
-        """Gera novo access token usando refresh token, verificando no banco"""
+        """Gera novo access token e refresh token usando refresh token (refresh token rotation)"""
         # Verificar se o refresh token existe e está ativo no banco
         stored_token = user_repo.get_token(refresh_token)
         if not stored_token or stored_token.token_type != "refresh":
@@ -185,19 +185,38 @@ class AuthService:
             "email": payload.get("email", "")
         }
         
-        access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
-        new_access_token = self.create_access_token(access_data, expires_delta=access_token_expires)
+        # Criar novo refresh token (rotation)
+        refresh_data = {
+            "sub": payload["sub"],
+            "username": payload["username"]
+        }
         
-        # Registrar novo access token no banco
+        access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
+        refresh_token_expires = timedelta(days=self.refresh_token_expire_days)
+        
+        new_access_token = self.create_access_token(access_data, expires_delta=access_token_expires)
+        new_refresh_token = self.create_refresh_token(refresh_data)
+        
+        # Invalidar refresh token antigo (security measure)
+        user_repo.invalidate_token(refresh_token)
+        
+        # Registrar novos tokens no banco
         user_repo.create_token(
             user_id=stored_token.user_id,
             token=new_access_token,
             token_type="access",
             expires_at=datetime.now(timezone.utc) + access_token_expires
         )
+        user_repo.create_token(
+            user_id=stored_token.user_id,
+            token=new_refresh_token,
+            token_type="refresh",
+            expires_at=datetime.now(timezone.utc) + refresh_token_expires
+        )
         
         return {
             "access_token": new_access_token,
+            "refresh_token": new_refresh_token,  # Novo refresh token
             "token_type": "bearer",
             "expires_in": self.access_token_expire_minutes * 60
         }
