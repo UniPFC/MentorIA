@@ -11,6 +11,7 @@ from src.api.schemas.auth import (
 from src.api.dependencies import get_current_active_user, security
 from src.services.auth import auth_service
 from src.services.email import email_service
+from src.services.rate_limiter import rate_limiter
 from config.logger import logger
 from config.settings import settings
 from datetime import datetime, timedelta, timezone
@@ -68,16 +69,40 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     """
     Autentica usuário e retorna tokens JWT
     """
+    # Verificar rate limit por email antes de processar
+    allowed, remaining_minutes = rate_limiter.check_attempt(user_credentials.email)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Muitas tentativas de login. Tente novamente em {remaining_minutes} minutos.",
+            headers={"Retry-After": str(remaining_minutes * 60)}
+        )
+    
     user_repo = UserRepository(db)
     
     user = auth_service.authenticate_user(user_repo, user_credentials.email, user_credentials.password)
     
     if not user:
+        # Registrar tentativa falha
+        rate_limiter.record_attempt(user_credentials.email)
+        
+        # Verificar se agora está bloqueado após registrar esta tentativa
+        blocked, block_minutes = rate_limiter.is_blocked(user_credentials.email)
+        if blocked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Número excessivo de tentativas. Conta bloqueada por {block_minutes} minutos.",
+                headers={"Retry-After": str(block_minutes * 60)}
+            )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Login bem-sucedido - limpar tentativas
+    rate_limiter.record_success(user_credentials.email)
     
     # Verificar se precisa de reset de senha
     if auth_service.needs_password_reset(user.password_hash):

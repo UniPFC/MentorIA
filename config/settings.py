@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Rate Limiting Configuration (simples, em memória)
+    LOGIN_MAX_ATTEMPTS: int = 5
+    LOGIN_WINDOW_MINUTES: int = 5
+    LOGIN_BLOCK_MINUTES: int = 10
+
     # Development Configuration
     DEV_MODE: bool = True
 
