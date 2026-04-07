@@ -1,0 +1,89 @@
+name: Tests and Regression
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.12']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+      with:
+        version: "latest"
+    
+    - name: Install dependencies with uv
+      run: |
+        uv sync
+    
+    - name: Run Unit Tests
+      run: |
+        pytest tests/unit/ -v --tb=short --cov=src --cov=shared --cov-report=term-missing --cov-report=html --cov-report=xml
+    
+    - name: Run Integration Tests
+      run: |
+        pytest tests/integration/ -v --tb=short
+    
+    - name: Run Regression Tests
+      run: |
+        pytest tests/regression/ -v --tb=short -m regression
+    
+    - name: Run Performance Tests
+      run: |
+        pytest tests/performance/ -v --tb=short -m performance
+    
+    - name: Upload Coverage Reports
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Generate Coverage Badge
+      run: |
+        pip install coverage-badge
+        coverage-badge -o coverage.svg -f
+    
+    - name: Comment PR with Test Results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const coverage = fs.readFileSync('coverage.xml', 'utf8');
+          const match = coverage.match(/line-rate="([^"]+)"/);
+          const lineRate = match ? (parseFloat(match[1]) * 100).toFixed(2) : 'N/A';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## Test Results ✅\n\n- **Coverage:** ${lineRate}%\n- **Unit Tests:** ✅ Passed\n- **Integration Tests:** ✅ Passed\n- **Regression Tests:** ✅ Passed\n- **Performance Tests:** ✅ Passed\n\nAll tests passed successfully!`
+          })
+    
+    - name: Fail if coverage below threshold
+      run: |
+        python -c "
+        import xml.etree.ElementTree as ET
+        tree = ET.parse('coverage.xml')
+        root = tree.getroot()
+        coverage = float(root.get('line-rate', 0)) * 100
+        print(f'Coverage: {coverage:.2f}%')
+        if coverage < 90:
+            print('ERROR: Coverage below 90% threshold')
+            exit(1)
+        "
