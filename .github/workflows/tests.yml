@@ -31,7 +31,7 @@ jobs:
     
     - name: Load test environment variables
       run: |
-        cat tests/.env.test >> $GITHUB_ENV
+        grep -v '^#' tests/.env.test | grep -v '^$' >> $GITHUB_ENV
     
     - name: Run Unit Tests
       run: |
