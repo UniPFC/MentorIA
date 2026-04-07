@@ -345,7 +345,7 @@ def send_message(
         
         return SendMessageResponse(
             chat=ChatWithMessagesResponse.model_validate(chat),
-            retrieved_chunks=chunks_response
+            sources=chunks_response
         )
         
     except HTTPException:

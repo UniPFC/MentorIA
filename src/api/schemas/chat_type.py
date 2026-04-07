@@ -2,7 +2,7 @@
 Pydantic schemas for ChatType endpoints.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -22,15 +22,14 @@ class ChatTypeCreate(ChatTypeBase):
 
 class ChatTypeResponse(ChatTypeBase):
     """Schema for ChatType response."""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     is_public: bool
     owner_id: Optional[UUID]
     owner_name: Optional[str] = Field(None, description="Owner username (system chat types show 'MentorIA')")
     collection_name: str
     created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 
 class ChatTypeListResponse(BaseModel):
