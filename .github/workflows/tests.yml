@@ -64,7 +64,7 @@ jobs:
     - name: Generate Coverage Badge
       run: |
         . .venv/bin/activate
-        pip install coverage-badge
+        pip install setuptools coverage-badge
         coverage-badge -o coverage.svg -f
     
     - name: Comment PR with Test Results
