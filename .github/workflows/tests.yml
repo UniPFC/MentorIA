@@ -33,7 +33,7 @@ jobs:
       run: |
         grep -v '^#' tests/.env.test | grep -v '^$' >> $GITHUB_ENV
     
-    - name: Run Unit Tests
+    - name: Run Unit Tests with Coverage
       run: |
         . .venv/bin/activate
         pytest tests/unit/ -v --tb=short --cov=src --cov=shared --cov-report=term-missing --cov-report=html --cov-report=xml
