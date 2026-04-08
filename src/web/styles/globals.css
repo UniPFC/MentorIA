@@ -2,7 +2,7 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @layer base {
   html {
@@ -15,45 +15,82 @@
     @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
     min-height: 100vh;
   }
+
+  /* Better default focus */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand-500/40 ring-offset-2 dark:ring-offset-gray-900;
+  }
 }
 
 @layer components {
   .input-field {
-    @apply w-full px-3.5 py-2.5 rounded-lg border border-gray-300 bg-white
+    @apply w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white
            text-gray-900 placeholder-gray-400 text-sm
-           focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500
-           transition-colors duration-150
-           dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100
-           dark:placeholder-gray-500 dark:focus:ring-brand-400/40 dark:focus:border-brand-400;
+           focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500
+           transition-all duration-200
+           dark:bg-gray-800/80 dark:border-gray-700 dark:text-gray-100
+           dark:placeholder-gray-500 dark:focus:ring-brand-400/30 dark:focus:border-brand-400;
   }
 
   .btn-primary {
-    @apply w-full py-2.5 px-4 rounded-lg font-medium text-sm text-white
-           bg-brand-600 hover:bg-brand-700 active:bg-brand-800
+    @apply w-full py-2.5 px-4 rounded-xl font-semibold text-sm text-white
+           bg-gradient-to-r from-brand-600 to-brand-700
+           hover:from-brand-700 hover:to-brand-800
+           active:from-brand-800 active:to-brand-900
            focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
-           transition-colors duration-150
-           dark:bg-brand-500 dark:hover:bg-brand-600 dark:focus:ring-offset-gray-900;
+           transition-all duration-200 shadow-sm shadow-brand-500/25
+           hover:shadow-md hover:shadow-brand-500/30
+           dark:from-brand-500 dark:to-brand-600
+           dark:hover:from-brand-600 dark:hover:to-brand-700
+           dark:focus:ring-offset-gray-900;
   }
 
   .btn-secondary {
-    @apply w-full py-2.5 px-4 rounded-lg font-medium text-sm
-           border border-gray-300 text-gray-700 bg-white
-           hover:bg-gray-50 active:bg-gray-100
+    @apply w-full py-2.5 px-4 rounded-xl font-medium text-sm
+           border border-gray-200 text-gray-700 bg-white
+           hover:bg-gray-50 hover:border-gray-300 active:bg-gray-100
            focus:outline-none focus:ring-2 focus:ring-gray-500/20 focus:ring-offset-2
-           transition-colors duration-150
+           transition-all duration-200
            dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300
-           dark:hover:bg-gray-700 dark:focus:ring-offset-gray-900;
+           dark:hover:bg-gray-700 dark:hover:border-gray-600
+           dark:focus:ring-offset-gray-900;
   }
 
   .card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm
-           dark:bg-gray-900 dark:border-gray-800;
+    @apply bg-white rounded-2xl border border-gray-200/80 shadow-sm
+           dark:bg-gray-900 dark:border-gray-800/80
+           transition-all duration-300;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-lg hover:shadow-gray-200/50 hover:border-gray-300
+           hover:-translate-y-0.5
+           dark:hover:shadow-gray-900/50 dark:hover:border-gray-700;
+  }
+
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20
+           dark:bg-gray-900/70 dark:border-gray-700/30;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand-600 to-brand-400 bg-clip-text text-transparent
+           dark:from-brand-400 dark:to-brand-300;
   }
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { @apply bg-gray-300 dark:bg-gray-700 rounded-full; }
+::-webkit-scrollbar-thumb { @apply bg-gray-300/60 dark:bg-gray-700/60 rounded-full; }
 ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400 dark:bg-gray-600; }
+
+/* Prose overrides for chat messages */
+.prose pre { @apply overflow-x-auto rounded-xl; }
+.prose code:not(pre code) {
+  @apply px-1.5 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm font-mono;
+}
+.prose a { @apply text-brand-600 dark:text-brand-400 underline decoration-brand-300 dark:decoration-brand-600 underline-offset-2; }
+.prose table { @apply text-sm; }
+.prose th { @apply bg-gray-50 dark:bg-gray-800; }
