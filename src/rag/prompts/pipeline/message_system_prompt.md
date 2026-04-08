@@ -10,3 +10,6 @@
 
 ### CONTEXTO:
 {context}
+
+### PERGUNTA:
+{user_query}

@@ -73,11 +73,8 @@ class TestChunkIngestionService:
         
         service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)
         
-        # With exactly 2 columns, auto-detection uses first as question, second as answer
-        chunks = service.parse_spreadsheet(buffer.getvalue(), "test.xlsx")
-        assert len(chunks) == 1
-        assert chunks[0]["question"] == "val1"
-        assert chunks[0]["answer"] == "val2"
+        with pytest.raises(ValueError, match="Required columns"):
+            service.parse_spreadsheet(buffer.getvalue(), "test.xlsx")
             
     def test_parse_spreadsheet_unsupported_format(self, mock_embedding_engine, mock_qdrant_manager):
         service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)

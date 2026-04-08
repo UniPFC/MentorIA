@@ -3,8 +3,6 @@
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { Button, Input } from '@/components/ui';
 import Toast from '@/components/Toast';
 import ThemeToggle from '@/components/ThemeToggle';
 import { authService } from '@/lib/auth';
@@ -25,17 +23,6 @@ export default function RegisterPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const getRegisterErrorMessage = (err: any): string => {
-    const apiError = err?.response?.data;
-    const fieldErrors = apiError?.errors;
-
-    if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-      return fieldErrors[0]?.message || 'Erro de validação no cadastro';
-    }
-
-    return apiError?.detail || 'Erro ao fazer cadastro';
-  };
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -43,26 +30,22 @@ export default function RegisterPage() {
       setToast({ message: 'Preencha todos os campos', type: 'error' });
       return;
     }
-    if (formData.username.trim().length > 0 && formData.username.trim().length < 3) {
-      setToast({ message: 'Nome de usuário deve ter no mínimo 3 caracteres', type: 'error' });
-      return;
-    }
     if (formData.password !== formData.confirmPassword) {
       setToast({ message: 'As senhas não coincidem', type: 'error' });
       return;
     }
-    if (formData.password.length < 8) {
-      setToast({ message: 'Senha deve ter no mínimo 8 caracteres', type: 'error' });
+    if (formData.password.length < 6) {
+      setToast({ message: 'Senha deve ter no mínimo 6 caracteres', type: 'error' });
       return;
     }
 
     setLoading(true);
     try {
-      await authService.register(formData.email, formData.password, formData.username.trim());
+      await authService.register(formData.email, formData.password, formData.username);
       setToast({ message: 'Cadastro realizado com sucesso!', type: 'success' });
       setTimeout(() => router.push('/dashboard'), 1500);
     } catch (err: any) {
-      setToast({ message: getRegisterErrorMessage(err), type: 'error' });
+      setToast({ message: err.response?.data?.detail || 'Erro ao fazer cadastro', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -71,47 +54,46 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex bg-gray-50 dark:bg-gray-950">
       {/* Left brand panel */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900">
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/5 animate-pulse-soft" />
-        <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full bg-white/5 animate-pulse-soft" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-[30%] right-[20%] w-48 h-48 rounded-full bg-white/5 animate-float" />
-        <div className="absolute bottom-[30%] left-[15%] w-24 h-24 rounded-full bg-white/[0.03] animate-float" style={{ animationDelay: '3s' }} />
+      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-indigo-800">
+        <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/5" />
+        <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full bg-white/5" />
+        <div className="absolute top-1/3 right-1/4 w-48 h-48 rounded-full bg-white/5" />
 
         <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center shadow-lg shadow-black/10">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
-            <span className="text-lg font-bold tracking-tight">MentorIA</span>
+            <span className="text-lg font-bold">Portal RAG</span>
           </div>
 
           <div>
-            <h2 className="text-4xl font-extrabold leading-tight mb-4">
+            <h2 className="text-3xl font-bold leading-tight mb-3">
               Comece sua
-              <br /><span className="text-white/90">jornada agora</span>
+              <br />jornada agora
             </h2>
-            <p className="text-base text-white/50 max-w-sm leading-relaxed">
+            <p className="text-base text-white/60 max-w-sm leading-relaxed">
               Crie sua conta gratuita e tenha acesso ao chat inteligente com tecnologia RAG.
             </p>
 
-            <div className="mt-10 space-y-4">
+            <div className="mt-8 space-y-3">
               {['Cadastro rápido e gratuito', 'Envie seus materiais de estudo', 'Obtenha respostas inteligentes e contextuais'].map((item) => (
                 <div key={item} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0 backdrop-blur-sm">
+                  <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center shrink-0">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
                   </div>
-                  <span className="text-sm text-white/60">{item}</span>
+                  <span className="text-sm text-white/70">{item}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-xs text-white/20 font-medium">&copy; 2026 MentorIA. Todos os direitos reservados.</p>
+          <p className="text-xs text-white/30">&copy; 2026 Portal RAG. Todos os direitos reservados.</p>
         </div>
       </div>
 
@@ -121,95 +103,172 @@ export default function RegisterPage() {
           <ThemeToggle />
         </div>
 
-        <div className="w-full max-w-[420px] mx-auto px-4">
+        <div className="w-full max-w-[440px] mx-auto px-4">
           {/* Header */}
-          <div className="text-center mb-10 animate-fade-in">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 mb-5 lg:hidden shadow-lg shadow-brand-500/25">
-              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 mb-4 lg:hidden shadow-lg shadow-brand-500/25">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Crie sua conta</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Preencha seus dados para começar</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Preencha seus dados para começar</p>
+          </div>
+
+          {/* Social Login */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+              </svg>
+              Google
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 23 23">
+                <path fill="#f35325" d="M1 1h10v10H1z" />
+                <path fill="#81bc06" d="M12 1h10v10H12z" />
+                <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                <path fill="#ffba08" d="M12 12h10v10H12z" />
+              </svg>
+              Microsoft
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-gray-50 dark:bg-gray-950 px-3 text-gray-400 dark:text-gray-500 uppercase tracking-wider">ou continue com e-mail</span>
+            </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="animate-slide-up-stagger-1">
-              <Input
-                label="Nome de usuário"
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                placeholder="seu_usuario"
-                autoComplete="username"
-                icon={<User className="w-[18px] h-[18px]" />}
-              />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nome de usuário</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  placeholder="seu_usuario"
+                  className="input-field pl-10"
+                  autoComplete="username"
+                />
+              </div>
             </div>
 
-            <div className="animate-slide-up-stagger-2">
-              <Input
-                label="E-mail"
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="seu@email.com"
-                required
-                autoComplete="email"
-                icon={<Mail className="w-[18px] h-[18px]" />}
-              />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">E-mail</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                  </svg>
+                </div>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="seu@email.com"
+                  required
+                  className="input-field pl-10"
+                  autoComplete="email"
+                />
+              </div>
             </div>
 
-            <div className="animate-slide-up-stagger-3">
-              <Input
-                label="Senha"
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Mínimo 8 caracteres"
-                required
-                autoComplete="new-password"
-                icon={<Lock className="w-[18px] h-[18px]" />}
-                rightIcon={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
-                  </button>
-                }
-              />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Senha</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Mínimo 6 caracteres"
+                  required
+                  className="input-field pl-10 pr-11"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showPassword ? (
+                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                    </svg>
+                  ) : (
+                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <div className="animate-slide-up-stagger-4">
-              <Input
-                label="Confirmar Senha"
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder="Digite a senha novamente"
-                required
-                autoComplete="new-password"
-                icon={<Lock className="w-[18px] h-[18px]" />}
-              />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirmar Senha</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                </div>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Digite a senha novamente"
+                  required
+                  className="input-field pl-10"
+                  autoComplete="new-password"
+                />
+              </div>
             </div>
 
-            <div className="animate-slide-up-stagger-5 pt-1">
-              <Button type="submit" loading={loading} className="w-full !py-3 !rounded-xl !text-sm !font-bold">
-                {loading ? 'Cadastrando...' : 'Criar conta'}
-              </Button>
-            </div>
+            <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 !py-3 !rounded-xl !text-sm !font-semibold">
+              {loading && (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {loading ? 'Cadastrando...' : 'Criar conta'}
+            </button>
           </form>
 
-          <p className="text-center mt-8 text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-center mt-6 text-sm text-gray-500 dark:text-gray-400">
             Já tem uma conta?{' '}
-            <Link href="/login" className="text-brand-600 dark:text-brand-400 font-semibold hover:text-brand-700 dark:hover:text-brand-300 transition-colors">
+            <Link href="/login" className="text-brand-600 dark:text-brand-400 font-medium hover:underline">
               Faça login
             </Link>
           </p>

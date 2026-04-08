@@ -6,8 +6,7 @@ from shared.database.models.user import User
 from src.repositories.user import UserRepository
 from src.api.schemas.auth import (
     UserRegister, UserLogin, Token, TokenRefresh, TokenVerifyResponse,
-    UserResponse, LogoutResponse, PasswordResetRequest, PasswordResetConfirm,
-    ProfileUpdate, PasswordChange
+    UserResponse, LogoutResponse, PasswordResetRequest, PasswordResetConfirm
 )
 from src.api.dependencies import get_current_active_user, security
 from src.services.auth import auth_service
@@ -233,45 +232,4 @@ async def confirm_reset_password(
     email_service.send_password_changed_email(user.email, user.username)
     
     logger.info(f"Password reset confirmed for user: {user.username}")
-    return {"message": "Senha alterada com sucesso", "success": True}
-
-
-@router.put("/me", response_model=UserResponse)
-async def update_profile(
-    profile_data: ProfileUpdate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    user_repo = UserRepository(db)
-
-    if profile_data.username and profile_data.username != current_user.username:
-        existing = user_repo.get_by_username(profile_data.username)
-        if existing:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome de usuário já existe")
-        current_user.username = profile_data.username
-
-    if profile_data.email and profile_data.email != current_user.email:
-        existing = user_repo.get_by_email(profile_data.email)
-        if existing:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email já cadastrado")
-        current_user.email = profile_data.email
-
-    user_repo.update(current_user)
-    logger.info(f"Profile updated for user: {current_user.username}")
-    return current_user
-
-
-@router.put("/change-password")
-async def change_password(
-    data: PasswordChange,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    if not auth_service.verify_password(data.current_password, current_user.password_hash):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Senha atual incorreta")
-
-    current_user.password_hash = auth_service.get_password_hash(data.new_password)
-    user_repo = UserRepository(db)
-    user_repo.update(current_user)
-    logger.info(f"Password changed for user: {current_user.username}")
     return {"message": "Senha alterada com sucesso", "success": True}

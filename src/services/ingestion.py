@@ -53,42 +53,15 @@ class ChunkIngestionService:
         try:
             # Detect file type and read
             if filename.endswith('.csv'):
-                for enc in ('utf-8', 'latin-1', 'cp1252'):
-                    try:
-                        # Auto-detect delimiter by reading first line
-                        sample = file_content[:4096]
-                        try:
-                            first_line = sample.decode(enc).split('\n')[0]
-                        except UnicodeDecodeError:
-                            continue
-                        if ';' in first_line and ',' not in first_line:
-                            sep = ';'
-                        elif '\t' in first_line and ',' not in first_line:
-                            sep = '\t'
-                        else:
-                            sep = ','
-                        df = pd.read_csv(BytesIO(file_content), encoding=enc, sep=sep)
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                else:
-                    raise ValueError(f"Não foi possível decodificar o arquivo {filename}. Tente salvar como UTF-8.")
+                df = pd.read_csv(BytesIO(file_content))
             elif filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(BytesIO(file_content))
             else:
                 raise ValueError(f"Unsupported file format: {filename}")
             
-            # Auto-detect columns if defaults not found
-            question_col, answer_col = self._detect_columns(df, question_col, answer_col)
-            
             # Validate columns
             if question_col not in df.columns or answer_col not in df.columns:
-                available = ", ".join(df.columns.tolist())
-                raise ValueError(
-                    f"Não foi possível identificar as colunas de pergunta e resposta. "
-                    f"Colunas disponíveis: {available}. "
-                    f"Renomeie para 'question' e 'answer' ou use nomes similares."
-                )
+                raise ValueError(f"Required columns '{question_col}' and '{answer_col}' not found in file")
             
             # Parse chunks
             chunks = []
@@ -113,60 +86,24 @@ class ChunkIngestionService:
             logger.error(f"Failed to parse spreadsheet {filename}: {e}")
             raise
     
-    @staticmethod
-    def _detect_columns(df: pd.DataFrame, question_col: str, answer_col: str) -> tuple:
-        """
-        Auto-detect question and answer columns if the specified ones don't exist.
-        Tries common column name patterns (case-insensitive).
-        """
-        cols_lower = {c.lower().strip(): c for c in df.columns}
-        
-        # If exact columns exist, use them
-        if question_col in df.columns and answer_col in df.columns:
-            return question_col, answer_col
-        
-        # Common patterns for question columns
-        q_patterns = ['question', 'pergunta', 'questão', 'questao', 'enunciado', 'prompt', 'input', 'q']
-        # Common patterns for answer columns  
-        a_patterns = ['answer', 'resposta', 'response', 'output', 'a', 'solução', 'solucao', 'gabarito']
-        
-        detected_q = None
-        detected_a = None
-        
-        for pattern in q_patterns:
-            if pattern in cols_lower:
-                detected_q = cols_lower[pattern]
-                break
-        
-        for pattern in a_patterns:
-            if pattern in cols_lower:
-                detected_a = cols_lower[pattern]
-                break
-        
-        # Fallback: if file has exactly 2 columns, use first as question, second as answer
-        if (detected_q is None or detected_a is None) and len(df.columns) == 2:
-            detected_q = detected_q or df.columns[0]
-            detected_a = detected_a or df.columns[1]
-            logger.info(f"Auto-detected 2-column file: question='{detected_q}', answer='{detected_a}'")
-        
-        final_q = detected_q or question_col
-        final_a = detected_a or answer_col
-        
-        if final_q != question_col or final_a != answer_col:
-            logger.info(f"Auto-detected columns: question='{final_q}', answer='{final_a}'")
-        
-        return final_q, final_a
-
     def ingest_chunks(
         self,
         chat_type_id: UUID,
         chunks: List[Dict[str, Any]],
         db_session: Any,
-        batch_size: int = 32,
-        on_progress=None
+        batch_size: int = 32
     ) -> Tuple[List[str], int]:
         """
         Ingest chunks into Qdrant with embeddings.
+        
+        Args:
+            chat_type_id: ID of the ChatType
+            chunks: List of chunk dicts
+            db_session: Database session for saving metadata
+            batch_size: Batch size for embedding generation
+            
+        Returns:
+            Tuple of (point_ids, total_ingested)
         """
         if not chunks:
             logger.warning("No chunks to ingest")
@@ -178,15 +115,11 @@ class ChunkIngestionService:
             
             # Generate embeddings in batches
             all_embeddings = []
-            total_batches = (len(texts) - 1) // batch_size + 1
             for i in range(0, len(texts), batch_size):
                 batch_texts = texts[i:i + batch_size]
                 batch_embeddings = self.embedding_engine.embed(batch_texts)
                 all_embeddings.extend(batch_embeddings)
-                batch_num = i // batch_size + 1
-                logger.debug(f"Generated embeddings for batch {batch_num}/{total_batches}")
-                if on_progress:
-                    on_progress(len(all_embeddings))
+                logger.debug(f"Generated embeddings for batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}")
             
             # Insert into Qdrant
             point_ids = self.qdrant_manager.insert_chunks(

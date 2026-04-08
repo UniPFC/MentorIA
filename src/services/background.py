@@ -32,6 +32,16 @@ def process_ingestion_job(
 ):
     """
     Background task to process chunk ingestion.
+    
+    Args:
+        job_id: ID of the IngestionJob
+        chat_type_id: ID of the ChatType
+        file_content: File bytes
+        filename: Original filename
+        question_col: Column name for questions
+        answer_col: Column name for answers
+        ingestion_service: ChunkIngestionService instance
+        db: Database session
     """
     job = db.query(IngestionJob).filter(IngestionJob.id == job_id).first()
     if not job:
@@ -54,19 +64,11 @@ def process_ingestion_job(
         job.total_chunks = len(chunks)
         db.commit()
         
-        # Ingest chunks with progress callback
-        def on_progress(processed: int):
-            try:
-                job.processed_chunks = processed
-                db.commit()
-            except Exception:
-                db.rollback()
-        
+        # Ingest chunks
         point_ids, total_ingested = ingestion_service.ingest_chunks(
             chat_type_id=chat_type_id,
             chunks=chunks,
-            db_session=db,
-            on_progress=on_progress
+            db_session=db
         )
         
         # Update job status

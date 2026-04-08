@@ -28,7 +28,7 @@ class TestProviderUtils:
     
     @patch('src.ai.provider.utils.settings')
     def test_resolve_api_key_gemini(self, mock_settings):
-        mock_settings.GEMINI_API_KEY = "test-gemini-key"
+        mock_settings.GOOGLE_API_KEY = "test-gemini-key"
         result = resolve_api_key("gemini", None)
         assert result == "test-gemini-key"
     

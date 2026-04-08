@@ -36,9 +36,8 @@ export const authService = {
         Cookies.set('authToken', token, { expires: 30 });
         localStorage.setItem('authToken', token);
       } else {
-        // Session cookie only — no localStorage so token is gone after browser close
         Cookies.set('authToken', token);
-        localStorage.removeItem('authToken');
+        localStorage.setItem('authToken', token);
       }
 
       // Buscar dados do usuário após login
@@ -58,34 +57,11 @@ export const authService = {
 
   async register(email: string, password: string, username?: string): Promise<RegisterResponse> {
     try {
-      const normalizedUsername = username?.trim();
-      const emailPrefix = email.split('@')[0].trim();
-
-      const buildFallbackUsername = (): string => {
-        const sanitized = emailPrefix.replace(/[^a-zA-Z0-9_]/g, '');
-        let candidate = sanitized.length >= 3 ? sanitized : `${sanitized}user`;
-
-        if (candidate.length < 3) {
-          candidate = `user${Date.now().toString().slice(-4)}`;
-        }
-
-        if (candidate.toLowerCase() === 'mentoria') {
-          candidate = `${candidate}_user`;
-        }
-
-        return candidate.slice(0, 50);
-      };
-
-      const finalUsername =
-        normalizedUsername && normalizedUsername.length > 0
-          ? normalizedUsername
-          : buildFallbackUsername();
-
       // 1. Registrar usuário
       const response = await api.post<RegisterResponse>('/auth/register', {
         email,
         password,
-        username: finalUsername,
+        username: username || email.split('@')[0],
       });
 
       // 2. Fazer login automaticamente após registro
