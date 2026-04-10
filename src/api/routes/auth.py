@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
@@ -11,7 +11,7 @@ from src.api.schemas.auth import (
 from src.api.dependencies import get_current_active_user, security
 from src.services.auth import auth_service
 from src.services.email import email_service
-from src.services.rate_limiter import rate_limiter
+from src.services.security_cache import security_cache
 from config.logger import logger
 from config.settings import settings
 from datetime import datetime, timedelta, timezone
@@ -65,17 +65,50 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
+async def login(user_credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     """
     Autentica usuário e retorna tokens JWT
     """
-    # Verificar rate limit por email antes de processar
-    allowed, remaining_minutes = rate_limiter.check_attempt(user_credentials.email)
-    if not allowed:
+    # Obter informações da requisição
+    client_ip = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")
+    
+    # Verificar se IP está bloqueado pelo cache de segurança
+    ip_blocked, ip_block_reason = security_cache.should_block_ip(client_ip)
+    if ip_blocked:
+        security_cache.record_login_attempt(
+            user_credentials.email, client_ip, user_agent,
+            False, ip_block_reason, "HIGH", [ip_block_reason]
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Muitas tentativas de login. Tente novamente em {remaining_minutes} minutos.",
-            headers={"Retry-After": str(remaining_minutes * 60)}
+            detail="IP temporariamente bloqueado por atividades suspeitas.",
+            headers={"Retry-After": "300"}
+        )
+    
+    # Detectar anomalias antes da autenticação
+    anomaly_result = security_cache.detect_anomalies(user_credentials.email, client_ip, user_agent)
+    
+    # Se detectar anomalias críticas ou rate limit, bloquear
+    if anomaly_result['risk_score'] in ['CRITICAL', 'HIGH']:
+        security_cache.record_login_attempt(
+            user_credentials.email, client_ip, user_agent,
+            False, "Security anomaly detected", anomaly_result['risk_score'], anomaly_result['anomalies']
+        )
+        
+        # Se for CRITICAL, bloquear imediatamente
+        if anomaly_result['risk_score'] == 'CRITICAL':
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso bloqueado por motivos de segurança.",
+                headers={"X-Security-Block": "anomaly_detection"}
+            )
+        
+        # Se for HIGH, dar rate limit
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas suspeitas. Tente novamente mais tarde.",
+            headers={"Retry-After": "300"}
         )
     
     user_repo = UserRepository(db)
@@ -83,16 +116,20 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     user = auth_service.authenticate_user(user_repo, user_credentials.email, user_credentials.password)
     
     if not user:
-        # Registrar tentativa falha
-        rate_limiter.record_attempt(user_credentials.email)
+        # Registrar tentativa falha com anomalias
+        security_cache.record_login_attempt(
+            user_credentials.email, client_ip, user_agent,
+            False, "Email ou senha incorretos", 
+            anomaly_result['risk_score'], anomaly_result['anomalies']
+        )
         
-        # Verificar se agora está bloqueado após registrar esta tentativa
-        blocked, block_minutes = rate_limiter.is_blocked(user_credentials.email)
-        if blocked:
+        # Verificar se agora tem anomalia pós-falha
+        post_failure_anomaly = security_cache.detect_anomalies(user_credentials.email, client_ip, user_agent)
+        if post_failure_anomaly['risk_score'] in ['CRITICAL', 'HIGH']:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Número excessivo de tentativas. Conta bloqueada por {block_minutes} minutos.",
-                headers={"Retry-After": str(block_minutes * 60)}
+                detail="Número excessivo de tentativas. Tente novamente mais tarde.",
+                headers={"Retry-After": "300"}
             )
         
         raise HTTPException(
@@ -101,8 +138,11 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Login bem-sucedido - limpar tentativas
-    rate_limiter.record_success(user_credentials.email)
+    # Login bem-sucedido - registrar com anomalias
+    security_cache.record_login_attempt(
+        user_credentials.email, client_ip, user_agent,
+        True, None, anomaly_result['risk_score'], anomaly_result['anomalies']
+    )
     
     # Verificar se precisa de reset de senha
     if auth_service.needs_password_reset(user.password_hash):
@@ -118,8 +158,33 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     user_repo.update(user)
     
     tokens = auth_service.create_user_tokens(user, user_repo)
-    logger.info(f"User logged in successfully: {user.username}")
+    logger.info(f"User logged in successfully: {user.username} from {client_ip}")
+    
+    # Limpar cache antigo periodicamente
+    security_cache.cleanup_old_data()
+    
     return tokens
+
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Obtém o IP real do cliente considerando proxies
+    """
+    # Verificar headers comuns de proxy
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Pega o primeiro IP da lista
+        return forwarded_for.split(",")[0].strip()
+    
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback para o IP da conexão
+    if hasattr(request, 'client') and request.client:
+        return request.client.host
+    
+    return "unknown"
 
 
 @router.post("/refresh", response_model=Token)
