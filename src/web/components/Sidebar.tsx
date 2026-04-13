@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { LayoutDashboard, MessageSquare, Upload, FolderOpen, LogOut, Menu, X, BookOpen, UserCircle, Clock } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import { authService } from '@/lib/auth';
 
 interface SidebarProps {
   userName: string;
@@ -26,9 +27,8 @@ export default function Sidebar({ userName, userEmail, userInitials }: SidebarPr
     { href: '/dashboard/profile', label: 'Perfil', icon: UserCircle },
   ];
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await authService.logout();
     router.push('/login');
   };
 

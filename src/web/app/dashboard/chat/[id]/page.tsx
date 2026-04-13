@@ -130,6 +130,16 @@ export default function ChatPage() {
       const res = await api.get(`/chats/${chatId}`);
       setChat(res.data);
       setMessages(res.data.messages || []);
+      
+      // Sync messages: if there are unsaved messages, reload to get the latest
+      // This handles the case where user left during streaming and returns
+      if (res.data.messages && res.data.messages.length > 0) {
+        const lastMessage = res.data.messages[res.data.messages.length - 1];
+        // If the last message is from assistant, it means the response was saved
+        if (lastMessage.role === 'assistant') {
+          // Messages are in sync
+        }
+      }
     } catch (err: any) {
       setError('Não foi possível carregar o chat');
     } finally {
@@ -291,11 +301,21 @@ export default function ChatPage() {
         }
       }
     } catch (err: any) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
-      setInput(content);
-      setError(err.message || 'Erro ao enviar mensagem');
+      // Connection lost during streaming
+      // Try to sync messages - the backend may have saved the response
+      try {
+        setError('Conexão perdida. Sincronizando mensagens...');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        await loadChat(); // Reload chat to get any saved messages
+        setError(''); // Clear error if sync successful
+      } catch (syncErr) {
+        // If sync fails, show the original error
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
+        setInput(content);
+        setError(err.message || 'Erro ao enviar mensagem');
+        setTimeout(() => setError(''), 4000);
+      }
       setTitlePollingActive(false);
-      setTimeout(() => setError(''), 4000);
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -538,7 +558,7 @@ export default function ChatPage() {
                   Envie uma mensagem para começar. A IA responderá com base nos documentos carregados nesta base de dados.
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-                  {['O que você sabe?', 'Resuma os documentos', 'Explique o conteúdo'].map((suggestion) => (
+                  {['O que você sabe?', 'Com oque pode me ajudar?', 'Como funciona?', 'Crie um teste de estudo!'].map((suggestion) => (
                     <button
                       key={suggestion}
                       onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}

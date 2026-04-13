@@ -14,6 +14,7 @@ from shared.database.models.message import Message, MessageRole
 from shared.database.models.user import User
 from src.services.chat import ChatService
 from src.services.background import schedule_title_generation
+from src.services.instant_responses import InstantResponseService
 from src.api.schemas.chat import (
     ChatCreate,
     ChatResponse,
@@ -388,6 +389,9 @@ def send_message_stream(
     """
     Send a message and get a streaming RAG-powered response.
     Returns a stream of JSON objects (NDJSON) with 'type' (token/sources/error) and 'content'.
+    
+    The user message is saved immediately before streaming starts.
+    The assistant response is generated and saved completely, even if the client disconnects.
     """
     
     # Verify ownership
@@ -396,47 +400,67 @@ def send_message_stream(
     # Initialize Service
     chat_service = ChatService(db)
     
-    # Get chat history
+    # Save User Message immediately (before streaming)
+    chat_service.save_message(
+        chat_id=chat_id,
+        role=MessageRole.USER,
+        content=message_data.content
+    )
+    
+    # Get chat history (after saving user message)
     chat_history = chat_service.get_chat_history(chat_id)
     
     # Initialize pipeline
-    
     rag_pipeline = RAGPipeline()
     
-    async def generate_response():
+    def generate_response():
         # Create a new session for the stream duration
         session = SessionLocal()
         stream_service = ChatService(session)
         
         full_response = []
         retrieved_chunks = []
+        client_connected = True
         
         try:
-            # Save User Message immediately
-            stream_service.save_message(
-                chat_id=chat_id,
-                role=MessageRole.USER,
-                content=message_data.content
-            )
+            # Check for instant response first
+            instant_response = InstantResponseService.get_instant_response(message_data.content)
             
-            # Stream generator with chat-specific model if configured
-            for chunk in rag_pipeline.run_stream(
-                chat_type_id=chat.chat_type_id,
-                query=message_data.content,
-                chat_history=chat_history,
-                llm_model=chat.llm_model,
-                llm_provider=chat.llm_provider
-            ):
-                # Send chunk to client
-                yield json.dumps(chunk) + "\n"
+            if instant_response:
+                # Use instant response instead of RAG
+                logger.info(f"Using instant response for: '{message_data.content}'")
                 
-                # Collect data for DB save
-                if chunk["type"] == "token":
-                    full_response.append(chunk["content"])
-                elif chunk["type"] == "sources":
-                    retrieved_chunks = chunk["content"]
+                # Yield the response as tokens (simulate streaming)
+                for char in instant_response:
+                    full_response.append(char)
+                    yield json.dumps({"type": "token", "content": char}) + "\n"
+                
+                # No sources for instant responses
+                yield json.dumps({"type": "sources", "content": []}) + "\n"
+            else:
+                # Stream generator with chat-specific model if configured
+                for chunk in rag_pipeline.run_stream(
+                    chat_type_id=chat.chat_type_id,
+                    query=message_data.content,
+                    chat_history=chat_history,
+                    llm_model=chat.llm_model,
+                    llm_provider=chat.llm_provider
+                ):
+                    # Collect data for DB save (regardless of client connection)
+                    if chunk["type"] == "token":
+                        full_response.append(chunk["content"])
+                    elif chunk["type"] == "sources":
+                        retrieved_chunks = chunk["content"]
+                    
+                    # Try to send chunk to client
+                    try:
+                        yield json.dumps(chunk) + "\n"
+                    except GeneratorExit:
+                        # Client disconnected, but continue generating
+                        client_connected = False
+                        logger.info(f"Client disconnected from stream for chat {chat_id}, continuing generation...")
             
-            # Save Assistant Message
+            # Save Assistant Message after streaming completes (even if client disconnected)
             assistant_content = "".join(full_response)
             if not assistant_content:
                 assistant_content = "Erro ao gerar resposta (sem conteúdo)."
@@ -449,19 +473,55 @@ def send_message_stream(
             
             schedule_title_generation(chat_id)
             
-            # Send final message object
-            message_response = MessageResponse.model_validate(saved_message)
-            yield json.dumps({
-                "type": "message", 
-                "content": json.loads(message_response.model_dump_json())
-            }) + "\n"
+            logger.info(f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}")
             
-            logger.info(f"Stream completed. Saved messages to chat {chat_id}")
+            # Send final message object only if client is still connected
+            if client_connected:
+                message_response = MessageResponse.model_validate(saved_message)
+                yield json.dumps({
+                    "type": "message", 
+                    "content": json.loads(message_response.model_dump_json())
+                }) + "\n"
             
+        except GeneratorExit:
+            # Client disconnected
+            client_connected = False
+            logger.info(f"Client disconnected from chat {chat_id}, saving response...")
+            # Continue to save the response
+            if full_response:
+                try:
+                    assistant_content = "".join(full_response)
+                    stream_service.save_message(
+                        chat_id=chat_id,
+                        role=MessageRole.ASSISTANT,
+                        content=assistant_content
+                    )
+                    logger.info(f"Saved complete response to chat {chat_id} after client disconnect")
+                    
+                except Exception as save_err:
+                    logger.error(f"Failed to save response after disconnect: {save_err}")
+
         except Exception as e:
-            logger.error(f"Stream error: {e}")
+            logger.error(f"Stream error in chat {chat_id}: {e}")
             session.rollback()
-            yield json.dumps({"type": "error", "content": f"Erro interno: {str(e)}"}) + "\n"
+            # Save response if available
+            if full_response:
+                try:
+                    assistant_content = "".join(full_response)
+                    stream_service.save_message(
+                        chat_id=chat_id,
+                        role=MessageRole.ASSISTANT,
+                        content=assistant_content
+                    )
+                    logger.info(f"Saved response to chat {chat_id} after error")
+                except Exception as save_err:
+                    logger.error(f"Failed to save response after error: {save_err}")
+            
+            if client_connected:
+                try:
+                    yield json.dumps({"type": "error", "content": f"Erro no processamento: {str(e)}"}) + "\n"
+                except GeneratorExit:
+                    pass
         finally:
             session.close()
 

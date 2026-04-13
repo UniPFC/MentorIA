@@ -12,6 +12,7 @@ from shared.database.models.chat_type import ChatType
 from shared.database.models.chat_type_favorite import ChatTypeFavorite
 from src.api.schemas.chat_type import (
     ChatTypeCreate,
+    ChatTypeUpdate,
     ChatTypeResponse,
     ChatTypeListResponse,
     ChatTypeSearchParams,
@@ -33,7 +34,7 @@ router = APIRouter(prefix="/chat-types", tags=["chat-types"])
 
 def enrich_chat_type_with_owner(chat_type: ChatType, favorite_repo: ChatTypeFavoriteRepository = None, user_id: UUID = None) -> dict:
     """
-    Helper function to add owner_name and is_favorited to ChatType response.
+    Helper function to add owner_name, is_favorited, and tags to ChatType response.
     Returns dict compatible with ChatTypeResponse schema.
     Chat types owned by user 'MentorIA' are system chat types.
     """
@@ -45,10 +46,14 @@ def enrich_chat_type_with_owner(chat_type: ChatType, favorite_repo: ChatTypeFavo
     if favorite_repo and user_id:
         is_favorited = favorite_repo.is_favorited(user_id, chat_type.id)
     
+    # Get tags from relationship
+    tags = [tag.tag for tag in chat_type.tags] if chat_type.tags else []
+    
     data = {
         "id": chat_type.id,
         "name": chat_type.name,
         "description": chat_type.description,
+        "tags": tags,
         "is_public": chat_type.is_public,
         "owner_id": chat_type.owner_id,
         "collection_name": chat_type.collection_name,
@@ -94,6 +99,10 @@ def create_chat_type(
         
         chat_type = chat_type_repo.create(chat_type)
         
+        # Add tags if provided
+        if chat_type_data.tags:
+            chat_type_repo.add_tags(chat_type.id, chat_type_data.tags)
+        
         # Create Qdrant collection
         try:
             qdrant = QdrantManager()
@@ -109,7 +118,7 @@ def create_chat_type(
         
         logger.info(f"Created ChatType: {chat_type.name} (id={chat_type.id})")
         
-        # Load owner relationship
+        # Load owner relationship and tags
         chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
         return ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id))
         
@@ -233,6 +242,66 @@ def get_chat_type(
         )
     
     return ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id))
+
+
+@router.patch("/{chat_type_id}", response_model=ChatTypeResponse)
+def update_chat_type(
+    chat_type_id: UUID,
+    chat_type_data: ChatTypeUpdate,
+    current_user: User = Depends(get_current_active_user),
+    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+):
+    """
+    Update a chat type (name, description, is_public, tags).
+    Only the owner can update it. All fields are optional.
+    """
+    try:
+        
+        chat_type = chat_type_repo.get_by_id(chat_type_id, load_owner=True)
+        
+        if not chat_type:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"ChatType with id {chat_type_id} not found"
+            )
+        
+        # Check ownership
+        if chat_type.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to update this chat type"
+            )
+        
+        # Update only provided fields
+        if chat_type_data.name is not None:
+            chat_type.name = chat_type_data.name
+        if chat_type_data.description is not None:
+            chat_type.description = chat_type_data.description
+        if chat_type_data.is_public is not None:
+            chat_type.is_public = chat_type_data.is_public
+        
+        # Update in database
+        chat_type = chat_type_repo.create(chat_type)
+        
+        # Update tags if provided
+        if chat_type_data.tags is not None:
+            chat_type_repo.add_tags(chat_type.id, chat_type_data.tags)
+        
+        logger.info(f"Updated ChatType: {chat_type.name} (id={chat_type.id})")
+        
+        # Reload to get updated tags
+        chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
+        return ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update ChatType {chat_type_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update chat type: {str(e)}"
+        )
 
 
 @router.delete("/{chat_type_id}", status_code=status.HTTP_204_NO_CONTENT)

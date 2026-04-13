@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Search, LayoutGrid, List, Trash2, Globe, Lock, MessageSquare, Calendar, User, Sparkles, Shield, Upload, Star } from 'lucide-react';
+import { Search, LayoutGrid, List, Trash2, Globe, Lock, MessageSquare, Calendar, User, Sparkles, Shield, Upload, Star, Edit2 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button, Input, Modal, Badge, EmptyState, Card } from '@/components/ui';
+import ChatTypeEditModal from '@/components/ChatTypeEditModal';
 
 import { PageSpinner } from '@/components/ui/Spinner';
 import Toast from '@/components/Toast';
@@ -14,6 +15,7 @@ interface ChatType {
   id: string;
   name: string;
   description?: string;
+  tags?: string[];
   is_public: boolean;
   owner_id?: string;
   owner_name?: string;
@@ -30,6 +32,8 @@ export default function ChatTypesPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [tab, setTab] = useState<'my-types' | 'explore'>('my-types');
   const [showDelete, setShowDelete] = useState<string | null>(null);
+  const [editingChatType, setEditingChatType] = useState<ChatType | null>(null);
+  const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -91,6 +95,21 @@ export default function ChatTypesPage() {
       loadChatTypes();
     } catch (err: any) {
       setToast({ message: err.response?.data?.detail || 'Erro ao favoritar', type: 'error' });
+    }
+  };
+
+  const handleUpdate = async (data: { name: string; description?: string; tags: string[]; is_public: boolean }) => {
+    if (!editingChatType) return;
+    setUpdating(true);
+    try {
+      await api.patch(`/chat-types/${editingChatType.id}`, data);
+      setToast({ message: 'Tipo de chat atualizado com sucesso', type: 'success' });
+      setEditingChatType(null);
+      loadChatTypes();
+    } catch (err: any) {
+      setToast({ message: err.response?.data?.detail || 'Erro ao atualizar', type: 'error' });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -214,6 +233,29 @@ export default function ChatTypesPage() {
                       {ct.description && (
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{ct.description}</p>
                       )}
+                      {ct.tags && ct.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {ct.tags.slice(0, 3).map((tag) => (
+                            <span key={tag} className="inline-flex items-center px-2 py-1 rounded-md bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 text-xs font-medium">
+                              #{tag}
+                            </span>
+                          ))}
+                          {ct.tags.length > 3 && (
+                            <span 
+                              className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs font-medium cursor-help group/tags relative"
+                              title={ct.tags.slice(3).join(', ')}
+                            >
+                              +{ct.tags.length - 3}
+                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover/tags:block z-50">
+                                <div className="bg-gray-900 dark:bg-gray-800 text-white text-[10px] py-1 px-2 rounded shadow-lg whitespace-nowrap border border-transparent dark:border-gray-700">
+                                  {ct.tags.slice(3).join(', ')}
+                                </div>
+                                <div className="w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45 -mt-1 mx-auto border-r border-b border-transparent dark:border-gray-700"></div>
+                              </div>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <Badge variant={ct.is_public ? 'success' : 'default'} dot>
                       {ct.is_public ? 'Público' : 'Privado'}
@@ -260,6 +302,13 @@ export default function ChatTypesPage() {
                       <Star className={`w-4 h-4 ${ct.is_favorited ? 'fill-current' : ''}`} />
                     </button>
                     <button
+                      onClick={(e) => { e.stopPropagation(); setEditingChatType(ct); }}
+                      className="p-1.5 rounded-xl text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-all duration-200"
+                      title="Editar tipo de chat"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); setShowDelete(ct.id); }}
                       className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-200"
                     >
@@ -301,6 +350,29 @@ export default function ChatTypesPage() {
                       {ct.description && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{ct.description}</p>
                       )}
+                      {ct.tags && ct.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {ct.tags.slice(0, 2).map((tag) => (
+                            <span key={tag} className="inline-flex items-center px-1.5 py-0.5 rounded text-brand-700 dark:text-brand-300 text-[10px] font-medium bg-brand-100 dark:bg-brand-500/20">
+                              #{tag}
+                            </span>
+                          ))}
+                          {ct.tags.length > 2 && (
+                            <span 
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 cursor-help group/tags relative"
+                              title={ct.tags.slice(2).join(', ')}
+                            >
+                              +{ct.tags.length - 2}
+                              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover/tags:block z-50">
+                                <div className="bg-gray-900 dark:bg-gray-800 text-white text-[9px] py-1 px-1.5 rounded shadow-lg whitespace-nowrap border border-transparent dark:border-gray-700">
+                                  {ct.tags.slice(2).join(', ')}
+                                </div>
+                                <div className="w-1.5 h-1.5 bg-gray-900 dark:bg-gray-800 rotate-45 -mt-0.5 mx-auto border-r border-b border-transparent dark:border-gray-700"></div>
+                              </div>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3 ml-4 shrink-0">
@@ -323,6 +395,13 @@ export default function ChatTypesPage() {
                       <Star className={`w-4 h-4 ${ct.is_favorited ? 'fill-current' : ''}`} />
                     </button>
                     <button
+                      onClick={() => setEditingChatType(ct)}
+                      className="p-1.5 rounded-xl text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-all duration-200"
+                      title="Editar"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => setShowDelete(ct.id)}
                       className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-200"
                     >
@@ -336,6 +415,15 @@ export default function ChatTypesPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      <ChatTypeEditModal
+        open={!!editingChatType}
+        onClose={() => setEditingChatType(null)}
+        chatType={editingChatType || undefined}
+        onSave={handleUpdate}
+        loading={updating}
+      />
 
       {/* Delete Confirmation */}
       <Modal

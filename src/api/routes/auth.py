@@ -133,10 +133,11 @@ async def logout(
     user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
-    Realiza logout do usuário invalidando o token no banco de dados
+    Realiza logout do usuário invalidando o token e refresh tokens no banco de dados
     """
     token = credentials.credentials
     user_repo.invalidate_token(token)
+    user_repo.invalidate_refresh_tokens(current_user.id)
     
     logger.info(f"User logged out: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}

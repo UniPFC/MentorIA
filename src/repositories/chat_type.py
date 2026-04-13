@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 from shared.database.models.chat_type import ChatType
+from shared.database.models.chat_type_tag import ChatTypeTag
 
 
 class ChatTypeRepository:
@@ -127,3 +128,22 @@ class ChatTypeRepository:
         chat_types = db_query.offset(skip).limit(limit).all()
         
         return chat_types, total
+
+    def add_tags(self, chat_type_id: UUID, tags: List[str]) -> None:
+        """Add tags to a chat type, replacing existing tags."""
+        # Delete existing tags
+        self.db.query(ChatTypeTag).filter(ChatTypeTag.chat_type_id == chat_type_id).delete()
+        
+        # Add new tags
+        for tag in tags:
+            tag_obj = ChatTypeTag(chat_type_id=chat_type_id, tag=tag)
+            self.db.add(tag_obj)
+        
+        self.db.commit()
+
+    def get_tags(self, chat_type_id: UUID) -> List[str]:
+        """Get all tags for a chat type."""
+        tags = self.db.query(ChatTypeTag).filter(
+            ChatTypeTag.chat_type_id == chat_type_id
+        ).all()
+        return [tag.tag for tag in tags]
