@@ -387,3 +387,52 @@ class TestChatTypeRepository:
         
         assert total == 5
         assert len(chat_types) == 2
+
+    def test_list_user_available_with_filters(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+        ct1 = ChatType(
+            id=uuid4(),
+            name="Public Mine",
+            is_public=True,
+            owner_id=sample_user.id,
+            collection_name="pub_mine",
+            created_at=datetime.now(timezone.utc)
+        )
+        ct2 = ChatType(
+            id=uuid4(),
+            name="Private Mine",
+            is_public=False,
+            owner_id=sample_user.id,
+            collection_name="priv_mine",
+            created_at=datetime.now(timezone.utc)
+        )
+        db_session.add_all([ct1, ct2])
+        db_session.commit()
+        
+        # Test is_public filter
+        chat_types, total = chat_type_repo.list_user_available(sample_user.id, [], is_public=True)
+        assert total == 1
+        assert chat_types[0].name == "Public Mine"
+        
+        # Test owner_id filter
+        chat_types, total = chat_type_repo.list_user_available(sample_user.id, [], owner_id=sample_user.id)
+        assert total == 2
+
+    def test_tags_operations(self, chat_type_repo: ChatTypeRepository, sample_chat_type: ChatType):
+        tags = ["python", "ai", "coding"]
+        
+        # Add tags
+        chat_type_repo.add_tags(sample_chat_type.id, tags)
+        
+        # Get tags
+        retrieved_tags = chat_type_repo.get_tags(sample_chat_type.id)
+        assert len(retrieved_tags) == 3
+        assert set(retrieved_tags) == set(tags)
+        
+        # Replace tags
+        new_tags = ["backend", "fastapi"]
+        chat_type_repo.add_tags(sample_chat_type.id, new_tags)
+        
+        retrieved_tags = chat_type_repo.get_tags(sample_chat_type.id)
+        assert len(retrieved_tags) == 2
+        assert set(retrieved_tags) == set(new_tags)
+        assert "python" not in retrieved_tags

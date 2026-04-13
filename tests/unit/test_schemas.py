@@ -5,7 +5,7 @@ from src.api.schemas.auth import (
     Token, UserResponse, LogoutResponse, TokenVerifyResponse
 )
 from src.api.schemas.chat import ChatCreate, ChatResponse, SendMessageRequest
-from src.api.schemas.chat_type import ChatTypeCreate, ChatTypeResponse
+from src.api.schemas.chat_type import ChatTypeCreate, ChatTypeResponse, ChatTypeUpdate, ChatTypeBase
 from uuid import uuid4
 from datetime import datetime, timezone
 
@@ -268,3 +268,42 @@ class TestChatTypeSchemas:
         
         assert chat_type.name == "Test Chat Type"
         assert chat_type.description is None
+
+    def test_chat_type_base_tags_validation(self):
+        # Valid tags
+        ct = ChatTypeBase(name="Test", tags=["tag1", "tag2"])
+        assert ct.tags == ["tag1", "tag2"]
+        
+        # None tags (should return empty list per validator)
+        ct_none = ChatTypeBase(name="Test", tags=None)
+        assert ct_none.tags == []
+        
+        # Too many tags
+        with pytest.raises(ValidationError) as exc:
+            ChatTypeBase(name="Test", tags=[f"tag{i}" for i in range(16)])
+        assert "Maximum 15 tags allowed" in str(exc.value)
+        
+        # Invalid tag (empty string)
+        with pytest.raises(ValidationError) as exc:
+            ChatTypeBase(name="Test", tags=[""])
+        assert "Each tag must be a non-empty string" in str(exc.value)
+        
+        # Invalid tag (too long)
+        with pytest.raises(ValidationError) as exc:
+            ChatTypeBase(name="Test", tags=["a" * 51])
+        assert "Each tag must be a non-empty string" in str(exc.value)
+
+    def test_chat_type_update_tags_validation(self):
+        # Valid update
+        upd = ChatTypeUpdate(tags=["newtag"])
+        assert upd.tags == ["newtag"]
+        
+        # None tags in update (should stay None per validator)
+        upd_none = ChatTypeUpdate(tags=None)
+        assert upd_none.tags is None
+        
+        # Too many tags in update
+        with pytest.raises(ValidationError) as exc:
+            ChatTypeUpdate(tags=[f"tag{i}" for i in range(16)])
+        assert "Maximum 15 tags allowed" in str(exc.value)
+

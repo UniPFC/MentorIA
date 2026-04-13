@@ -129,8 +129,9 @@ class TestUserRepository:
         
         repo.invalidate_token(sample_user_token.token)
         
-        db_session.refresh(sample_user_token)
-        assert sample_user_token.is_active is False
+        # Verify token was deleted
+        token = db_session.query(UserToken).filter(UserToken.token == sample_user_token.token).first()
+        assert token is None
         
     def test_invalidate_all_user_tokens(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
@@ -150,10 +151,9 @@ class TestUserRepository:
         
         repo.invalidate_all_user_tokens(sample_user.id)
         
-        db_session.refresh(token1)
-        db_session.refresh(token2)
-        assert token1.is_active is False
-        assert token2.is_active is False
+        # Verify tokens were deleted
+        tokens = db_session.query(UserToken).filter(UserToken.user_id == sample_user.id).all()
+        assert len(tokens) == 0
         
     def test_create_password_reset_token(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
