@@ -133,10 +133,13 @@ class RAGPipeline:
             # Get the LLM provider for this request (custom or default)
             request_provider = self._get_provider(llm_model, llm_provider)
             
-            # Step 0: Contextualize Query (if history exists)
+            # Step 0: Contextualize Query (if history exists and has content)
             effective_query = query
-            if chat_history:
+            if chat_history and len(chat_history) > 0:
                 effective_query = self.query_engine.contextualize_query(query, chat_history, provider=request_provider)
+                logger.debug(f"Query contextualized: '{query}' -> '{effective_query}'")
+            else:
+                logger.debug("Skipping contextualization: no chat history available")
 
             # Step 1: Query Expansion (using custom model)
             expanded_queries = self.query_engine.expand_query(effective_query, provider=request_provider)
@@ -221,10 +224,13 @@ class RAGPipeline:
             # Get the LLM provider for this request (custom or default)
             request_provider = self._get_provider(llm_model, llm_provider)
             
-            # Step 0: Contextualize Query (if history exists)
+            # Step 0: Contextualize Query (if history exists and has content)
             effective_query = query
-            if chat_history:
+            if chat_history and len(chat_history) > 0:
                 effective_query = self.query_engine.contextualize_query(query, chat_history, provider=request_provider)
+                logger.debug(f"Query contextualized: '{query}' -> '{effective_query}'")
+            else:
+                logger.debug("Skipping contextualization: no chat history available")
 
             # Step 1: Query Expansion (using custom model)
             expanded_queries = self.query_engine.expand_query(effective_query, provider=request_provider)

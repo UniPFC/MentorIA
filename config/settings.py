@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 class Settings(BaseSettings):
 
     # Project Configuration
-    PROJECT_NAME: str = "Techstein RAG Portal"
+    PROJECT_NAME: str = "MentorIA"
     LOG_LEVEL: str
     
     # Directories
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     LOG_DIR: str = os.path.join(BASE_DIR, "logs", "api")
     DATA_DIR: str = os.path.join(BASE_DIR, "data")
     CACHE_DIR: str = os.path.join(BASE_DIR, "cache")
+    PROMPTS_DIR: str = os.path.join(BASE_DIR, "src", "rag", "prompts")
 
     # Relational Database
     POSTGRES_USER: str

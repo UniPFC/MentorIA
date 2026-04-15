@@ -4,12 +4,42 @@ from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.database.models.user import User
 from src.repositories.user import UserRepository
+from src.repositories.chat_type import ChatTypeRepository
+from src.repositories.chat_type_favorite import ChatTypeFavoriteRepository
+from src.repositories.chat import ChatRepository
+from src.repositories.ingestion_job import IngestionJobRepository
 from src.services.auth import auth_service
 from config.logger import logger
 
 
 # Configuração do esquema de segurança
 security = HTTPBearer()
+
+
+# Repository Dependencies
+def get_user_repo(db: Session = Depends(get_db)) -> UserRepository:
+    """Dependency to get User repository."""
+    return UserRepository(db)
+
+
+def get_chat_type_repo(db: Session = Depends(get_db)) -> ChatTypeRepository:
+    """Dependency to get ChatType repository."""
+    return ChatTypeRepository(db)
+
+
+def get_chat_type_favorite_repo(db: Session = Depends(get_db)) -> ChatTypeFavoriteRepository:
+    """Dependency to get ChatTypeFavorite repository."""
+    return ChatTypeFavoriteRepository(db)
+
+
+def get_chat_repo(db: Session = Depends(get_db)) -> ChatRepository:
+    """Dependency to get Chat repository."""
+    return ChatRepository(db)
+
+
+def get_ingestion_job_repo(db: Session = Depends(get_db)) -> IngestionJobRepository:
+    """Dependency to get IngestionJob repository."""
+    return IngestionJobRepository(db)
 
 
 def get_current_user(

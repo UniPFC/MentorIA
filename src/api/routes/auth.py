@@ -8,7 +8,7 @@ from src.api.schemas.auth import (
     UserRegister, UserLogin, Token, TokenRefresh, TokenVerifyResponse,
     UserResponse, LogoutResponse, PasswordResetRequest, PasswordResetConfirm
 )
-from src.api.dependencies import get_current_active_user, security
+from src.api.dependencies import get_current_active_user, get_user_repo, security
 from src.services.auth import auth_service
 from src.services.email import email_service
 from src.services.security_cache import security_cache
@@ -21,11 +21,13 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
+async def register_user(
+    user_data: UserRegister,
+    user_repo: UserRepository = Depends(get_user_repo)
+):
     """
     Registra um novo usuário
     """
-    user_repo = UserRepository(db)
 
     # Verificar se username é reservado (camada extra de segurança)
     if user_data.username.lower() == 'mentoria':
@@ -65,6 +67,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
+
 async def login(user_credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     """
     Autentica usuário e retorna tokens JWT
@@ -188,11 +191,13 @@ def _get_client_ip(request: Request) -> str:
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
+async def refresh_token(
+    token_data: TokenRefresh,
+    user_repo: UserRepository = Depends(get_user_repo)
+):
     """
     Atualiza o token de acesso usando refresh token
     """
-    user_repo = UserRepository(db)
     new_tokens = auth_service.refresh_access_token(token_data.refresh_token, user_repo)
     if not new_tokens:
         raise HTTPException(
@@ -214,13 +219,14 @@ async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db))
 async def logout(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
-    Realiza logout do usuário invalidando todos os seus tokens no banco de dados
+    Realiza logout do usuário invalidando o token e refresh tokens no banco de dados
     """
     token = credentials.credentials
-    user_repo = UserRepository(db)
+    user_repo.invalidate_token(token)
+    user_repo.invalidate_refresh_tokens(current_user.id)
     
     # Invalidar todos os tokens do usuário (access e refresh)
     user_repo.invalidate_all_user_tokens(current_user.id)
@@ -252,12 +258,11 @@ async def verify_token(current_user: User = Depends(get_current_active_user)):
 @router.post("/forgot-password")
 async def forgot_password(
     request: PasswordResetRequest,
-    db: Session = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
     Solicita reset de senha via email
     """
-    user_repo = UserRepository(db)
     
     # Buscar usuário por email
     user = user_repo.get_by_email(request.email)
@@ -290,12 +295,11 @@ async def forgot_password(
 @router.post("/confirm-reset-password")
 async def confirm_reset_password(
     request: PasswordResetConfirm,
-    db: Session = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
     Confirma o reset de senha usando o token recebido por email
     """
-    user_repo = UserRepository(db)
     
     # Validar token
     reset_token_data = user_repo.get_password_reset_token(request.token)

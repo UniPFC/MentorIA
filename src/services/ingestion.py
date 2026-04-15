@@ -7,7 +7,7 @@ import json
 from typing import List, Dict, Any, Tuple
 import pandas as pd
 from uuid import UUID
-from io import BytesIO
+from io import BytesIO, StringIO
 from config.logger import logger
 from shared.qdrant.client import QdrantManager
 from shared.database.models.knowledge_chunk import KnowledgeChunk
@@ -31,6 +31,60 @@ class ChunkIngestionService:
         self.qdrant_manager = qdrant_manager
         logger.info("ChunkIngestionService initialized")
     
+    def _detect_encoding(self, file_content: bytes) -> str:
+        """
+        Detect file encoding by trying common encodings.
+        
+        Args:
+            file_content: File bytes
+            
+        Returns:
+            Detected encoding (utf-8, latin-1, cp1252, etc.)
+        """
+        encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+        
+        for encoding in encodings:
+            try:
+                file_content.decode(encoding)
+                logger.debug(f"Detected encoding: {encoding}")
+                return encoding
+            except (UnicodeDecodeError, LookupError):
+                continue
+        
+        logger.warning("Could not detect encoding, defaulting to latin-1")
+        return 'latin-1'
+
+    def _detect_csv_delimiter(self, file_content: bytes) -> str:
+        """
+        Detect CSV delimiter (comma or semicolon) by analyzing first line.
+        
+        Args:
+            file_content: File bytes
+            
+        Returns:
+            Detected delimiter (',' or ';')
+        """
+        try:
+            # Detect encoding first
+            encoding = self._detect_encoding(file_content)
+            text_content = file_content.decode(encoding, errors='ignore')
+            first_line = text_content.split('\n')[0]
+            
+            # Count occurrences of common delimiters
+            comma_count = first_line.count(',')
+            semicolon_count = first_line.count(';')
+            
+            # Return the most frequent delimiter, default to comma
+            if semicolon_count > comma_count:
+                logger.debug(f"Detected CSV delimiter: semicolon (;)")
+                return ';'
+            else:
+                logger.debug(f"Detected CSV delimiter: comma (,)")
+                return ','
+        except Exception as e:
+            logger.warning(f"Failed to detect CSV delimiter, defaulting to comma: {e}")
+            return ','
+
     def parse_spreadsheet(
         self, 
         file_content: bytes, 
@@ -53,7 +107,9 @@ class ChunkIngestionService:
         try:
             # Detect file type and read
             if filename.endswith('.csv'):
-                df = pd.read_csv(BytesIO(file_content))
+                delimiter = self._detect_csv_delimiter(file_content)
+                encoding = self._detect_encoding(file_content)
+                df = pd.read_csv(BytesIO(file_content), delimiter=delimiter, encoding=encoding)
             elif filename.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(BytesIO(file_content))
             else:
@@ -91,7 +147,8 @@ class ChunkIngestionService:
         chat_type_id: UUID,
         chunks: List[Dict[str, Any]],
         db_session: Any,
-        batch_size: int = 32
+        batch_size: int = 32,
+        on_progress: callable = None
     ) -> Tuple[List[str], int]:
         """
         Ingest chunks into Qdrant with embeddings.
@@ -101,6 +158,7 @@ class ChunkIngestionService:
             chunks: List of chunk dicts
             db_session: Database session for saving metadata
             batch_size: Batch size for embedding generation
+            on_progress: Optional callback function(processed_count) for progress tracking
             
         Returns:
             Tuple of (point_ids, total_ingested)
@@ -128,6 +186,7 @@ class ChunkIngestionService:
                 embeddings=all_embeddings
             )
             
+            # Save metadata to database with progress tracking
             for i, point_id in enumerate(point_ids):
                 chunk_data = chunks[i]
                 metadata = chunk_data.get("metadata", {})
@@ -140,7 +199,17 @@ class ChunkIngestionService:
                     chunk_metadata=json.dumps(metadata)
                 )
                 db_session.add(knowledge_chunk)
+                
+                # Update progress every batch_size chunks or at the end
+                if (i + 1) % batch_size == 0 or (i + 1) == len(point_ids):
+                    db_session.commit()
+                    if on_progress:
+                        try:
+                            on_progress(i + 1)
+                        except Exception as e:
+                            logger.warning(f"Progress callback failed: {e}")
             
+            # Final commit if not already done
             db_session.commit()
             
             logger.info(f"Successfully ingested {len(point_ids)} chunks for chat_type_id={chat_type_id}")

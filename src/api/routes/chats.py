@@ -13,6 +13,8 @@ from shared.database.models.chat_type import ChatType
 from shared.database.models.message import Message, MessageRole
 from shared.database.models.user import User
 from src.services.chat import ChatService
+from src.services.background import schedule_title_generation
+from src.services.instant_responses import InstantResponseService
 from src.api.schemas.chat import (
     ChatCreate,
     ChatResponse,
@@ -24,7 +26,13 @@ from src.api.schemas.chat import (
     AvailableModelsResponse,
     LLMModelInfo
 )
-from src.api.dependencies import get_current_active_user
+from src.api.dependencies import (
+    get_current_active_user,
+    get_chat_repo,
+    get_chat_type_repo
+)
+from src.repositories.chat import ChatRepository
+from src.repositories.chat_type import ChatTypeRepository
 from src.rag.pipeline import RAGPipeline
 from config.settings import settings
 import json
@@ -69,14 +77,14 @@ def get_available_models(
         )
 
 
-def verify_chat_ownership(chat_id: UUID, user_id: UUID, db: Session) -> Chat:
+def verify_chat_ownership(chat_id: UUID, user_id: UUID, chat_repo: ChatRepository) -> Chat:
     """
     Verify that a chat belongs to the specified user.
     
     Args:
         chat_id: ID of the chat
         user_id: ID of the user
-        db: Database session
+        chat_repo: Chat repository instance
         
     Returns:
         Chat object if found and owned by user
@@ -84,7 +92,7 @@ def verify_chat_ownership(chat_id: UUID, user_id: UUID, db: Session) -> Chat:
     Raises:
         HTTPException: If chat not found or doesn't belong to user
     """
-    chat = db.query(Chat).filter(Chat.id == chat_id).first()
+    chat = chat_repo.get_by_id(chat_id)
     
     if not chat:
         raise HTTPException(
@@ -104,42 +112,60 @@ def verify_chat_ownership(chat_id: UUID, user_id: UUID, db: Session) -> Chat:
 @router.post("/", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
 def create_chat(
     chat_data: ChatCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
+    chat_repo: ChatRepository = Depends(get_chat_repo)
 ):
     """
     Create a new chat session.
-    Optionally specify llm_model and llm_provider to override defaults.
+    If no title is provided, generates a numbered placeholder (e.g., "Chat #1").
+    Title can be auto-generated after first message/response if placeholder was used.
     """
     try:
+        
         # Verify chat type exists
-        chat_type = db.query(ChatType).filter(ChatType.id == chat_data.chat_type_id).first()
+        chat_type = chat_type_repo.get_by_id(chat_data.chat_type_id)
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"ChatType with id {chat_data.chat_type_id} not found"
             )
         
+        # Check access: user must own it or it must be public
+        if not chat_type.is_public and chat_type.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to create chats with this chat type"
+            )
+        
+        # Determine title and whether it's auto-generated
+        title_auto_generated = False
+        if chat_data.title:
+            title = chat_data.title
+        else:
+            # Generate numbered placeholder
+            user_chats_count = chat_repo.count_by_user(current_user.id)
+            title = f"Chat #{user_chats_count + 1}"
+            title_auto_generated = True
+        
         # Create chat with default model
         chat = Chat(
             user_id=current_user.id,
             chat_type_id=chat_data.chat_type_id,
-            title=chat_data.title,
+            title=title,
+            title_auto_generated=title_auto_generated,
             llm_model=settings.LLM_MODEL,
             llm_provider=settings.LLM_PROVIDER
         )
         
-        db.add(chat)
-        db.commit()
-        db.refresh(chat)
+        chat = chat_repo.create(chat)
         
-        logger.info(f"Created Chat: {chat.title} (id={chat.id}, model={chat.llm_model}, provider={chat.llm_provider})")
+        logger.info(f"Created Chat: {chat.title} (id={chat.id}, auto_generated={title_auto_generated}, model={chat.llm_model}, provider={chat.llm_provider})")
         return chat
         
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to create chat: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -152,22 +178,19 @@ def list_chats(
     chat_type_id: UUID = None,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_repo: ChatRepository = Depends(get_chat_repo)
 ):
     """
     List chats with optional filtering.
     """
     try:
-        query = db.query(Chat)
-        
-        # Filter by current user (always)
-        query = query.filter(Chat.user_id == current_user.id)
-        
-        if chat_type_id is not None:
-            query = query.filter(Chat.chat_type_id == chat_type_id)
-        
-        chats = query.order_by(Chat.updated_at.desc()).offset(skip).limit(limit).all()
+        chats = chat_repo.get_by_user(
+            user_id=current_user.id,
+            chat_type_id=chat_type_id,
+            skip=skip,
+            limit=limit
+        )
         return chats
         
     except Exception as e:
@@ -181,14 +204,14 @@ def list_chats(
 @router.get("/{chat_id}", response_model=ChatWithMessagesResponse)
 def get_chat(
     chat_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_repo: ChatRepository = Depends(get_chat_repo)
 ):
     """
     Get a chat with all its messages.
     Only the chat owner can access it.
     """
-    chat = verify_chat_ownership(chat_id, current_user.id, db)
+    chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
     return chat
 
 
@@ -196,8 +219,9 @@ def get_chat(
 def update_chat_model(
     chat_id: UUID,
     model_update: ChatModelUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_repo: ChatRepository = Depends(get_chat_repo),
+    db: Session = Depends(get_db)
 ):
     """
     Update the LLM model and/or provider for a chat.
@@ -209,7 +233,7 @@ def update_chat_model(
         model_update: ChatModelUpdate schema with llm_model and/or llm_provider
     """
     try:
-        chat = verify_chat_ownership(chat_id, current_user.id, db)
+        chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
         
         # Get available models for validation
         available_models = settings.get_available_models()
@@ -228,13 +252,9 @@ def update_chat_model(
             )
         
         # Update the chat
-        if model_update.llm_model is not None:
-            chat.llm_model = model_update.llm_model
-        if model_update.llm_provider is not None:
-            chat.llm_provider = model_update.llm_provider
-        
-        db.commit()
-        db.refresh(chat)
+        chat.llm_model = new_model
+        chat.llm_provider = new_provider
+        chat = chat_repo.update(chat)
         
         logger.info(f"Updated Chat model: {chat_id} -> model={chat.llm_model}, provider={chat.llm_provider}")
         return chat
@@ -242,7 +262,6 @@ def update_chat_model(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to update chat model: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -253,23 +272,21 @@ def update_chat_model(
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_chat(
     chat_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_repo: ChatRepository = Depends(get_chat_repo)
 ):
     """
     Delete a chat and all its messages.
     """
     try:
-        chat = verify_chat_ownership(chat_id, current_user.id, db)
-        db.delete(chat)
-        db.commit()
+        chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
+        chat_repo.delete(chat)
         
         logger.info(f"Deleted Chat: {chat.title} (id={chat_id})")
         
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to delete chat {chat_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -282,7 +299,8 @@ def send_message(
     chat_id: UUID,
     message_data: SendMessageRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_repo: ChatRepository = Depends(get_chat_repo)
 ):
     """
     Send a message and get RAG-powered response.
@@ -291,7 +309,7 @@ def send_message(
     """
     try:
         # Verify ownership and get chat
-        chat = verify_chat_ownership(chat_id, current_user.id, db)
+        chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
         
         # Initialize Service
         chat_service = ChatService(db)
@@ -338,20 +356,21 @@ def send_message(
             content=assistant_content
         )
         
+        schedule_title_generation(chat_id)
+        
         logger.info(f"Processed RAG message in chat {chat_id} with {len(retrieved_chunks)} chunks")
         
-        # Return full chat with all messages
-        db.refresh(chat)
+        # Return full chat with all messages - reload to get updated messages
+        chat = chat_repo.get_by_id(chat_id)
         
         return SendMessageResponse(
             chat=ChatWithMessagesResponse.model_validate(chat),
-            retrieved_chunks=chunks_response
+            sources=chunks_response
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to send message: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -364,60 +383,84 @@ def send_message_stream(
     chat_id: UUID,
     message_data: SendMessageRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    chat_repo: ChatRepository = Depends(get_chat_repo)
 ):
     """
     Send a message and get a streaming RAG-powered response.
     Returns a stream of JSON objects (NDJSON) with 'type' (token/sources/error) and 'content'.
+    
+    The user message is saved immediately before streaming starts.
+    The assistant response is generated and saved completely, even if the client disconnects.
     """
     
     # Verify ownership
-    chat = verify_chat_ownership(chat_id, current_user.id, db)
+    chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
     
     # Initialize Service
     chat_service = ChatService(db)
     
-    # Get chat history
+    # Save User Message immediately (before streaming)
+    chat_service.save_message(
+        chat_id=chat_id,
+        role=MessageRole.USER,
+        content=message_data.content
+    )
+    
+    # Get chat history (after saving user message)
     chat_history = chat_service.get_chat_history(chat_id)
     
     # Initialize pipeline
-    
     rag_pipeline = RAGPipeline()
     
-    async def generate_response():
+    def generate_response():
         # Create a new session for the stream duration
         session = SessionLocal()
         stream_service = ChatService(session)
         
         full_response = []
         retrieved_chunks = []
+        client_connected = True
         
         try:
-            # Save User Message immediately
-            stream_service.save_message(
-                chat_id=chat_id,
-                role=MessageRole.USER,
-                content=message_data.content
-            )
+            # Check for instant response first
+            instant_response = InstantResponseService.get_instant_response(message_data.content)
             
-            # Stream generator with chat-specific model if configured
-            for chunk in rag_pipeline.run_stream(
-                chat_type_id=chat.chat_type_id,
-                query=message_data.content,
-                chat_history=chat_history,
-                llm_model=chat.llm_model,
-                llm_provider=chat.llm_provider
-            ):
-                # Send chunk to client
-                yield json.dumps(chunk) + "\n"
+            if instant_response:
+                # Use instant response instead of RAG
+                logger.info(f"Using instant response for: '{message_data.content}'")
                 
-                # Collect data for DB save
-                if chunk["type"] == "token":
-                    full_response.append(chunk["content"])
-                elif chunk["type"] == "sources":
-                    retrieved_chunks = chunk["content"]
+                # Yield the response as tokens (simulate streaming)
+                for char in instant_response:
+                    full_response.append(char)
+                    yield json.dumps({"type": "token", "content": char}) + "\n"
+                
+                # No sources for instant responses
+                yield json.dumps({"type": "sources", "content": []}) + "\n"
+            else:
+                # Stream generator with chat-specific model if configured
+                for chunk in rag_pipeline.run_stream(
+                    chat_type_id=chat.chat_type_id,
+                    query=message_data.content,
+                    chat_history=chat_history,
+                    llm_model=chat.llm_model,
+                    llm_provider=chat.llm_provider
+                ):
+                    # Collect data for DB save (regardless of client connection)
+                    if chunk["type"] == "token":
+                        full_response.append(chunk["content"])
+                    elif chunk["type"] == "sources":
+                        retrieved_chunks = chunk["content"]
+                    
+                    # Try to send chunk to client
+                    try:
+                        yield json.dumps(chunk) + "\n"
+                    except GeneratorExit:
+                        # Client disconnected, but continue generating
+                        client_connected = False
+                        logger.info(f"Client disconnected from stream for chat {chat_id}, continuing generation...")
             
-            # Save Assistant Message
+            # Save Assistant Message after streaming completes (even if client disconnected)
             assistant_content = "".join(full_response)
             if not assistant_content:
                 assistant_content = "Erro ao gerar resposta (sem conteúdo)."
@@ -428,19 +471,57 @@ def send_message_stream(
                 content=assistant_content
             )
             
-            # Send final message object
-            message_response = MessageResponse.model_validate(saved_message)
-            yield json.dumps({
-                "type": "message", 
-                "content": json.loads(message_response.model_dump_json())
-            }) + "\n"
+            schedule_title_generation(chat_id)
             
-            logger.info(f"Stream completed. Saved messages to chat {chat_id}")
+            logger.info(f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}")
             
+            # Send final message object only if client is still connected
+            if client_connected:
+                message_response = MessageResponse.model_validate(saved_message)
+                yield json.dumps({
+                    "type": "message", 
+                    "content": json.loads(message_response.model_dump_json())
+                }) + "\n"
+            
+        except GeneratorExit:
+            # Client disconnected
+            client_connected = False
+            logger.info(f"Client disconnected from chat {chat_id}, saving response...")
+            # Continue to save the response
+            if full_response:
+                try:
+                    assistant_content = "".join(full_response)
+                    stream_service.save_message(
+                        chat_id=chat_id,
+                        role=MessageRole.ASSISTANT,
+                        content=assistant_content
+                    )
+                    logger.info(f"Saved complete response to chat {chat_id} after client disconnect")
+                    
+                except Exception as save_err:
+                    logger.error(f"Failed to save response after disconnect: {save_err}")
+
         except Exception as e:
-            logger.error(f"Stream error: {e}")
+            logger.error(f"Stream error in chat {chat_id}: {e}")
             session.rollback()
-            yield json.dumps({"type": "error", "content": f"Erro interno: {str(e)}"}) + "\n"
+            # Save response if available
+            if full_response:
+                try:
+                    assistant_content = "".join(full_response)
+                    stream_service.save_message(
+                        chat_id=chat_id,
+                        role=MessageRole.ASSISTANT,
+                        content=assistant_content
+                    )
+                    logger.info(f"Saved response to chat {chat_id} after error")
+                except Exception as save_err:
+                    logger.error(f"Failed to save response after error: {save_err}")
+            
+            if client_connected:
+                try:
+                    yield json.dumps({"type": "error", "content": f"Erro no processamento: {str(e)}"}) + "\n"
+                except GeneratorExit:
+                    pass
         finally:
             session.close()
 

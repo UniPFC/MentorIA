@@ -87,7 +87,7 @@ class EmailService:
         </html>
         """
         
-        return self._send_email(to_email, "Reset de Senha - Techstein RAG Portal", html_body)
+        return self._send_email(to_email, "Reset de Senha - MentorIA", html_body)
 
     def send_password_changed_email(self, to_email: str, username: str) -> bool:
         """Envia email confirmando mudança de senha"""
@@ -134,7 +134,7 @@ class EmailService:
         </html>
         """
         
-        return self._send_email(to_email, "Senha Alterada - Techstein RAG Portal", html_body)
+        return self._send_email(to_email, "Senha Alterada - MentorIA", html_body)
 
 
 # Instância global do serviço

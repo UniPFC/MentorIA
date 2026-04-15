@@ -32,7 +32,7 @@ def resolve_api_key(provider_alias: str, explicit_key: Optional[str]) -> str:
         case "ollama":
             return getattr(settings, "OLLAMA_API_KEY", alias)
         case "gemini":
-            return getattr(settings, "GOOGLE_API_KEY", "")
+            return getattr(settings, "GEMINI_API_KEY", "")
         case "openai":
             return getattr(settings, "OPENAI_API_KEY", "")
         case _:

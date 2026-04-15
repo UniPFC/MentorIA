@@ -223,6 +223,13 @@ class AuthService:
 
     def get_current_user_from_token(self, token: str, user_repo: Any) -> Optional[User]:
         """Obtém usuário atual a partir do token, verificando se está ativo no banco"""
+        # Limpar tokens expirados/inativos periodicamente
+        try:
+            user_repo.cleanup_expired_tokens()
+            user_repo.cleanup_expired_password_reset_tokens()
+        except Exception as e:
+            logger.warning(f"Failed to cleanup expired tokens: {e}")
+        
         # Verificar se o token existe e está ativo no banco
         stored_token = user_repo.get_token(token)
         if not stored_token or not stored_token.is_active:

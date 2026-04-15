@@ -21,6 +21,7 @@ class User(Base):
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
     tokens = relationship("UserToken", back_populates="user", cascade="all, delete-orphan")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
+    favorite_chat_types = relationship("ChatTypeFavorite", back_populates="user", cascade="all, delete-orphan")
 
     
     def __repr__(self):

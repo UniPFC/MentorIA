@@ -3,8 +3,11 @@ import { ThemeProvider } from '@/lib/theme';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'Portal RAG',
-  description: 'Sistema de Questões e Chat Inteligente',
+  title: 'MentorIA',
+  description: 'Chat Inteligente com Tecnologia RAG',
+  icons: {
+    icon: '/MentorIA-Logo-Full-Transparent.ico',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

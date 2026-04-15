@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down API...")
 
 app = FastAPI(
-    title="RAG Chat API",
+    title=settings.PROJECT_NAME,
     description="Multi-tenant RAG chat system with custom knowledge bases",
     version="1.0.0",
     lifespan=lifespan

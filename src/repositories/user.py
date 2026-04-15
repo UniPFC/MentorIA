@@ -50,15 +50,21 @@ class UserRepository:
         ).first()
 
     def invalidate_token(self, token: str):
-        user_token = self.db.query(UserToken).filter(UserToken.token == token).first()
-        if user_token:
-            user_token.is_active = False
-            self.db.commit()
+        self.db.query(UserToken).filter(UserToken.token == token).delete()
+        self.db.commit()
 
     def invalidate_all_user_tokens(self, user_id: UUID):
         self.db.query(UserToken).filter(
             UserToken.user_id == user_id
-        ).update({"is_active": False})
+        ).delete()
+        self.db.commit()
+
+    def invalidate_refresh_tokens(self, user_id: UUID):
+        """Deleta todos os refresh tokens do usuário"""
+        self.db.query(UserToken).filter(
+            UserToken.user_id == user_id,
+            UserToken.token_type == 'refresh'
+        ).delete()
         self.db.commit()
 
     def create_password_reset_token(self, user_id: UUID, token: str, expires_at: datetime) -> PasswordResetToken:
@@ -92,3 +98,21 @@ class UserRepository:
             reset_token.is_active = False
             reset_token.used_at = datetime.now(timezone.utc)
             self.db.commit()
+
+    def cleanup_expired_tokens(self):
+        """Delete expired or inactive user tokens to prevent database bloat"""
+        now = datetime.now(timezone.utc)
+        now_naive = now.replace(tzinfo=None)
+        self.db.query(UserToken).filter(
+            (UserToken.expires_at <= now_naive) | (UserToken.is_active == False)
+        ).delete()
+        self.db.commit()
+
+    def cleanup_expired_password_reset_tokens(self):
+        """Delete expired or inactive password reset tokens to prevent database bloat"""
+        now = datetime.now(timezone.utc)
+        now_naive = now.replace(tzinfo=None)
+        self.db.query(PasswordResetToken).filter(
+            (PasswordResetToken.expires_at <= now_naive) | (PasswordResetToken.is_active == False)
+        ).delete()
+        self.db.commit()

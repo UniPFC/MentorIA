@@ -20,6 +20,8 @@ class ChatType(Base):
     owner = relationship("User", back_populates="chat_types")
     chats = relationship("Chat", back_populates="chat_type", cascade="all, delete-orphan")
     knowledge_chunks = relationship("KnowledgeChunk", back_populates="chat_type", cascade="all, delete-orphan")
+    favorited_by = relationship("ChatTypeFavorite", back_populates="chat_type", cascade="all, delete-orphan")
+    tags = relationship("ChatTypeTag", back_populates="chat_type", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<ChatType(id={self.id}, name='{self.name}', is_public={self.is_public})>"

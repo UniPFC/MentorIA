@@ -18,7 +18,13 @@ from src.services.background import process_ingestion_job
 from src.ai.loader import ModelLoader
 from src.ai.provider.embedding import HFEmbeddingProvider
 from src.ai.embedding import EmbeddingEngine
-from src.api.dependencies import get_current_active_user
+from src.api.dependencies import (
+    get_current_active_user,
+    get_chat_type_repo,
+    get_ingestion_job_repo
+)
+from src.repositories.chat_type import ChatTypeRepository
+from src.repositories.ingestion_job import IngestionJobRepository
 from shared.qdrant.client import QdrantManager
 from config.settings import settings
 from config.logger import logger
@@ -49,7 +55,9 @@ async def create_chat_type_from_file(
     answer_column: str = Form("answer", description="Column name for answers"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-    ingestion_service: ChunkIngestionService = Depends(get_ingestion_service)
+    ingestion_service: ChunkIngestionService = Depends(get_ingestion_service),
+    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
+    job_repo: IngestionJobRepository = Depends(get_ingestion_job_repo)
 ):
     """
     Create a new ChatType from an uploaded spreadsheet.
@@ -75,7 +83,7 @@ async def create_chat_type_from_file(
         collection_name = f"chat_type_{name.lower().replace(' ', '_')}"
         
         # Check if name already exists
-        existing = db.query(ChatType).filter(ChatType.name == name).first()
+        existing = chat_type_repo.get_by_name(name)
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,9 +99,7 @@ async def create_chat_type_from_file(
             collection_name=collection_name
         )
         
-        db.add(chat_type)
-        db.commit()
-        db.refresh(chat_type)
+        chat_type = chat_type_repo.create(chat_type)
         
         logger.info(f"Created ChatType: {name} (id={chat_type.id})")
         
@@ -103,22 +109,20 @@ async def create_chat_type_from_file(
             qdrant.create_collection(chat_type.id, vector_size=1024)
         except Exception as e:
             logger.error(f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}")
-            db.delete(chat_type)
-            db.commit()
+            chat_type_repo.delete(chat_type)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to create vector collection: {str(e)}"
             )
         
         # Create ingestion job
-        job = IngestionJob(
-            chat_type_id=chat_type.id,
-            filename=file.filename,
-            status=IngestionStatus.PENDING
+        job = job_repo.create(
+            IngestionJob(
+                chat_type_id=chat_type.id,
+                filename=file.filename,
+                status=IngestionStatus.PENDING
+            )
         )
-        db.add(job)
-        db.commit()
-        db.refresh(job)
         
         logger.info(f"Created ingestion job {job.id} for ChatType {chat_type.id}")
         
@@ -145,7 +149,6 @@ async def create_chat_type_from_file(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to create chat type from file: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -161,14 +164,16 @@ async def add_chunks_to_chat_type(
     answer_column: str = Form("answer", description="Column name for answers"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-    ingestion_service: ChunkIngestionService = Depends(get_ingestion_service)
+    ingestion_service: ChunkIngestionService = Depends(get_ingestion_service),
+    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo)
 ):
     """
     Add more chunks to an existing ChatType.
     """
     try:
+        
         # Verify chat type exists
-        chat_type = db.query(ChatType).filter(ChatType.id == chat_type_id).first()
+        chat_type = chat_type_repo.get_by_id(chat_type_id)
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -213,7 +218,6 @@ async def add_chunks_to_chat_type(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to add chunks: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

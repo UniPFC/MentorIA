@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Uuid
+from sqlalchemy import Column, String, DateTime, ForeignKey, Uuid, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import uuid
@@ -12,6 +12,7 @@ class Chat(Base):
     user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     chat_type_id = Column(Uuid(as_uuid=True), ForeignKey("chat_types.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
+    title_auto_generated = Column(Boolean, default=False, nullable=False)
     llm_model = Column(String(255), nullable=True, index=True)
     llm_provider = Column(String(50), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
