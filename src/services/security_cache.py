@@ -100,6 +100,9 @@ class SecurityCache:
             self._record_anomaly(email, ip_address, risk_score, anomalies, timestamp)
         
         logger.debug(f"Login attempt recorded: {email} from {ip_address} - {'SUCCESS' if success else 'FAILURE'}")
+        
+        # Verificar limpeza automática periodicamente
+        self.auto_cleanup_check()
     
     def _update_ip_tracking(self, ip_address: str, email: str, timestamp: str):
         """Atualiza tracking de IPs"""
@@ -318,6 +321,77 @@ class SecurityCache:
         self._save_cache(self.user_tracking_file, filtered_user_data)
         
         logger.info(f"Security cache cleanup completed. Removed data older than {self.max_age_hours} hours")
+    
+    def cleanup_cache_directory(self, force_cleanup: bool = False):
+        """Limpa completamente o diretório de cache se necessário"""
+        try:
+            # Verificar tamanho total do diretório
+            total_size = 0
+            file_count = 0
+            
+            for file_path in self.cache_dir.iterdir():
+                if file_path.is_file():
+                    file_size = file_path.stat().st_size
+                    total_size += file_size
+                    file_count += 1
+            
+            # Limpar se for muito grande (>10MB) ou se forçado
+            max_size_mb = 10
+            if total_size > (max_size_mb * 1024 * 1024) or force_cleanup:
+                logger.warning(f"Cache directory too large: {total_size/1024/1024:.2f}MB, {file_count} files. Cleaning up...")
+                
+                # Backup dos dados recentes antes de limpar
+                if not force_cleanup:
+                    self.cleanup_old_data()
+                else:
+                    # Limpeza completa - apagar tudo e recriar
+                    for file_path in self.cache_dir.iterdir():
+                        if file_path.is_file():
+                            file_path.unlink()
+                    
+                    # Recriar arquivos vazios
+                    self._init_cache_files()
+                    logger.info("Cache directory completely cleaned and reinitialized")
+                
+                return True
+            else:
+                logger.debug(f"Cache directory size OK: {total_size/1024:.2f}KB, {file_count} files")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error during cache directory cleanup: {str(e)}")
+            return False
+    
+    def auto_cleanup_check(self):
+        """Verificação automática de limpeza (chamada periodicamente)"""
+        try:
+            # Limpar dados antigos (sempre)
+            self.cleanup_old_data()
+            
+            # Verificar se precisa de limpeza completa
+            self.cleanup_cache_directory(force_cleanup=False)
+            
+            # Contador para limpeza completa periódica (a cada 24 horas)
+            current_time = time.time()
+            last_cleanup_file = self.cache_dir / ".last_full_cleanup"
+            
+            should_cleanup = False
+            if last_cleanup_file.exists():
+                with open(last_cleanup_file, 'r') as f:
+                    last_cleanup = float(f.read().strip())
+                if current_time - last_cleanup > 86400:  # 24 horas
+                    should_cleanup = True
+            else:
+                should_cleanup = True
+            
+            if should_cleanup:
+                self.cleanup_cache_directory(force_cleanup=True)
+                with open(last_cleanup_file, 'w') as f:
+                    f.write(str(current_time))
+                logger.info("Periodic full cache cleanup completed")
+                
+        except Exception as e:
+            logger.error(f"Error during auto cleanup check: {str(e)}")
     
     def get_recent_anomalies(self, hours: int = 1) -> List[Dict]:
         """Retorna anomalias recentes"""
