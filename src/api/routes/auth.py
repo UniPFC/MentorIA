@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
@@ -11,6 +11,7 @@ from src.api.schemas.auth import (
 from src.api.dependencies import get_current_active_user, get_user_repo, security
 from src.services.auth import auth_service
 from src.services.email import email_service
+from src.services.security_cache import security_cache
 from config.logger import logger
 from config.settings import settings
 from datetime import datetime, timedelta, timezone
@@ -66,22 +67,85 @@ async def register_user(
 
 
 @router.post("/login", response_model=Token)
-async def login(
-    user_credentials: UserLogin,
-    user_repo: UserRepository = Depends(get_user_repo)
-):
+
+async def login(user_credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     """
     Autentica usuário e retorna tokens JWT
     """
+    # Obter informações da requisição
+    client_ip = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")
+    
+    # Verificar se IP está bloqueado pelo cache de segurança
+    ip_blocked, ip_block_reason = security_cache.should_block_ip(client_ip)
+    if ip_blocked:
+        security_cache.record_login_attempt(
+            user_credentials.email, client_ip, user_agent,
+            False, ip_block_reason, "HIGH", [ip_block_reason]
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="IP temporariamente bloqueado por atividades suspeitas.",
+            headers={"Retry-After": "300"}
+        )
+    
+    # Detectar anomalias antes da autenticação
+    anomaly_result = security_cache.detect_anomalies(user_credentials.email, client_ip, user_agent)
+    
+    # Se detectar anomalias críticas ou rate limit, bloquear
+    if anomaly_result['risk_score'] in ['CRITICAL', 'HIGH']:
+        security_cache.record_login_attempt(
+            user_credentials.email, client_ip, user_agent,
+            False, "Security anomaly detected", anomaly_result['risk_score'], anomaly_result['anomalies']
+        )
+        
+        # Se for CRITICAL, bloquear imediatamente
+        if anomaly_result['risk_score'] == 'CRITICAL':
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso bloqueado por motivos de segurança.",
+                headers={"X-Security-Block": "anomaly_detection"}
+            )
+        
+        # Se for HIGH, dar rate limit
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas suspeitas. Tente novamente mais tarde.",
+            headers={"Retry-After": "300"}
+        )
+    
+    user_repo = UserRepository(db)
     
     user = auth_service.authenticate_user(user_repo, user_credentials.email, user_credentials.password)
     
     if not user:
+        # Registrar tentativa falha com anomalias
+        security_cache.record_login_attempt(
+            user_credentials.email, client_ip, user_agent,
+            False, "Email ou senha incorretos", 
+            anomaly_result['risk_score'], anomaly_result['anomalies']
+        )
+        
+        # Verificar se agora tem anomalia pós-falha
+        post_failure_anomaly = security_cache.detect_anomalies(user_credentials.email, client_ip, user_agent)
+        if post_failure_anomaly['risk_score'] in ['CRITICAL', 'HIGH']:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Número excessivo de tentativas. Tente novamente mais tarde.",
+                headers={"Retry-After": "300"}
+            )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Login bem-sucedido - registrar com anomalias
+    security_cache.record_login_attempt(
+        user_credentials.email, client_ip, user_agent,
+        True, None, anomaly_result['risk_score'], anomaly_result['anomalies']
+    )
     
     # Verificar se precisa de reset de senha
     if auth_service.needs_password_reset(user.password_hash):
@@ -97,8 +161,33 @@ async def login(
     user_repo.update(user)
     
     tokens = auth_service.create_user_tokens(user, user_repo)
-    logger.info(f"User logged in successfully: {user.username}")
+    logger.info(f"User logged in successfully: {user.username} from {client_ip}")
+    
+    # Limpar cache antigo periodicamente
+    security_cache.cleanup_old_data()
+    
     return tokens
+
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Obtém o IP real do cliente considerando proxies
+    """
+    # Verificar headers comuns de proxy
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Pega o primeiro IP da lista
+        return forwarded_for.split(",")[0].strip()
+    
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback para o IP da conexão
+    if hasattr(request, 'client') and request.client:
+        return request.client.host
+    
+    return "unknown"
 
 
 @router.post("/refresh", response_model=Token)
@@ -120,7 +209,7 @@ async def refresh_token(
     logger.info("Access token refreshed successfully")
     return {
         "access_token": new_tokens["access_token"],
-        "refresh_token": token_data.refresh_token,  # Mantém o mesmo refresh token
+        "refresh_token": new_tokens["refresh_token"],  # Novo refresh token (rotation)
         "token_type": new_tokens["token_type"],
         "expires_in": new_tokens["expires_in"]
     }
@@ -139,7 +228,10 @@ async def logout(
     user_repo.invalidate_token(token)
     user_repo.invalidate_refresh_tokens(current_user.id)
     
-    logger.info(f"User logged out: {current_user.username}")
+    # Invalidar todos os tokens do usuário (access e refresh)
+    user_repo.invalidate_all_user_tokens(current_user.id)
+    
+    logger.info(f"User logged out and all tokens invalidated: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}
 
 
