@@ -22,11 +22,14 @@ class AuthService:
 
     def _prepare_password_for_bcrypt(self, password: str) -> str:
         """
-        Prepara senha para bcrypt usando SHA-256 para lidar com o limite de 72 bytes.
-        Isso mantém a segurança enquanto permite senhas longas.
+        Prepara senha para bcrypt usando SHA-256 + pepper para lidar com o limite de 72 bytes.
+        Isso mantém a segurança enquanto permite senhas longas e adiciona camada extra.
         """
+        # Adicionar pepper à senha antes do hash
+        password_with_pepper = password + settings.PASSWORD_PEPPER
+        
         # SHA-256 produz sempre 32 bytes (256 bits), que está dentro do limite do bcrypt
-        sha256_hash = hashlib.sha256(password.encode('utf-8')).digest()
+        sha256_hash = hashlib.sha256(password_with_pepper.encode('utf-8')).digest()
         # Base64 encode para string (44 caracteres, bem abaixo do limite de 72)
         return base64.b64encode(sha256_hash).decode('utf-8')
 

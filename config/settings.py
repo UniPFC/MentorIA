@@ -62,10 +62,13 @@ class Settings(BaseSettings):
     SYSTEM_USER_PASSWORD: str
 
     # JWT Configuration
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str 
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # Password Security Configuration
+    PASSWORD_PEPPER: str
 
     # Email Configuration
     SMTP_SERVER: str = "smtp.gmail.com"
