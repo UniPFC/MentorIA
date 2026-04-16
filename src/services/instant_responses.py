@@ -79,6 +79,7 @@ class InstantResponseService:
     def get_instant_response(question: str) -> Optional[str]:
         """
         Get instant response for a question if it matches a known pattern.
+        Only exact matches are returned to avoid false positives with complex queries.
         
         Args:
             question: User's question
@@ -88,16 +89,10 @@ class InstantResponseService:
         """
         normalized_question = InstantResponseService.normalize_text(question)
         
-        # Exact match
+        # Exact match only
         if normalized_question in InstantResponseService.INSTANT_RESPONSES:
             response = InstantResponseService.INSTANT_RESPONSES[normalized_question]
             logger.info(f"Instant response matched: '{question}' -> '{response[:50]}...'")
             return response
-        
-        # Partial match (question contains pattern)
-        for pattern, response in InstantResponseService.INSTANT_RESPONSES.items():
-            if pattern in normalized_question:
-                logger.info(f"Instant response partial match: '{question}' -> '{response[:50]}...'")
-                return response
         
         return None
