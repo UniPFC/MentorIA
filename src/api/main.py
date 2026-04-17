@@ -9,6 +9,11 @@ from config.settings import settings
 from shared.database.migration import run_migrations
 from src.api.routes import chat_types, chats, upload, jobs, auth
 from src.services.seeder import seed_default_knowledge
+from src.middleware.https_security import (
+    HTTPSRedirectMiddleware, 
+    SecurityHeadersMiddleware, 
+    SecureCookieMiddleware
+)
 import asyncio
 
 @asynccontextmanager
@@ -33,7 +38,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS
+# Adicionar middlewares de segurança (ordem importa!)
+# 1. Forçar HTTPS em produção
+app.add_middleware(HTTPSRedirectMiddleware)
+
+# 2. Adicionar headers de segurança
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 3. Garantir cookies seguros
+app.add_middleware(SecureCookieMiddleware)
+
+# Configure CORS (depois dos middlewares de segurança)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, replace with specific origins
