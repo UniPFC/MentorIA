@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from unittest.mock import Mock, MagicMock
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, DateTime
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
@@ -15,6 +15,30 @@ from shared.database.models.chat import Chat
 from shared.database.models.message import Message, MessageRole
 from shared.database.models.user_token import UserToken
 from shared.database.models.password_reset_token import PasswordResetToken
+
+
+def _ensure_aware_datetimes(target):
+    """
+    SQLite returns naive datetimes even for DateTime(timezone=True) columns.
+    This simulates PostgreSQL behavior by converting naive datetimes to UTC-aware
+    on all DateTime(timezone=True) columns of the loaded object.
+    """
+    mapper = target.__class__.__mapper__
+    for column in mapper.columns:
+        if isinstance(column.type, DateTime) and column.type.timezone:
+            value = getattr(target, column.key, None)
+            if value is not None and value.tzinfo is None:
+                setattr(target, column.key, value.replace(tzinfo=timezone.utc))
+
+
+@event.listens_for(Base, "load", propagate=True)
+def _tz_aware_on_load(target, context):
+    _ensure_aware_datetimes(target)
+
+
+@event.listens_for(Base, "refresh", propagate=True)
+def _tz_aware_on_refresh(target, context, attrs):
+    _ensure_aware_datetimes(target)
 
 
 @pytest.fixture(scope="function")

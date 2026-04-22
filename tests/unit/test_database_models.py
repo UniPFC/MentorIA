@@ -177,7 +177,7 @@ class TestUserTokenModel:
         assert token.is_active is True
         
     def test_token_expiration(self, db_session: Session, sample_user: User):
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
         expired_time = now - timedelta(hours=1)
         
         expired_token = UserToken(
@@ -192,7 +192,7 @@ class TestUserTokenModel:
         db_session.commit()
         db_session.refresh(expired_token)
         
-        current_time = datetime.now(timezone.utc).replace(tzinfo=None)
+        current_time = datetime.now(timezone.utc)
         
         assert expired_token.expires_at < current_time
 

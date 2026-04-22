@@ -102,17 +102,15 @@ class UserRepository:
     def cleanup_expired_tokens(self):
         """Delete expired or inactive user tokens to prevent database bloat"""
         now = datetime.now(timezone.utc)
-        now_naive = now.replace(tzinfo=None)
         self.db.query(UserToken).filter(
-            (UserToken.expires_at <= now_naive) | (UserToken.is_active == False)
+            (UserToken.expires_at <= now) | (UserToken.is_active == False)
         ).delete()
         self.db.commit()
 
     def cleanup_expired_password_reset_tokens(self):
         """Delete expired or inactive password reset tokens to prevent database bloat"""
         now = datetime.now(timezone.utc)
-        now_naive = now.replace(tzinfo=None)
         self.db.query(PasswordResetToken).filter(
-            (PasswordResetToken.expires_at <= now_naive) | (PasswordResetToken.is_active == False)
+            (PasswordResetToken.expires_at <= now) | (PasswordResetToken.is_active == False)
         ).delete()
         self.db.commit()
