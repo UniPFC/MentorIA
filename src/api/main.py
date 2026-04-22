@@ -14,6 +14,8 @@ from src.middleware.https_security import (
     SecurityHeadersMiddleware, 
     SecureCookieMiddleware
 )
+from src.middleware.csrf_protection import CSRFProtectionMiddleware, create_csrf_protect
+from fastapi_csrf_protect import CsrfProtect
 import asyncio
 
 @asynccontextmanager
@@ -38,6 +40,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Criar instância de CSRF protection
+csrf_protect = create_csrf_protect()
+
 # Adicionar middlewares de segurança (ordem importa!)
 # 1. Forçar HTTPS em produção
 app.add_middleware(HTTPSRedirectMiddleware)
@@ -47,6 +52,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # 3. Garantir cookies seguros
 app.add_middleware(SecureCookieMiddleware)
+
+# 4. Proteção CSRF
+app.add_middleware(CSRFProtectionMiddleware, csrf_protect=csrf_protect)
 
 # Configure CORS (depois dos middlewares de segurança)
 app.add_middleware(

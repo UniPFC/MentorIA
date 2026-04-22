@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi_csrf_protect import CsrfProtect
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.database.models.user import User
@@ -19,6 +20,14 @@ from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
 
+@router.get("/csrf-token")
+async def get_csrf_token(csrf_protect: CsrfProtect = Depends()):
+    """
+    Retorna o CSRF token
+    """
+    # Usar o método correto para gerar token
+    token = csrf_protect.generate_csrf_token()
+    return {"csrf_token": token}
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(

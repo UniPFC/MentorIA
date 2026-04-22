@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     
     # Password Security Configuration
     PASSWORD_PEPPER: str
+    
+    # CSRF Protection Configuration
+    CSRF_SECRET_KEY: str
+    CSRF_COOKIE_NAME: str = "csrf_token"
+    CSRF_TOKEN_AGE: int = 3600  # 1 hora
 
     # Email Configuration
     SMTP_SERVER: str = "smtp.gmail.com"
