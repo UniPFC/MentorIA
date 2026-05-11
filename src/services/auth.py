@@ -134,7 +134,7 @@ class AuthService:
         access_data = {
             "sub": str(user.id),
             "username": user.username,
-            "email": user.email
+            "email": user.email  # Property já retorna email decriptado
         }
         
         refresh_data = {

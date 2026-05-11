@@ -37,10 +37,12 @@ def seed_default_knowledge():
         system_email = settings.SYSTEM_USER_EMAIL
         system_username = "MentorIA"
         
-        # Try to find by email or username
-        system_user = db.query(User).filter(
-            (User.email == system_email) | (User.username == system_username)
-        ).first()
+        # Try to find by email or username using repository
+        from src.repositories.user import UserRepository
+        user_repo = UserRepository(db)
+        system_user = user_repo.get_by_email(system_email)
+        if not system_user:
+            system_user = db.query(User).filter(User.username == system_username).first()
         
         if not system_user:
             logger.info("Creating MentorIA system user...")
