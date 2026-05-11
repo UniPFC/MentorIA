@@ -68,12 +68,15 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Password Security Configuration
-    PASSWORD_PEPPER: str
+    PASSWORD_PEPPER: str 
     
     # CSRF Protection Configuration
     CSRF_SECRET_KEY: str
     CSRF_COOKIE_NAME: str = "csrf_token"
     CSRF_TOKEN_AGE: int = 3600  # 1 hora
+    
+    # Encryption Configuration
+    ENCRYPTION_SALT: str
 
     # Email Configuration
     SMTP_SERVER: str = "smtp.gmail.com"

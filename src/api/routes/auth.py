@@ -53,7 +53,7 @@ async def register_user(
             detail="Nome de usuário já existe"
         )
     
-    # Verificar se email já existe
+    # Verificar se email já existe (usando busca criptografada)
     existing_email = user_repo.get_by_email(user_data.email)
     if existing_email:
         raise HTTPException(
@@ -61,11 +61,11 @@ async def register_user(
             detail="Email já cadastrado"
         )
     
-    # Criar novo usuário
+    # Criar novo usuário com email criptografado
     hashed_password = auth_service.get_password_hash(user_data.password)
     new_user = User(
         username=user_data.username,
-        email=user_data.email,
+        email=user_data.email,  # Será criptografado automaticamente no repository
         password_hash=hashed_password
     )
     
