@@ -26,7 +26,8 @@ class Settings(BaseSettings):
 
     @property
     def POSTGRES_URL(self):
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        ssl_mode = "require" if not self.DEV_MODE else "prefer"
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}?sslmode={ssl_mode}"
 
     # Vector Database
     QDRANT_HOST: str
