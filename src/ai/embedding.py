@@ -3,6 +3,7 @@ Embedding engine for generating vector representations of text.
 Adapted from SoulsborneRAG for multi-tenant chat system.
 """
 
+import threading
 from typing import List
 from config.logger import logger
 from src.ai.provider.base import EmbeddingProvider
@@ -12,6 +13,7 @@ class EmbeddingEngine:
     """
     Orchestrates embedding generation.
     Abstracts the provider layer for higher-level RAG operations.
+    Thread-safe: uses a lock to serialize inference for local models.
     """
     
     def __init__(self, provider: EmbeddingProvider):
@@ -22,11 +24,13 @@ class EmbeddingEngine:
             provider: EmbeddingProvider instance (HFEmbeddingProvider or RemoteEmbeddingProvider)
         """
         self.provider = provider
+        self._lock = threading.Lock()
         logger.info("EmbeddingEngine initialized")
     
     def embed(self, inputs: List[str], **kwargs) -> List[List[float]]:
         """
         Generate embeddings for texts.
+        Thread-safe: acquires lock to prevent concurrent model access.
         
         Args:
             inputs: List of text strings
@@ -36,7 +40,8 @@ class EmbeddingEngine:
             List of embedding vectors
         """
         logger.debug(f"Embedding {len(inputs)} inputs")
-        embeddings = self.provider.embed(inputs, **kwargs)
+        with self._lock:
+            embeddings = self.provider.embed(inputs, **kwargs)
         return embeddings
     
     def embed_single(self, text: str, **kwargs) -> List[float]:

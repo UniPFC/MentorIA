@@ -12,7 +12,10 @@ class TestRAGPipeline:
             mock_settings.BASE_DIR = "."
             mock_settings.LLM_MODEL = "test-model"
             mock_settings.LLM_PROVIDER = "test"
+            mock_settings.EMBEDDING_PROVIDER = "local"
             mock_settings.EMBEDDING_MODEL_ID = "test-embedding"
+            mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-3-small"
+            mock_settings.EMBEDDING_REMOTE_PROVIDER = "openai"
             mock_settings.RERANKER_MODEL_ID = "test-reranker"
             mock_settings.K_RETRIEVAL = 10
             mock_settings.TOP_K = 5
