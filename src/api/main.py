@@ -30,7 +30,10 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Multi-tenant RAG chat system with custom knowledge bases",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.DEV_MODE else None,
+    redoc_url="/redoc" if settings.DEV_MODE else None,
+    openapi_url="/openapi.json" if settings.DEV_MODE else None
 )
 
 # Configure CORS
