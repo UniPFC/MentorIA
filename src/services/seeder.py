@@ -11,7 +11,7 @@ from shared.database.models.knowledge_chunk import KnowledgeChunk
 from src.services.ingestion import ChunkIngestionService
 from shared.qdrant.client import QdrantManager
 from src.ai.loader import ModelLoader
-from src.ai.provider.embedding import HFEmbeddingProvider
+from src.ai.provider.embedding import HFEmbeddingProvider, RemoteEmbeddingProvider
 from src.ai.embedding import EmbeddingEngine
 from config.settings import settings
 from src.services.auth import auth_service
@@ -125,9 +125,18 @@ def seed_default_knowledge():
                 # Load models only if we actually need to ingest something
                 if not models_loaded:
                     logger.info("Loading embedding models for seeding...")
-                    loader = ModelLoader()
-                    emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
-                    emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+                    provider_type = settings.EMBEDDING_PROVIDER.lower()
+                    
+                    if provider_type == "remote":
+                        emb_provider = RemoteEmbeddingProvider(
+                            model_name=settings.EMBEDDING_REMOTE_MODEL,
+                            provider_alias=settings.EMBEDDING_REMOTE_PROVIDER
+                        )
+                    else:
+                        loader = ModelLoader()
+                        emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
+                        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+                    
                     embedding_engine = EmbeddingEngine(emb_provider)
                     
                     if not qdrant_manager:

@@ -4,6 +4,7 @@ Adapted from SoulsborneRAG to work with dynamic chat_type_id.
 """
 
 import os
+import threading
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 from config.logger import logger
@@ -13,7 +14,7 @@ from src.rag.engine.reranker import RerankerEngine
 from src.rag.engine.query import QueryEngine
 from src.ai.provider.llm import Provider
 from src.ai.loader import ModelLoader
-from src.ai.provider.embedding import HFEmbeddingProvider
+from src.ai.provider.embedding import HFEmbeddingProvider, RemoteEmbeddingProvider
 from src.ai.provider.reranker import HFRerankProvider
 from src.ai.embedding import EmbeddingEngine
 from shared.qdrant.client import QdrantManager
@@ -67,34 +68,61 @@ class RAGPipeline:
         
         logger.info("Initializing RAGPipeline...")
         
+        # Provider cache: reuse Provider instances by (model, provider_alias)
+        self._provider_cache: Dict[tuple, Provider] = {}
+        self._provider_cache_lock = threading.Lock()
+        
         # Initialize default LLM provider from settings (will be overridden per chat if needed)
         self.llm_provider = Provider(
             model_name=settings.LLM_MODEL,
             provider_alias=settings.LLM_PROVIDER
         )
+        self._provider_cache[(settings.LLM_MODEL, settings.LLM_PROVIDER)] = self.llm_provider
         
         # Initialize Query Engine WITHOUT provider (will be set per request)
         self.query_engine = QueryEngine(primary_provider=None)
         
-        # Initialize model loader
-        self.loader = ModelLoader()
-        
-        # Load embedding model
-        emb_model, emb_tokenizer = self.loader.load_embedding(settings.EMBEDDING_MODEL_ID)
-        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
-        self.embedding_engine = EmbeddingEngine(emb_provider)
+        # Initialize embedding engine based on config
+        self.embedding_engine = self._create_embedding_engine()
         
         # Initialize Qdrant and retriever
         self.qdrant = QdrantManager()
         self.retriever = KnowledgeRetriever(self.qdrant, self.embedding_engine)
         
         # Load reranker model
+        self.loader = ModelLoader()
         rerank_model, rerank_tokenizer = self.loader.load_reranker(settings.RERANKER_MODEL_ID)
         rerank_provider = HFRerankProvider(rerank_model, rerank_tokenizer)
         self.reranker = RerankerEngine(rerank_provider)
         
         self._initialized = True
         logger.info("RAGPipeline initialized successfully")
+    
+    def _create_embedding_engine(self) -> EmbeddingEngine:
+        """
+        Create embedding engine based on settings.EMBEDDING_PROVIDER.
+        
+        - "local": loads HuggingFace model locally (requires GPU/CPU resources)
+        - "remote": uses OpenAI-compatible API (requires API key)
+        
+        Returns:
+            Configured EmbeddingEngine instance
+        """
+        provider_type = settings.EMBEDDING_PROVIDER.lower()
+        
+        if provider_type == "remote":
+            logger.info(f"Using remote embedding: model={settings.EMBEDDING_REMOTE_MODEL}, provider={settings.EMBEDDING_REMOTE_PROVIDER}")
+            emb_provider = RemoteEmbeddingProvider(
+                model_name=settings.EMBEDDING_REMOTE_MODEL,
+                provider_alias=settings.EMBEDDING_REMOTE_PROVIDER
+            )
+        else:
+            logger.info(f"Using local embedding: model={settings.EMBEDDING_MODEL_ID}")
+            self.loader = ModelLoader()
+            emb_model, emb_tokenizer = self.loader.load_embedding(settings.EMBEDDING_MODEL_ID)
+            emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+        
+        return EmbeddingEngine(emb_provider)
     
     def run(
         self,
@@ -373,6 +401,7 @@ class RAGPipeline:
     def _get_provider(self, llm_model: Optional[str] = None, llm_provider: Optional[str] = None) -> Provider:
         """
         Get LLM provider instance, using custom model/provider if specified.
+        Caches instances by (model, provider_alias) to reuse HTTP connection pools.
         
         Args:
             llm_model: Optional model name override
@@ -381,13 +410,18 @@ class RAGPipeline:
         Returns:
             Provider instance configured with the specified or default model/provider
         """
-        # Use custom model/provider if provided, otherwise use defaults
         model = llm_model or settings.LLM_MODEL
         provider_alias = llm_provider or settings.LLM_PROVIDER
+        cache_key = (model, provider_alias)
         
-        logger.debug(f"Getting provider: model={model}, provider={provider_alias}")
+        with self._provider_cache_lock:
+            if cache_key not in self._provider_cache:
+                logger.debug(f"Creating new provider: model={model}, provider={provider_alias}")
+                self._provider_cache[cache_key] = Provider(
+                    model_name=model,
+                    provider_alias=provider_alias
+                )
+            else:
+                logger.debug(f"Reusing cached provider: model={model}, provider={provider_alias}")
         
-        return Provider(
-            model_name=model,
-            provider_alias=provider_alias
-        )
+        return self._provider_cache[cache_key]

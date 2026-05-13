@@ -16,7 +16,7 @@ from src.api.schemas.ingestion import UploadResponseAsync, IngestionJobResponse
 from src.services.ingestion import ChunkIngestionService
 from src.services.background import process_ingestion_job
 from src.ai.loader import ModelLoader
-from src.ai.provider.embedding import HFEmbeddingProvider
+from src.ai.provider.embedding import HFEmbeddingProvider, RemoteEmbeddingProvider
 from src.ai.embedding import EmbeddingEngine
 from src.api.dependencies import (
     get_current_active_user,
@@ -35,9 +35,18 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 def get_ingestion_service() -> ChunkIngestionService:
     """Dependency to get ingestion service with loaded models."""
-    loader = ModelLoader()
-    emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
-    emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+    provider_type = settings.EMBEDDING_PROVIDER.lower()
+    
+    if provider_type == "remote":
+        emb_provider = RemoteEmbeddingProvider(
+            model_name=settings.EMBEDDING_REMOTE_MODEL,
+            provider_alias=settings.EMBEDDING_REMOTE_PROVIDER
+        )
+    else:
+        loader = ModelLoader()
+        emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
+        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+    
     emb_engine = EmbeddingEngine(emb_provider)
     qdrant = QdrantManager()
     

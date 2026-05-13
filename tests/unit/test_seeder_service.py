@@ -152,11 +152,19 @@ class TestSeederService:
     @patch('src.services.seeder.QdrantManager')
     @patch('src.services.seeder.ModelLoader')
     @patch('src.services.seeder.ChunkIngestionService')
+    @patch('src.services.seeder.settings')
     @patch('builtins.open', new_callable=mock_open, read_data=b'file content')
-    def test_seed_default_knowledge_ingests_data(self, mock_file, mock_ingestion, mock_loader, mock_qdrant, mock_auth, mock_join, mock_listdir, mock_exists, mock_session_local):
+    def test_seed_default_knowledge_ingests_data(self, mock_file, mock_settings, mock_ingestion, mock_loader, mock_qdrant, mock_auth, mock_join, mock_listdir, mock_exists, mock_session_local):
         mock_exists.return_value = True
         mock_listdir.return_value = ['data.xlsx']
         mock_join.return_value = '/data/data.xlsx'
+        
+        # Configure settings mock
+        mock_settings.EMBEDDING_PROVIDER = "huggingface"
+        mock_settings.EMBEDDING_MODEL_ID = "test-model"
+        mock_settings.DATA_DIR = "/data"
+        mock_settings.SYSTEM_USER_EMAIL = "system@test.com"
+        mock_settings.SYSTEM_USER_PASSWORD = "test-password"
         
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
@@ -168,11 +176,27 @@ class TestSeederService:
         mock_chat_type = MagicMock()
         mock_chat_type.id = "chat-type-id"
         
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
-            mock_user,      # System user
-            mock_chat_type, # ChatType exists
-        ]
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        # Create separate mocks for different query types
+        mock_user_query = MagicMock()
+        mock_user_query.filter.return_value.first.return_value = mock_user
+        
+        mock_chat_type_query = MagicMock()
+        mock_chat_type_query.filter.return_value.first.return_value = mock_chat_type
+        
+        mock_chunk_query = MagicMock()
+        mock_chunk_query.filter.return_value.count.return_value = 0
+        
+        # Set up query to return different mocks based on the model class
+        def query_side_effect(model):
+            if model == User:
+                return mock_user_query
+            elif model == ChatType:
+                return mock_chat_type_query
+            elif model == KnowledgeChunk:
+                return mock_chunk_query
+            return MagicMock()
+        
+        mock_db.query.side_effect = query_side_effect
         
         mock_loader_instance = MagicMock()
         mock_loader.return_value = mock_loader_instance

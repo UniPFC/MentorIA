@@ -2,6 +2,7 @@
 Reranker engine for scoring and filtering retrieved chunks.
 """
 
+import threading
 from typing import List, Dict, Any
 from config.logger import logger
 from src.ai.provider.base import RerankProvider
@@ -20,6 +21,7 @@ class RerankerEngine:
             rerank_provider: RerankProvider instance
         """
         self.provider = rerank_provider
+        self._lock = threading.Lock()
         logger.info("RerankerEngine initialized")
     
     def rerank_chunks(
@@ -51,8 +53,9 @@ class RerankerEngine:
                 for chunk in chunks
             ]
             
-            # Get relevance scores
-            scores = self.provider.rerank(query, documents)
+            # Get relevance scores (thread-safe)
+            with self._lock:
+                scores = self.provider.rerank(query, documents)
             
             # Attach scores to chunks
             for chunk, score in zip(chunks, scores):

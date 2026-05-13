@@ -35,6 +35,7 @@ from src.repositories.chat import ChatRepository
 from src.repositories.chat_type import ChatTypeRepository
 from src.rag.pipeline import RAGPipeline
 from config.settings import settings
+import asyncio
 import json
 from config.logger import logger
 
@@ -295,7 +296,7 @@ def delete_chat(
 
 
 @router.post("/{chat_id}/messages", response_model=SendMessageResponse)
-def send_message(
+async def send_message(
     chat_id: UUID,
     message_data: SendMessageRequest,
     db: Session = Depends(get_db),
@@ -306,29 +307,33 @@ def send_message(
     Send a message and get RAG-powered response.
     Uses the RAG pipeline to retrieve relevant chunks and generate contextual answers.
     Only the chat owner can send messages.
+    
+    Async endpoint: offloads blocking RAG pipeline to a thread so the event loop
+    stays free for other requests.
     """
     try:
-        # Verify ownership and get chat
-        chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
+        # Verify ownership and get chat (offload sync DB call)
+        chat = await asyncio.to_thread(verify_chat_ownership, chat_id, current_user.id, chat_repo)
         
         # Initialize Service
         chat_service = ChatService(db)
         
-        # Save User Message
-        chat_service.save_message(
+        # Save User Message (offload sync DB call)
+        await asyncio.to_thread(
+            chat_service.save_message,
             chat_id=chat_id,
             role=MessageRole.USER,
             content=message_data.content
         )
         
-        # Get chat history
-        chat_history = chat_service.get_chat_history(chat_id)
+        # Get chat history (offload sync DB call)
+        chat_history = await asyncio.to_thread(chat_service.get_chat_history, chat_id)
         
-        # Run RAG pipeline with chat-specific model if configured
-        from src.rag.pipeline import RAGPipeline
+        # Run RAG pipeline in a thread to avoid blocking the event loop
         rag_pipeline = RAGPipeline()
         
-        result = rag_pipeline.run(
+        result = await asyncio.to_thread(
+            rag_pipeline.run,
             chat_type_id=chat.chat_type_id,
             query=message_data.content,
             chat_history=chat_history if chat_history else None,
@@ -349,8 +354,9 @@ def send_message(
             for chunk in retrieved_chunks
         ]
         
-        # Save Assistant Message with context
-        chat_service.save_message(
+        # Save Assistant Message with context (offload sync DB call)
+        await asyncio.to_thread(
+            chat_service.save_message,
             chat_id=chat_id,
             role=MessageRole.ASSISTANT,
             content=assistant_content
@@ -360,8 +366,8 @@ def send_message(
         
         logger.info(f"Processed RAG message in chat {chat_id} with {len(retrieved_chunks)} chunks")
         
-        # Return full chat with all messages - reload to get updated messages
-        chat = chat_repo.get_by_id(chat_id)
+        # Return full chat with all messages - reload to get updated messages (offload sync DB call)
+        chat = await asyncio.to_thread(chat_repo.get_by_id, chat_id)
         
         return SendMessageResponse(
             chat=ChatWithMessagesResponse.model_validate(chat),
@@ -379,7 +385,7 @@ def send_message(
 
 
 @router.post("/{chat_id}/messages/stream")
-def send_message_stream(
+async def send_message_stream(
     chat_id: UUID,
     message_data: SendMessageRequest,
     db: Session = Depends(get_db),
@@ -392,23 +398,27 @@ def send_message_stream(
     
     The user message is saved immediately before streaming starts.
     The assistant response is generated and saved completely, even if the client disconnects.
+    
+    Async endpoint: the setup phase (verify, save, history) runs without blocking.
+    The streaming generator itself runs in a thread via StreamingResponse.
     """
     
-    # Verify ownership
-    chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
+    # Verify ownership (offload sync DB call)
+    chat = await asyncio.to_thread(verify_chat_ownership, chat_id, current_user.id, chat_repo)
     
     # Initialize Service
     chat_service = ChatService(db)
     
-    # Save User Message immediately (before streaming)
-    chat_service.save_message(
+    # Save User Message immediately (offload sync DB call)
+    await asyncio.to_thread(
+        chat_service.save_message,
         chat_id=chat_id,
         role=MessageRole.USER,
         content=message_data.content
     )
     
-    # Get chat history (after saving user message)
-    chat_history = chat_service.get_chat_history(chat_id)
+    # Get chat history (offload sync DB call)
+    chat_history = await asyncio.to_thread(chat_service.get_chat_history, chat_id)
     
     # Initialize pipeline
     rag_pipeline = RAGPipeline()
