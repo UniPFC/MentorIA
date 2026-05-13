@@ -58,12 +58,11 @@ jobs:
         pytest tests/performance/ -v --tb=short -m performance --cov=src --cov=shared --cov-append --cov-report=xml
     
     - name: Upload Coverage Reports
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         files: ./coverage.xml
         flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
     
     - name: Generate Coverage Badge
       run: |
