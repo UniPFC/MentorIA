@@ -112,7 +112,6 @@ app.include_router(jobs.router, prefix="/api/v1")
 def root():
     return {
         "message": "RAG Chat API",
-        "version": "1.0.0",
         "docs": "/docs"
     }
 
