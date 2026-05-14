@@ -8,7 +8,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
     
@@ -75,6 +75,15 @@ jobs:
       run: |
         uv pip install setuptools coverage-badge
         .venv/bin/coverage-badge -o coverage.svg -f
+    
+    - name: Push Coverage Badge
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add coverage.svg
+        git diff --staged --quiet || git commit -m "chore: update coverage badge [skip ci]"
+        git push
     
     - name: Comment PR with Test Results
       if: github.event_name == 'pull_request'

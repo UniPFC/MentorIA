@@ -77,3 +77,8 @@ graph TD
 
 **Equipe Techstein**
 Projeto desenvolvido para a disciplina de Projeto Final de Curso.
+
+## Badges
+
+![Tests](https://github.com/FelipeRochaMartins/MentorIA/actions/workflows/tests.yml/badge.svg)
+![Coverage](./coverage.svg)

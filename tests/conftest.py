@@ -242,35 +242,35 @@ def client(db_session):
     from fastapi.testclient import TestClient
     
     # Mock migrations and seeder before importing app
-    with patch('shared.database.migration.run_migrations'), \
+    with patch('src.api.main.run_migrations'), \
          patch('src.services.seeder.seed_default_knowledge'):
         from src.api.main import app
-    
-    # Override the database dependency
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-    
-    from src.api.routes.auth import get_db
-    from src.api.routes.chats import get_db as get_db_chats
-    from src.api.routes.chat_types import get_db as get_db_chat_types
-    from src.api.routes.jobs import get_db as get_db_jobs
-    from src.api.routes.upload import get_db as get_db_upload
-    from src.api.routes.websocket import get_db as get_db_ws
-    
-    app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_db_chats] = override_get_db
-    app.dependency_overrides[get_db_chat_types] = override_get_db
-    app.dependency_overrides[get_db_jobs] = override_get_db
-    app.dependency_overrides[get_db_upload] = override_get_db
-    app.dependency_overrides[get_db_ws] = override_get_db
-    
-    with TestClient(app) as test_client:
-        yield test_client
-    
-    # Clean up overrides
-    app.dependency_overrides.clear()
+        
+        # Override the database dependency
+        def override_get_db():
+            try:
+                yield db_session
+            finally:
+                pass
+        
+        from src.api.routes.auth import get_db
+        from src.api.routes.chats import get_db as get_db_chats
+        from src.api.routes.chat_types import get_db as get_db_chat_types
+        from src.api.routes.jobs import get_db as get_db_jobs
+        from src.api.routes.upload import get_db as get_db_upload
+        from src.api.routes.websocket import get_db as get_db_ws
+        
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_db_chats] = override_get_db
+        app.dependency_overrides[get_db_chat_types] = override_get_db
+        app.dependency_overrides[get_db_jobs] = override_get_db
+        app.dependency_overrides[get_db_upload] = override_get_db
+        app.dependency_overrides[get_db_ws] = override_get_db
+        
+        with TestClient(app) as test_client:
+            yield test_client
+        
+        # Clean up overrides
+        app.dependency_overrides.clear()
 
 
