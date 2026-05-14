@@ -31,3 +31,12 @@ class RerankProvider(ABC):
     def rerank(self, query: str, documents: List[str], **kwargs) -> List[float]:
         """Rerank documents by relevance to query."""
         pass
+
+
+class STTProvider(ABC):
+    """Base class for Speech-to-Text providers."""
+    
+    @abstractmethod
+    def transcribe(self, audio_path: str, **kwargs) -> str:
+        """Transcribe audio file to text."""
+        pass

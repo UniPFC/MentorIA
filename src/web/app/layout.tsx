@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from '@/lib/theme';
 import '@/styles/globals.css';
+import 'katex/dist/katex.min.css';
 
 export const metadata: Metadata = {
   title: 'MentorIA',

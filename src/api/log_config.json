@@ -1,0 +1,47 @@
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "handlers": {
+        "null": {
+            "class": "logging.NullHandler"
+        }
+    },
+    "loggers": {
+        "uvicorn": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "uvicorn.access": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "uvicorn.error": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "alembic": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "alembic.runtime": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "alembic.runtime.migration": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "MentorIA": {
+            "handlers": ["null"],
+            "propagate": true
+        },
+        "huggingface_hub": {
+            "handlers": ["null"],
+            "propagate": false
+        },
+        "huggingface_hub._http": {
+            "handlers": ["null"],
+            "propagate": false
+        }
+    }
+}

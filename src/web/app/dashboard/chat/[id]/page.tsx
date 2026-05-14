@@ -5,9 +5,20 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { authService } from '@/lib/auth';
-import api from '@/lib/api';
+import api, { checkSTTEnabled } from '@/lib/api';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import AudioRecorder from '@/components/AudioRecorder';
+
+const processLatex = (content: string): string => {
+  let result = content;
+  result = result.replace(/\$\$([^$]+)\$\$/g, (match) => `\n\n${match}\n\n`);
+  result = result.replace(/\n{3,}/g, '\n\n');
+  return result.trim();
+};
 
 interface Message {
   id: string;
@@ -50,9 +61,11 @@ export default function ChatPage() {
   const [chatListLoading, setChatListLoading] = useState(false);
   const [showSources, setShowSources] = useState(false);
   const [currentSources, setCurrentSources] = useState<any[]>([]);
-  const [titlePollingActive, setTitlePollingActive] = useState(false);
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [sttEnabled, setSttEnabled] = useState(false);
+  const [isAudioRecording, setIsAudioRecording] = useState(false);
+  const [isAudioTranscribing, setIsAudioTranscribing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -64,6 +77,9 @@ export default function ChatPage() {
     loadChat();
     loadChatList();
     loadAvailableModels();
+    checkSTTEnabled().then((enabled) => {
+      setSttEnabled(enabled);
+    });
   }, [chatId]);
 
   useEffect(() => {
@@ -87,33 +103,19 @@ export default function ChatPage() {
     };
   }, [showModelSelector]);
 
-  // Poll for title updates when sending message
-  useEffect(() => {
-    if (!titlePollingActive) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await api.get(`/chats/${chatId}`);
-        const newChat = res.data;
-        
-        // If title changed, update it
-        if (newChat.title && newChat.title !== chat?.title) {
-          setChat(newChat);
-          setChatList((prev) =>
-            prev.map((c) =>
-              c.id === chatId ? { ...c, title: newChat.title } : c
-            )
-          );
-          // Stop polling once title is updated
-          setTitlePollingActive(false);
-        }
-      } catch (err) {
-        // Silently fail on polling
+  // Use WebSocket for real-time updates instead of polling
+  useWebSocket(chatId, {
+    onMessage: (message) => {
+      if (message.type === 'title' && message.data.title) {
+        setChat((prev) => prev ? { ...prev, title: message.data.title } : null);
+        setChatList((prev) =>
+          prev.map((c) =>
+            c.id === chatId ? { ...c, title: message.data.title } : c
+          )
+        );
       }
-    }, 1000); // Poll every 1 second
-
-    return () => clearInterval(interval);
-  }, [titlePollingActive, chatId, chat?.title]);
+    },
+  });
 
   // Auto-close sidebar on mobile
   useEffect(() => {
@@ -182,31 +184,24 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async (e: FormEvent) => {
-    e.preventDefault();
-    const content = input.trim();
-    if (!content || sending) return;
+  const sendMessageInternal = async (content: string) => {
+    if (!content.trim() || sending) return;
 
     const tempUserMsg: Message = {
       id: `temp-${Date.now()}`,
       role: 'user',
-      content,
+      content: content.trim(),
       created_at: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, tempUserMsg]);
     setInput('');
     setSending(true);
-    setCurrentSources([]); // Clear previous sources
-    setTitlePollingActive(true); // Start polling for title updates
+    setCurrentSources([]);
 
     try {
-      // Use streaming endpoint (API is on different port/host)
-      const apiUrl = typeof window !== 'undefined' && (window as any).__API_URL__ 
-        ? (window as any).__API_URL__ 
-        : 'http://localhost:8000';
+      const apiUrl = 'http://localhost:8000';
       
-      // Get token from Cookies or localStorage (same as api.ts)
       const getCookie = (name: string) => {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
@@ -226,7 +221,7 @@ export default function ChatPage() {
       const response = await fetch(`${apiUrl}/api/v1/chats/${chatId}/messages/stream`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: content.trim() }),
       });
 
       if (!response.ok) {
@@ -257,7 +252,6 @@ export default function ChatPage() {
                 assistantContent += data.content;
 
                 if (isFirstToken) {
-                  // First token: create the assistant message
                   assistantMessageCreated = true;
                   setMessages((prev) => [
                     ...prev,
@@ -269,7 +263,6 @@ export default function ChatPage() {
                     },
                   ]);
                 } else {
-                  // Subsequent tokens: update existing message
                   setMessages((prev) => 
                     prev.map((msg) =>
                       msg.id === assistantMessageId
@@ -282,44 +275,34 @@ export default function ChatPage() {
                 streamSources = data.content || [];
                 setCurrentSources(streamSources);
               } else if (data.type === 'message') {
-                // Final message from backend, update with real ID
-                const finalMessage = data.content;
+                // Final message object from backend — replace temp id with real id and final content
+                const finalContent = typeof data.content === 'object' ? data.content.content : data.content;
+                const finalId = typeof data.content === 'object' ? data.content.id : assistantMessageId;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMessageId
-                      ? { ...msg, id: finalMessage.id }
+                      ? { ...msg, id: finalId, content: finalContent }
                       : msg
                   )
                 );
-              } else if (data.type === 'error') {
-                throw new Error(data.content);
               }
-            } catch (parseErr) {
-              // Silently skip parse errors
+            } catch (e) {
+              console.error('Error parsing stream data:', e);
             }
           }
         }
       }
-    } catch (err: any) {
-      // Connection lost during streaming
-      // Try to sync messages - the backend may have saved the response
-      try {
-        setError('Conexão perdida. Sincronizando mensagens...');
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-        await loadChat(); // Reload chat to get any saved messages
-        setError(''); // Clear error if sync successful
-      } catch (syncErr) {
-        // If sync fails, show the original error
-        setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
-        setInput(content);
-        setError(err.message || 'Erro ao enviar mensagem');
-        setTimeout(() => setError(''), 4000);
-      }
-      setTitlePollingActive(false);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError('Erro ao enviar mensagem. Tente novamente.');
     } finally {
       setSending(false);
-      inputRef.current?.focus();
     }
+  };
+
+  const sendMessage = async (e: FormEvent) => {
+    e.preventDefault();
+    await sendMessageInternal(input);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -601,10 +584,11 @@ export default function ChatPage() {
                       >
                         {msg.role === 'assistant' ? (
                           <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
                             className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed prose-pre:bg-gray-100 dark:prose-pre:bg-gray-900 prose-pre:text-gray-900 dark:prose-pre:text-gray-100 prose-code:text-brand-600 dark:prose-code:text-brand-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-900 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-strong:text-gray-900 dark:prose-strong:text-white prose-headings:text-gray-900 dark:prose-headings:text-white prose-a:text-brand-600 dark:prose-a:text-brand-400 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
                           >
-                            {msg.content}
+                            {processLatex(msg.content)}
                           </ReactMarkdown>
                         ) : (
                           <p className="whitespace-pre-wrap break-words">{msg.content}</p>
@@ -729,6 +713,17 @@ export default function ChatPage() {
           <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200/60 dark:border-gray-800/60 px-4 md:px-6 py-4 shrink-0">
             <form onSubmit={sendMessage} className="max-w-3xl mx-auto">
               <div className="flex items-end gap-2 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200/80 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 focus-within:border-brand-500 dark:focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 dark:focus-within:ring-brand-400/20 transition-all duration-200 px-4 py-2.5">
+                {/* Audio recorder on the left */}
+                <AudioRecorder
+                  onTranscription={(text) => {
+                    // Send message immediately with transcribed text
+                    sendMessageInternal(text);
+                  }}
+                  disabled={!sttEnabled || sending || loading}
+                  onRecordingStateChange={setIsAudioRecording}
+                  onTranscribingStateChange={setIsAudioTranscribing}
+                />
+
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -737,7 +732,7 @@ export default function ChatPage() {
                   placeholder="Digite sua mensagem..."
                   rows={1}
                   className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:ring-offset-0 appearance-none resize-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 max-h-32 py-1.5 leading-relaxed"
-                  disabled={sending || loading}
+                  disabled={sending || loading || isAudioRecording || isAudioTranscribing}
                   style={{ minHeight: '36px' }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
@@ -797,7 +792,7 @@ export default function ChatPage() {
 
                 <button
                   type="submit"
-                  disabled={!input.trim() || sending || loading}
+                  disabled={!input.trim() || sending || loading || isAudioRecording || isAudioTranscribing}
                   className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 hover:from-brand-500 hover:to-brand-600 disabled:from-gray-300 disabled:to-gray-300 dark:disabled:from-gray-600 dark:disabled:to-gray-700 text-white flex items-center justify-center transition-all duration-200 disabled:cursor-not-allowed active:scale-[0.93] shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 disabled:shadow-none"
                 >
                   {sending ? (

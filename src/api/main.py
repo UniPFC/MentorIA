@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from config.logger import logger
 from config.settings import settings
 from shared.database.migration import run_migrations
-from src.api.routes import chat_types, chats, upload, jobs, auth
+from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket
 from src.services.seeder import seed_default_knowledge
 import asyncio
 
@@ -31,9 +31,9 @@ app = FastAPI(
     description="Multi-tenant RAG chat system with custom knowledge bases",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs" if settings.DEV_MODE else None,
-    redoc_url="/redoc" if settings.DEV_MODE else None,
-    openapi_url="/openapi.json" if settings.DEV_MODE else None
+    docs_url="/docs", #if settings.DEV_MODE else None,
+    redoc_url="/redoc", #if settings.DEV_MODE else None,
+    openapi_url="/openapi.json", #if settings.DEV_MODE else None
 )
 
 # Configure CORS
@@ -43,7 +43,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-STT-Enabled"],
 )
+
+# Middleware to add STT availability header
+@app.middleware("http")
+async def add_stt_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-STT-Enabled"] = str(settings.STT_ENABLED).lower()
+    return response
 
 # Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
@@ -84,6 +92,8 @@ app.include_router(chat_types.router, prefix="/api/v1")
 app.include_router(chats.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
+app.include_router(audio.router, prefix="/api/v1")
+app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 
 @app.get("/")
 def root():

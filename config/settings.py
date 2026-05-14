@@ -42,14 +42,27 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     HUGGINGFACE_TOKEN: str = ""
 
+    @property
+    def HF_TOKEN(self):
+        return self.HUGGINGFACE_TOKEN
+
     # LLM Configuration
     LLM_PROVIDER: str = "ollama"  # ollama, openai, gemini
     LLM_MODEL: str = "llama3.1:8b"
 
     # Embedding & Reranking Models Configuration
+    EMBEDDING_PROVIDER: str
     EMBEDDING_MODEL_ID: str = "BAAI/bge-m3"
     EMBEDDING_DIMENSION: int = 1024
+    EMBEDDING_REMOTE_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_REMOTE_PROVIDER: str = "openai"
     RERANKER_MODEL_ID: str = "BAAI/bge-reranker-v2-m3"
+
+    # Speech-to-Text Configuration
+    STT_ENABLED: bool = False
+    STT_MODEL: str = "small"  # tiny, base, small, medium, large
+    STT_COMPUTE_TYPE: str = "int8"  # int8, int16, float16, float32
+    STT_TIMEOUT: int = 30  # seconds to wait for memory before failing
     
     # RAG Parameters
     K_RETRIEVAL: int = 10
