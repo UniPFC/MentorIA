@@ -62,7 +62,7 @@ app.add_middleware(CSRFProtectionMiddleware, csrf_protect=csrf_protect)
 # Configure CORS (depois dos middlewares de segurança)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
