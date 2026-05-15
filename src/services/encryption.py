@@ -17,170 +17,127 @@ class EncryptionService:
     """
     Serviço para criptografia e decriptação de dados sensíveis
     """
-    
+
     def __init__(self):
-        """Inicializa o serviço com a chave principal"""
         self.backend = default_backend()
         self.master_key = self._get_master_key()
-    
+
     def _get_master_key(self) -> bytes:
-        """
-        Obtém a chave mestre do ambiente ou gera uma
-        """
-        # Usar SECRET_KEY como base para a chave de criptografia
-        secret = settings.SECRET_KEY.encode('utf-8')
-        
-        # Derivar chave de 32 bytes (256 bits) usando PBKDF2
+        """Deriva chave AES-256 a partir do SECRET_KEY"""
+        if not settings.SECRET_KEY:
+            raise ValueError("SECRET_KEY is not set")
+
+        if not settings.ENCRYPTION_SALT:
+            raise ValueError("ENCRYPTION_SALT is not set")
+
+        secret = settings.SECRET_KEY.encode("utf-8")
+
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=settings.ENCRYPTION_SALT.encode('utf-8'),  # Salt do settings
+            salt=settings.ENCRYPTION_SALT.encode("utf-8"),
             iterations=100000,
-            backend=self.backend
+            backend=self.backend,
         )
+
         return kdf.derive(secret)
-    
-    def encrypt(self, data: str) -> str:
-        """
-        Criptografa dados sensíveis
-        
-        Args:
-            data: Dado em plain text para criptografar
-            
-        Returns:
-            Dado criptografado em base64
-        """
-        if not data:
-            return data
-        
+
+    def _looks_encrypted(self, value: str) -> bool:
+        """Validação básica de base64 + tamanho mínimo AES-GCM"""
+        if not value or not isinstance(value, str):
+            return False
+
         try:
-            # Gerar nonce aleatório para cada criptografia
-            nonce = os.urandom(12)  # 96 bits para GCM
-            
-            # Criar cipher
+            decoded = base64.b64decode(value, validate=True)
+            return len(decoded) >= 44  # nonce(12) + tag(16) + ciphertext
+        except Exception:
+            return False
+
+    def encrypt(self, data: str) -> str:
+        """Criptografa dados usando AES-256-GCM"""
+        if data is None or data == "":
+            return data
+
+        try:
+            nonce = os.urandom(12)
+
             cipher = Cipher(
                 algorithms.AES(self.master_key),
                 modes.GCM(nonce),
-                backend=self.backend
+                backend=self.backend,
             )
-            
-            # Criptografar
+
             encryptor = cipher.encryptor()
-            ciphertext = encryptor.update(data.encode('utf-8')) + encryptor.finalize()
-            
-            # Combinar nonce + ciphertext + tag para armazenamento
-            encrypted_data = nonce + encryptor.tag + ciphertext
-            
-            # Retornar em base64 para armazenamento seguro
-            return base64.b64encode(encrypted_data).decode('utf-8')
-            
+            ciphertext = encryptor.update(data.encode("utf-8")) + encryptor.finalize()
+
+            encrypted = nonce + encryptor.tag + ciphertext
+
+            return base64.b64encode(encrypted).decode("utf-8")
+
         except Exception as e:
             logger.error(f"Error encrypting data: {e}")
-            raise ValueError(f"Failed to encrypt data: {e}")
-    
+            raise ValueError("Encryption failed") from e
+
     def decrypt(self, encrypted_data: str) -> str:
-        """
-        Decriptografa dados sensíveis
-        
-        Args:
-            encrypted_data: Dado criptografado em base64
-            
-        Returns:
-            Dado em plain text
-        """
+        """Descriptografa dados AES-256-GCM"""
         if not encrypted_data:
             return encrypted_data
-        
+
+        if not self._looks_encrypted(encrypted_data):
+            raise ValueError("Data does not appear to be encrypted")
+
         try:
-            # Decodificar base64
-            encrypted_bytes = base64.b64decode(encrypted_data.encode('utf-8'))
-            
-            # Extrair nonce, tag e ciphertext
-            nonce = encrypted_bytes[:12]  # Primeiros 12 bytes
-            tag = encrypted_bytes[12:28]  # Próximos 16 bytes
-            ciphertext = encrypted_bytes[28:]  # Restante
-            
-            # Criar cipher
+            raw = base64.b64decode(encrypted_data)
+
+            nonce = raw[:12]
+            tag = raw[12:28]
+            ciphertext = raw[28:]
+
             cipher = Cipher(
                 algorithms.AES(self.master_key),
                 modes.GCM(nonce, tag),
-                backend=self.backend
+                backend=self.backend,
             )
-            
-            # Decriptografar
+
             decryptor = cipher.decryptor()
             plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-            
-            return plaintext.decode('utf-8')
-            
+
+            return plaintext.decode("utf-8")
+
         except Exception as e:
             logger.error(f"Error decrypting data: {e}")
-            raise ValueError(f"Failed to decrypt data: {e}")
-    
+            raise ValueError("Decryption failed") from e
+
     def encrypt_field(self, field_name: str, value: str) -> str:
-        """
-        Criptografa um campo específico com logging
-        
-        Args:
-            field_name: Nome do campo para logging
-            value: Valor para criptografar
-            
-        Returns:
-            Valor criptografado
-        """
         try:
             encrypted = self.encrypt(value)
-            logger.debug(f"Encrypted field {field_name}")
+            logger.debug(f"Encrypted field: {field_name}")
             return encrypted
         except Exception as e:
-            logger.error(f"Failed to encrypt field {field_name}: {e}")
+            logger.error(f"Failed encrypt field {field_name}: {e}")
             raise
-    
+
     def decrypt_field(self, field_name: str, encrypted_value: str) -> str:
-        """
-        Decriptografa um campo específico com logging
-        
-        Args:
-            field_name: Nome do campo para logging
-            encrypted_value: Valor criptografado
-            
-        Returns:
-            Valor decriptografado
-        """
         try:
             decrypted = self.decrypt(encrypted_value)
-            logger.debug(f"Decrypted field {field_name}")
+            logger.debug(f"Decrypted field: {field_name}")
             return decrypted
         except Exception as e:
-            logger.error(f"Failed to decrypt field {field_name}: {e}")
+            logger.error(f"Failed decrypt field {field_name}: {e}")
             raise
 
 
-# Instância global do serviço de criptografia
+# Instância global
 encryption_service = EncryptionService()
 
 
 def encrypt_sensitive_data(data: str) -> str:
-    """
-    Função helper para criptografar dados sensíveis
-    
-    Args:
-        data: Dado para criptografar
-        
-    Returns:
-        Dado criptografado
-    """
     return encryption_service.encrypt(data)
 
 
 def decrypt_sensitive_data(encrypted_data: str) -> str:
-    """
-    Função helper para decriptografar dados sensíveis
-    
-    Args:
-        encrypted_data: Dado criptografado
-        
-    Returns:
-        Dado decriptografado
-    """
     return encryption_service.decrypt(encrypted_data)
+
+
+def is_encrypted_data(value: str) -> bool:
+    return encryption_service._looks_encrypted(value)

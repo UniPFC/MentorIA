@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from src.services.email import EmailService
+from src.services.email_service import EmailService
 
 
 @pytest.mark.unit

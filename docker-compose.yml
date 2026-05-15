@@ -85,6 +85,35 @@ services:
     networks:
       - rag_network
 
+  # 5. Backup Service
+  backup:
+    build:
+      context: .
+      dockerfile: src/api/Dockerfile
+    container_name: rag_backup
+    command: sh -c "echo '0 2 * * * uv run python src/scripts/backup.py' | crontab - && cron -f"
+    environment:
+      - TZ=America/Sao_Paulo
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./cache:/app/cache
+      - ./alembic:/app/alembic
+      - ./shared:/app/shared
+      - ./config:/app/config
+      - ./alembic.ini:/app/alembic.ini
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - rag_network
+    depends_on:
+      - db
+      - vector_db
+
 volumes:
   postgres_data:
   qdrant_storage:

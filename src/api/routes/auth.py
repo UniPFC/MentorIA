@@ -11,7 +11,7 @@ from src.api.schemas.auth import (
 )
 from src.api.dependencies import get_current_active_user, get_user_repo, security
 from src.services.auth import auth_service
-from src.services.email import email_service
+from src.services.email_service import email_service
 from src.services.security_cache import security_cache
 from config.logger import logger
 from config.settings import settings
