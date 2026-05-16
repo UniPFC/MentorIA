@@ -49,7 +49,7 @@ class EncryptionService:
 
         try:
             decoded = base64.b64decode(value, validate=True)
-            return len(decoded) >= 44  # nonce(12) + tag(16) + ciphertext
+            return len(decoded) >= 28  # nonce(12) + tag(16) + ciphertext
         except Exception:
             return False
 
