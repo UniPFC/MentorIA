@@ -77,3 +77,7 @@ graph TD
 
 **Equipe Techstein**
 Projeto desenvolvido para a disciplina de Projeto Final de Curso.
+
+## Badges
+
+![Coverage](./coverage.svg)

@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from sqlalchemy import create_engine, event, DateTime
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
@@ -71,12 +71,16 @@ def db_session(db_engine):
 
 @pytest.fixture
 def sample_user(db_session: Session):
-    """Create a sample user for testing."""
+    """Create a sample user for testing with password hash matching AuthService."""
+    from src.services.auth import AuthService
+    auth_service = AuthService()
+    password_hash = auth_service.get_password_hash("password123")
+    
     user = User(
         id=uuid4(),
         username="testuser",
         email="test@example.com",
-        password_hash="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqYj5rHQZe",  # "password123"
+        password_hash=password_hash,
         is_active=True,
         created_at=datetime.now(timezone.utc)
     )
@@ -181,6 +185,30 @@ def sample_password_reset_token(db_session: Session, sample_user: User):
 
 
 @pytest.fixture
+def sample_jwt_token(db_session: Session, sample_user: User):
+    """Create a valid JWT access token registered in the database for integration tests."""
+    from src.services.auth import AuthService
+    from src.repositories.user import UserRepository
+    
+    auth_service = AuthService()
+    jwt_string = auth_service.create_access_token(
+        {"sub": str(sample_user.id)},
+        expires_delta=timedelta(hours=1)
+    )
+    
+    user_repo = UserRepository(db_session)
+    user_repo.create_token(
+        user_id=sample_user.id,
+        token=jwt_string,
+        token_type="access",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1)
+    )
+    db_session.commit()
+    
+    return jwt_string
+
+
+@pytest.fixture
 def mock_qdrant_client():
     """Create a mock Qdrant client."""
     mock_client = MagicMock()
@@ -206,5 +234,43 @@ def mock_llm_provider():
     mock_provider.generate.return_value = "Mock LLM response"
     mock_provider.stream.return_value = iter(["Mock ", "LLM ", "response"])
     return mock_provider
+
+
+@pytest.fixture
+def client(db_session):
+    """Create a test client for FastAPI app."""
+    from fastapi.testclient import TestClient
+    
+    # Mock migrations and seeder before importing app
+    with patch('src.api.main.run_migrations'), \
+         patch('src.services.seeder.seed_default_knowledge'):
+        from src.api.main import app
+        
+        # Override the database dependency
+        def override_get_db():
+            try:
+                yield db_session
+            finally:
+                pass
+        
+        from src.api.routes.auth import get_db
+        from src.api.routes.chats import get_db as get_db_chats
+        from src.api.routes.chat_types import get_db as get_db_chat_types
+        from src.api.routes.jobs import get_db as get_db_jobs
+        from src.api.routes.upload import get_db as get_db_upload
+        from src.api.routes.websocket import get_db as get_db_ws
+        
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_db_chats] = override_get_db
+        app.dependency_overrides[get_db_chat_types] = override_get_db
+        app.dependency_overrides[get_db_jobs] = override_get_db
+        app.dependency_overrides[get_db_upload] = override_get_db
+        app.dependency_overrides[get_db_ws] = override_get_db
+        
+        with TestClient(app) as test_client:
+            yield test_client
+        
+        # Clean up overrides
+        app.dependency_overrides.clear()
 
 

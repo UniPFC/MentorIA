@@ -10,7 +10,11 @@ def run_migrations():
         alembic_cfg = Config("/app/alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", settings.POSTGRES_URL)
         
+        logger.info("Running upgrade command...")
         command.upgrade(alembic_cfg, "head")
+        logger.info("Upgrade command completed.")
+        
         logger.info("Database migrations applied successfully.")
     except Exception as e:
         logger.error(f"Error applying migrations: {e}")
+        raise

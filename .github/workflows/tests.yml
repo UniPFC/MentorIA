@@ -8,7 +8,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
     
@@ -40,22 +40,29 @@ jobs:
     - name: Run Unit Tests with Coverage
       run: |
         . .venv/bin/activate
-        pytest tests/unit/ -v --tb=short --cov=src --cov=shared --cov-report=term-missing --cov-report=html --cov-report=xml
+        pytest tests/unit/ -v --tb=short --cov=src --cov=shared --cov-append
     
     - name: Run Integration Tests
       run: |
         . .venv/bin/activate
-        pytest tests/integration/ -v --tb=short --cov=src --cov=shared --cov-append --cov-report=xml
+        pytest tests/integration/ -v --tb=short --cov=src --cov=shared --cov-append
     
     - name: Run Regression Tests
       run: |
         . .venv/bin/activate
-        pytest tests/regression/ -v --tb=short -m regression --cov=src --cov=shared --cov-append --cov-report=xml
+        pytest tests/regression/ -v --tb=short -m regression --cov=src --cov=shared --cov-append
     
     - name: Run Performance Tests
       run: |
         . .venv/bin/activate
-        pytest tests/performance/ -v --tb=short -m performance --cov=src --cov=shared --cov-append --cov-report=xml
+        pytest tests/performance/ -v --tb=short -m performance --cov=src --cov=shared --cov-append
+    
+    - name: Generate Coverage Report
+      run: |
+        . .venv/bin/activate
+        coverage report --show-missing
+        coverage html
+        coverage xml
     
     - name: Upload Coverage Reports
       uses: codecov/codecov-action@v5
@@ -68,6 +75,15 @@ jobs:
       run: |
         uv pip install setuptools coverage-badge
         .venv/bin/coverage-badge -o coverage.svg -f
+    
+    - name: Push Coverage Badge
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add coverage.svg
+        git diff --staged --quiet || git commit -m "chore: update coverage badge [skip ci]"
+        git push
     
     - name: Comment PR with Test Results
       if: github.event_name == 'pull_request'

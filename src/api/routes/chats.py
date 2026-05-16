@@ -38,6 +38,7 @@ from config.settings import settings
 import asyncio
 import json
 from config.logger import logger
+from src.services.tokenizer import count_tokens, count_messages_tokens, mode_from_provider
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -329,6 +330,11 @@ async def send_message(
         # Get chat history (offload sync DB call)
         chat_history = await asyncio.to_thread(chat_service.get_chat_history, chat_id)
         
+        # Count input tokens before calling the AI
+        token_mode = mode_from_provider(chat.llm_provider)
+        input_tokens = count_tokens(message_data.content, mode=token_mode)
+        logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
+        
         # Run RAG pipeline in a thread to avoid blocking the event loop
         rag_pipeline = RAGPipeline()
         
@@ -343,6 +349,15 @@ async def send_message(
         
         assistant_content = result["answer"]
         retrieved_chunks = result["chunks"]
+        
+        # Token usage logging
+        output_tokens = count_tokens(assistant_content, mode=token_mode)
+        logger.info(f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}")
+        logger.info(
+            f"[TOKEN USAGE] chat={chat_id} provider={chat.llm_provider or 'default'} "
+            f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
+            f"total_tokens={input_tokens + output_tokens}"
+        )
         
         # Format chunks for response (and storage)
         chunks_response = [
@@ -420,6 +435,11 @@ async def send_message_stream(
     # Get chat history (offload sync DB call)
     chat_history = await asyncio.to_thread(chat_service.get_chat_history, chat_id)
     
+    # Count input tokens before calling the AI
+    token_mode = mode_from_provider(chat.llm_provider)
+    input_tokens = count_tokens(message_data.content, mode=token_mode)
+    logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
+    
     # Initialize pipeline
     rag_pipeline = RAGPipeline()
     
@@ -482,6 +502,15 @@ async def send_message_stream(
             )
             
             schedule_title_generation(chat_id)
+            
+            # Token usage logging
+            output_tokens = count_tokens(assistant_content, mode=token_mode)
+            logger.info(f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}")
+            logger.info(
+                f"[TOKEN USAGE] chat={chat_id} provider={chat.llm_provider or 'default'} "
+                f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
+                f"total_tokens={input_tokens + output_tokens}"
+            )
             
             logger.info(f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}")
             

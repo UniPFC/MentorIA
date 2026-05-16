@@ -192,7 +192,7 @@ def _generate_chat_title_internal(chat_id: UUID, db: Session) -> bool:
         response = llm_provider.generate_structured(
             messages=messages,
             response_format=ChatTitleResponse,
-            max_new_tokens=50,
+            max_new_tokens=100,
             temperature=0.3
         )
         
@@ -210,6 +210,10 @@ def _generate_chat_title_internal(chat_id: UUID, db: Session) -> bool:
         chat.title = title
         chat.title_auto_generated = False
         db.commit()
+        
+        # Broadcast title update via WebSocket
+        from src.api.routes.websocket import broadcast_chat_update
+        broadcast_chat_update(str(chat_id), "title", {"title": title})
         
         logger.info(f"Generated chat title: {chat_id} -> '{title}'")
         return True

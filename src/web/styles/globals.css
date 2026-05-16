@@ -86,6 +86,26 @@
 ::-webkit-scrollbar-thumb { @apply bg-gray-300/60 dark:bg-gray-700/60 rounded-full; }
 ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400 dark:bg-gray-600; }
 
+/* KaTeX display math centering */
+.katex-display {
+  display: block !important;
+  text-align: center !important;
+  margin: 1.5rem 0 !important;
+  overflow-x: auto;
+}
+
+/* Center paragraphs that contain only a katex block (display math) */
+p:has(> .katex-display),
+p:has(> .katex:only-child) {
+  text-align: center !important;
+  display: block;
+}
+
+/* KaTeX styling - bold */
+.katex {
+  font-weight: 600;
+}
+
 /* Prose overrides for chat messages */
 .prose pre { @apply overflow-x-auto rounded-xl; }
 .prose code:not(pre code) {

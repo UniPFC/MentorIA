@@ -25,7 +25,10 @@ class ModelLoader:
     def __init__(self):
         """Initialize model loader with device detection."""
         self.cache_dir = os.path.join(settings.CACHE_DIR, "models")
-        self.token = getattr(settings, "HUGGINGFACE_TOKEN", None)
+        self.token = getattr(settings, "HUGGINGFACE_TOKEN", None) or None
+        # Don't use token if it's empty or whitespace
+        if not self.token or not self.token.strip():
+            self.token = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
         os.makedirs(self.cache_dir, exist_ok=True)

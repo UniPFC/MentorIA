@@ -7,6 +7,12 @@ from shared.qdrant.client import QdrantManager
 
 @pytest.mark.unit
 class TestQdrantManager:
+    def test_init_failure(self):
+        with patch('shared.qdrant.client.QdrantClient') as mock_qdrant_client:
+            mock_qdrant_client.side_effect = Exception("Connection refused")
+            with pytest.raises(Exception, match="Connection refused"):
+                QdrantManager()
+
     @patch('shared.qdrant.client.QdrantClient')
     def test_init(self, mock_qdrant_client):
         manager = QdrantManager()
@@ -32,6 +38,18 @@ class TestQdrantManager:
         assert result is True
         mock_client.create_collection.assert_called_once()
         
+    @patch('shared.qdrant.client.QdrantClient')
+    def test_create_collection_exception(self, mock_qdrant_client):
+        mock_client = MagicMock()
+        mock_client.get_collections.side_effect = Exception("Qdrant error")
+        mock_qdrant_client.return_value = mock_client
+        
+        manager = QdrantManager()
+        chat_type_id = uuid4()
+        
+        with pytest.raises(Exception, match="Qdrant error"):
+            manager.create_collection(chat_type_id)
+
     @patch('shared.qdrant.client.QdrantClient')
     def test_create_collection_exists(self, mock_qdrant_client):
         chat_type_id = uuid4()
@@ -62,6 +80,19 @@ class TestQdrantManager:
         
         assert result is True
         mock_client.delete_collection.assert_called_once()
+
+    @patch('shared.qdrant.client.QdrantClient')
+    def test_delete_collection_exception(self, mock_qdrant_client):
+        mock_client = MagicMock()
+        mock_client.delete_collection.side_effect = Exception("Qdrant delete failed")
+        mock_qdrant_client.return_value = mock_client
+        
+        manager = QdrantManager()
+        chat_type_id = uuid4()
+        
+        result = manager.delete_collection(chat_type_id)
+        
+        assert result is False
         
     @patch('shared.qdrant.client.QdrantClient')
     def test_insert_chunks(self, mock_qdrant_client):
@@ -82,6 +113,21 @@ class TestQdrantManager:
         assert len(point_ids) == 2
         mock_client.upsert.assert_called_once()
         
+    @patch('shared.qdrant.client.QdrantClient')
+    def test_insert_chunks_exception(self, mock_qdrant_client):
+        mock_client = MagicMock()
+        mock_client.upsert.side_effect = Exception("Qdrant insert failed")
+        mock_qdrant_client.return_value = mock_client
+        
+        manager = QdrantManager()
+        chat_type_id = uuid4()
+        
+        chunks = [{"question": "Q1", "answer": "A1", "metadata": {}}]
+        embeddings = [[0.1] * 384]
+        
+        with pytest.raises(Exception, match="Qdrant insert failed"):
+            manager.insert_chunks(chat_type_id, chunks, embeddings)
+
     @patch('shared.qdrant.client.QdrantClient')
     def test_insert_chunks_mismatch(self, mock_qdrant_client):
         mock_client = MagicMock()
@@ -122,6 +168,19 @@ class TestQdrantManager:
         assert results[0]["score"] == 0.95
         assert results[0]["question"] == "Test question"
         
+    @patch('shared.qdrant.client.QdrantClient')
+    def test_search_exception(self, mock_qdrant_client):
+        mock_client = MagicMock()
+        mock_client.query_points.side_effect = Exception("Qdrant search failed")
+        mock_qdrant_client.return_value = mock_client
+        
+        manager = QdrantManager()
+        chat_type_id = uuid4()
+        query_embedding = [0.1] * 384
+        
+        with pytest.raises(Exception, match="Qdrant search failed"):
+            manager.search(chat_type_id, query_embedding)
+
     @patch('shared.qdrant.client.QdrantClient')
     def test_get_collection_info(self, mock_qdrant_client):
         mock_collection_info = MagicMock()

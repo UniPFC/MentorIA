@@ -114,6 +114,19 @@ class TestChunkIngestionService:
         
         assert encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
 
+    def test_detect_encoding_fallback(self, mock_embedding_engine, mock_qdrant_manager):
+        service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)
+        mock_content = MagicMock()
+        mock_content.decode.side_effect = UnicodeDecodeError('utf-8', b'', 0, 1, 'invalid start byte')
+        encoding = service._detect_encoding(mock_content)
+        assert encoding == 'latin-1'
+
+    def test_detect_csv_delimiter_exception(self, mock_embedding_engine, mock_qdrant_manager):
+        service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)
+        with patch.object(service, '_detect_encoding', side_effect=Exception("encoding error")):
+            delimiter = service._detect_csv_delimiter(b"some content")
+            assert delimiter == ','
+
     def test_parse_spreadsheet_csv_with_latin1_encoding(self, mock_embedding_engine, mock_qdrant_manager):
         # Create CSV with Latin-1 encoding and special characters
         csv_content = "question,answer\nQual é a resposta?,Café\nOutra pergunta?,Açúcar".encode('latin-1')
@@ -163,6 +176,37 @@ class TestChunkIngestionService:
         
         assert len(point_ids) == 0
         assert total == 0
+
+    def test_ingest_chunks_progress_callback_exception(self, mock_embedding_engine, mock_qdrant_manager, db_session: Session, sample_chat_type: ChatType):
+        service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)
+        
+        chunks = [
+            {"question": "Q1", "answer": "A1", "metadata": {"source_file": "test.xlsx"}},
+            {"question": "Q2", "answer": "A2", "metadata": {"source_file": "test.xlsx"}}
+        ]
+        
+        def failing_progress(processed):
+            raise Exception("Progress callback failed")
+        
+        point_ids, total = service.ingest_chunks(
+            sample_chat_type.id, chunks, db_session, on_progress=failing_progress
+        )
+        
+        assert len(point_ids) == 2
+        assert total == 2
+
+    def test_ingest_chunks_exception(self, mock_embedding_engine, mock_qdrant_manager, db_session: Session, sample_chat_type: ChatType):
+        service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)
+        mock_embedding_engine.embed.side_effect = Exception("Embedding failed")
+        
+        chunks = [
+            {"question": "Q1", "answer": "A1", "metadata": {"source_file": "test.xlsx"}}
+        ]
+        
+        with pytest.raises(Exception, match="Embedding failed"):
+            service.ingest_chunks(sample_chat_type.id, chunks, db_session)
+        
+        mock_embedding_engine.embed.side_effect = None
         
     def test_ingest_from_file(self, mock_embedding_engine, mock_qdrant_manager, db_session: Session, sample_chat_type: ChatType, sample_excel_bytes):
         service = ChunkIngestionService(mock_embedding_engine, mock_qdrant_manager)

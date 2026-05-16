@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch, mock_open, call
 from uuid import uuid4
 from src.rag.pipeline import RAGPipeline
 
@@ -495,3 +495,126 @@ class TestRAGPipeline:
             answer = pipeline._generate_answer("query", chunks)
         
         assert "ocorreu um erro" in answer
+
+    @patch('src.rag.pipeline.RemoteEmbeddingProvider')
+    @patch('src.rag.pipeline.EmbeddingEngine')
+    def test_create_embedding_engine_remote(self, mock_embedding_engine, mock_remote_provider, mock_settings):
+        """Cobre linhas 114-115: remote embedding provider path"""
+        mock_settings.EMBEDDING_PROVIDER = "remote"
+        
+        pipeline = RAGPipeline.__new__(RAGPipeline)
+        pipeline._create_embedding_engine()
+        
+        mock_remote_provider.assert_called_once_with(
+            model_name="text-embedding-3-small",
+            provider_alias="openai"
+        )
+        mock_embedding_engine.assert_called_once()
+
+    @patch('src.rag.pipeline.Provider')
+    @patch('src.rag.pipeline.ModelLoader')
+    @patch('src.rag.pipeline.QdrantManager')
+    @patch('src.rag.pipeline.QueryEngine')
+    @patch('src.rag.pipeline.KnowledgeRetriever')
+    @patch('src.rag.pipeline.RerankerEngine')
+    def test_run_stream_with_chat_history(self, mock_reranker_class, mock_retriever_class, mock_query_class, mock_qdrant, mock_loader, mock_provider, mock_settings):
+        """Cobre linhas 258-259: contextualize_query quando chat_history tem conteúdo no run_stream"""
+        RAGPipeline._instance = None
+        
+        mock_loader_instance = MagicMock()
+        mock_loader.return_value = mock_loader_instance
+        mock_loader_instance.load_embedding.return_value = (MagicMock(), MagicMock())
+        mock_loader_instance.load_reranker.return_value = (MagicMock(), MagicMock())
+        
+        mock_query_instance = MagicMock()
+        mock_query_class.return_value = mock_query_instance
+        mock_query_instance.contextualize_query.return_value = "Contextualized query"
+        mock_query_instance.expand_query.return_value = [MagicMock(text="query1")]
+        
+        mock_retriever_instance = MagicMock()
+        mock_retriever_class.return_value = mock_retriever_instance
+        mock_retriever_instance.search_many.return_value = [
+            {"id": "1", "score": 0.9, "question": "Q1", "answer": "A1"}
+        ]
+        
+        mock_reranker_instance = MagicMock()
+        mock_reranker_class.return_value = mock_reranker_instance
+        mock_reranker_instance.rerank_chunks.return_value = [
+            {"id": "1", "score": 0.95, "question": "Q1", "answer": "A1", "rerank_score": 0.95}
+        ]
+        
+        mock_provider_instance = MagicMock()
+        mock_provider.return_value = mock_provider_instance
+        mock_provider_instance.generate_stream.return_value = iter(["Hello"])
+        
+        with patch.object(RAGPipeline, '_load_prompt', return_value="System: {context}"):
+            pipeline = RAGPipeline()
+            
+            results = list(pipeline.run_stream(
+                chat_type_id=uuid4(),
+                query="What is AI?",
+                chat_history=[{"role": "user", "content": "Hello"}]
+            ))
+        
+        mock_query_instance.contextualize_query.assert_called_once()
+        assert any(r["type"] == "token" for r in results)
+
+    @patch('src.rag.pipeline.Provider')
+    @patch('src.rag.pipeline.ModelLoader')
+    @patch('src.rag.pipeline.QdrantManager')
+    @patch('src.rag.pipeline.QueryEngine')
+    @patch('src.rag.pipeline.KnowledgeRetriever')
+    @patch('src.rag.pipeline.RerankerEngine')
+    def test_generate_answer_stream_with_history(self, mock_reranker_class, mock_retriever_class, mock_query_class, mock_qdrant, mock_loader, mock_provider, mock_settings):
+        """Cobre linha 330: messages.extend(chat_history) quando chat_history existe"""
+        RAGPipeline._instance = None
+        
+        mock_loader_instance = MagicMock()
+        mock_loader.return_value = mock_loader_instance
+        mock_loader_instance.load_embedding.return_value = (MagicMock(), MagicMock())
+        mock_loader_instance.load_reranker.return_value = (MagicMock(), MagicMock())
+        
+        mock_provider_instance = MagicMock()
+        mock_provider.return_value = mock_provider_instance
+        mock_provider_instance.generate_stream.return_value = iter(["Hello"])
+        
+        with patch.object(RAGPipeline, '_load_prompt', return_value="System: {context}"):
+            pipeline = RAGPipeline()
+            
+            chunks = [{"question": "Q1", "answer": "A1"}]
+            chat_history = [{"role": "user", "content": "Previous message"}]
+            
+            results = list(pipeline._generate_answer_stream("query", chunks, chat_history))
+        
+        assert any(r["type"] == "token" for r in results)
+        call_args = mock_provider_instance.generate_stream.call_args[0][0]
+        assert len(call_args) == 3  # system + chat_history + user
+        assert call_args[0]["role"] == "system"
+        assert call_args[1]["role"] == "user"
+        assert call_args[1]["content"] == "Previous message"
+        assert call_args[2]["role"] == "user"
+
+    @patch('src.rag.pipeline.Provider')
+    @patch('src.rag.pipeline.ModelLoader')
+    @patch('src.rag.pipeline.QdrantManager')
+    @patch('src.rag.pipeline.QueryEngine')
+    @patch('src.rag.pipeline.KnowledgeRetriever')
+    @patch('src.rag.pipeline.RerankerEngine')
+    def test_get_provider_cache_miss(self, mock_reranker_class, mock_retriever_class, mock_query_class, mock_qdrant, mock_loader, mock_provider, mock_settings):
+        """Cobre linhas 419-420: criação de novo provider quando não está no cache"""
+        RAGPipeline._instance = None
+        
+        mock_loader_instance = MagicMock()
+        mock_loader.return_value = mock_loader_instance
+        mock_loader_instance.load_embedding.return_value = (MagicMock(), MagicMock())
+        mock_loader_instance.load_reranker.return_value = (MagicMock(), MagicMock())
+        
+        pipeline = RAGPipeline()
+        pipeline._provider_cache.clear()
+        
+        provider = pipeline._get_provider("custom-model", "custom-provider")
+        
+        # Provider is called once during __init__ and again for the cache miss
+        assert mock_provider.call_count == 2
+        assert mock_provider.call_args == call(model_name="custom-model", provider_alias="custom-provider")
+        assert provider is not None

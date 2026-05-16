@@ -151,6 +151,108 @@ class TestBackgroundService:
         
         assert mock_job.status == IngestionStatus.COMPLETED
         assert mock_job.started_at is not None
+
+    def test_process_ingestion_job_progress_callback_db_error(self, mock_db, mock_ingestion_service, mock_job):
+        job_id = uuid4()
+        chat_type_id = uuid4()
+        
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_job
+        
+        # Make db.commit fail on the 3rd call (inside progress callback)
+        commit_calls = []
+        def commit_side_effect():
+            commit_calls.append(1)
+            if len(commit_calls) == 3:
+                raise Exception("DB commit failed")
+        
+        mock_db.commit.side_effect = commit_side_effect
+        
+        def ingest_with_callback(*args, **kwargs):
+            on_progress = kwargs.get('on_progress')
+            if on_progress:
+                on_progress(1)
+            return (["point1", "point2"], 2)
+        
+        mock_ingestion_service.ingest_chunks.side_effect = ingest_with_callback
+        
+        process_ingestion_job(
+            job_id=job_id,
+            chat_type_id=chat_type_id,
+            file_content=b"test",
+            filename="test.xlsx",
+            question_col="question",
+            answer_col="answer",
+            ingestion_service=mock_ingestion_service,
+            db=mock_db
+        )
+        
+        assert mock_job.status == IngestionStatus.COMPLETED
+        mock_db.rollback.assert_called()
+
+    @patch("src.services.background.QdrantManager")
+    @patch("src.repositories.chat_type.ChatTypeRepository")
+    def test_process_ingestion_job_qdrant_cleanup_error(self, mock_repo_class, mock_qdrant_class, mock_db, mock_ingestion_service, mock_job):
+        job_id = uuid4()
+        chat_type_id = uuid4()
+        
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_job
+        mock_ingestion_service.ingest_chunks.side_effect = Exception("Ingest error")
+        
+        mock_chat_type = MagicMock()
+        mock_repo = MagicMock()
+        mock_repo.get_by_id.return_value = mock_chat_type
+        mock_repo_class.return_value = mock_repo
+        
+        mock_qdrant = MagicMock()
+        mock_qdrant.delete_collection.side_effect = Exception("Qdrant delete failed")
+        mock_qdrant_class.return_value = mock_qdrant
+        
+        process_ingestion_job(
+            job_id=job_id,
+            chat_type_id=chat_type_id,
+            file_content=b"test",
+            filename="test.xlsx",
+            question_col="question",
+            answer_col="answer",
+            ingestion_service=mock_ingestion_service,
+            db=mock_db
+        )
+        
+        assert mock_job.status == IngestionStatus.FAILED
+        mock_qdrant.delete_collection.assert_called_once()
+        mock_repo.delete.assert_called_once_with(mock_chat_type)
+
+    @patch("src.services.background.QdrantManager")
+    @patch("src.repositories.chat_type.ChatTypeRepository")
+    def test_process_ingestion_job_chat_type_cleanup_error(self, mock_repo_class, mock_qdrant_class, mock_db, mock_ingestion_service, mock_job):
+        job_id = uuid4()
+        chat_type_id = uuid4()
+        
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_job
+        mock_ingestion_service.ingest_chunks.side_effect = Exception("Ingest error")
+        
+        mock_chat_type = MagicMock()
+        mock_repo = MagicMock()
+        mock_repo.get_by_id.return_value = mock_chat_type
+        mock_repo.delete.side_effect = Exception("Delete failed")
+        mock_repo_class.return_value = mock_repo
+        
+        mock_qdrant = MagicMock()
+        mock_qdrant_class.return_value = mock_qdrant
+        
+        process_ingestion_job(
+            job_id=job_id,
+            chat_type_id=chat_type_id,
+            file_content=b"test",
+            filename="test.xlsx",
+            question_col="question",
+            answer_col="answer",
+            ingestion_service=mock_ingestion_service,
+            db=mock_db
+        )
+        
+        assert mock_job.status == IngestionStatus.FAILED
+        mock_repo.delete.assert_called_once_with(mock_chat_type)
     
     def test_load_title_generation_prompt_system(self):
         """Test loading system prompt"""
@@ -338,9 +440,7 @@ class TestBackgroundService:
         mock_load_prompt.side_effect = ["System", "User: {user_question} {assistant_response}"]
         
         mock_provider = MagicMock()
-        mock_response = MagicMock()
-        mock_response.__str__ = MagicMock(return_value="")
-        mock_provider.generate_structured.return_value = mock_response
+        mock_provider.generate_structured.return_value = ""
         mock_provider_class.return_value = mock_provider
         
         result = _generate_chat_title_internal(chat_id, mock_db)

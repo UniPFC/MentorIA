@@ -323,7 +323,7 @@ class RAGPipeline:
         
         context_str = "\n\n".join(context_parts)
         prompt_template = self._load_prompt("pipeline/message_system_prompt")
-        system_prompt = prompt_template.format(context=context_str)
+        system_prompt = prompt_template.replace("{context}", context_str)
         
         messages = [{"role": "system", "content": system_prompt}]
         if chat_history:
@@ -376,7 +376,7 @@ class RAGPipeline:
         context_str = "\n\n".join(context_parts)
         
         prompt_template = self._load_prompt("pipeline/message_system_prompt")
-        system_prompt = prompt_template.format(context=context_str)
+        system_prompt = prompt_template.replace("{context}", context_str)
         
         messages = [{"role": "system", "content": system_prompt}]
 
