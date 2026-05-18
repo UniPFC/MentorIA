@@ -29,6 +29,12 @@ class User(Base):
     level = Column(SQLEnum(UserLevel), nullable=False, default=UserLevel.LEVEL_01)
     token_budget = Column(Integer, nullable=True)
     
+    # Subscription fields (Pagar.me integration)
+    pagarme_customer_id = Column(String(255), nullable=True, index=True)
+    subscription_id = Column(String(255), nullable=True, index=True)
+    subscription_status = Column(String(50), nullable=True)  # active, canceled, past_due, unpaid, ended
+    subscription_period_end = Column(DateTime(timezone=True), nullable=True)
+    
     # Relationships
     chat_types = relationship("ChatType", back_populates="owner", cascade="all, delete-orphan")
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")

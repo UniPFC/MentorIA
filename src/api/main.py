@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from config.logger import logger
 from config.settings import settings
 from shared.database.migration import run_migrations
-from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket
+from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket, payments
 from src.services.seeder import seed_default_knowledge
 import asyncio
 
@@ -94,6 +94,7 @@ app.include_router(upload.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(audio.router, prefix="/api/v1")
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
+app.include_router(payments.router, prefix="/api/v1")
 
 @app.get("/")
 def root():

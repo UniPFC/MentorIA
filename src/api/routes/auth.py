@@ -6,8 +6,7 @@ from shared.database.models.user import User, UserLevel
 from src.repositories.user import UserRepository
 from src.api.schemas.auth import (
     UserRegister, UserLogin, Token, TokenRefresh, TokenVerifyResponse,
-    UserResponse, LogoutResponse, PasswordResetRequest, PasswordResetConfirm,
-    UserLevelUpgradeRequest, UserLevelUpgradeResponse
+    UserResponse, LogoutResponse, PasswordResetRequest, PasswordResetConfirm
 )
 from src.api.dependencies import get_current_active_user, get_user_repo, security
 from src.services.auth import auth_service
@@ -334,97 +333,6 @@ async def confirm_reset_password(
     
     logger.info(f"Password reset confirmed for user: {user.username}")
     return {"message": "Senha alterada com sucesso", "success": True}
-
-
-@router.post("/upgrade-level", response_model=UserLevelUpgradeResponse)
-async def upgrade_user_level(
-    upgrade_request: UserLevelUpgradeRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Upgrade user subscription level.
-    
-    This endpoint initiates the upgrade process. In a production environment,
-    this would integrate with a payment gateway (Stripe, PayPal, etc.).
-    For now, it returns a placeholder payment URL.
-    
-    Users cannot upgrade to LEVEL_05 (admin) - that's reserved for system admins.
-    """
-    try:
-        current_level = current_user.level
-        target_level = upgrade_request.target_level
-        
-        # Validate that target level is higher than current level
-        level_order = [UserLevel.LEVEL_01, UserLevel.LEVEL_02, UserLevel.LEVEL_03, UserLevel.LEVEL_04, UserLevel.LEVEL_05]
-        if level_order.index(target_level) <= level_order.index(current_level):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot downgrade or stay at same level. Current: {current_level}, Target: {target_level}"
-            )
-        
-        # Get budget for target level
-        budget_map = {
-            UserLevel.LEVEL_01: settings.TOKEN_BUDGET_LEVEL_01,
-            UserLevel.LEVEL_02: settings.TOKEN_BUDGET_LEVEL_02,
-            UserLevel.LEVEL_03: settings.TOKEN_BUDGET_LEVEL_03,
-            UserLevel.LEVEL_04: settings.TOKEN_BUDGET_LEVEL_04,
-            UserLevel.LEVEL_05: None,  # Unlimited
-        }
-        new_budget = budget_map[target_level]
-        
-        # TODO: Integrate with payment gateway here
-        # For now, return a placeholder payment URL
-        payment_url = f"https://payment-gateway.example.com/upgrade?user={current_user.id}&level={target_level}"
-        
-        # If skip_payment is enabled and DEV_MODE is on, apply upgrade immediately
-        if upgrade_request.skip_payment and settings.DEV_MODE:
-            from src.repositories.user import UserRepository
-            user_repo = UserRepository(db)
-            
-            # Apply the upgrade
-            current_user.level = target_level
-            current_user.token_budget = new_budget
-            user_repo.update(current_user)
-            
-            logger.info(
-                f"Level upgrade applied immediately (DEV_MODE): user={current_user.username} "
-                f"from {current_level} to {target_level}, budget={new_budget}"
-            )
-            
-            return UserLevelUpgradeResponse(
-                success=True,
-                message=f"Upgrade to {target_level} applied immediately (DEV_MODE).",
-                current_level=current_level,
-                new_level=target_level,
-                new_budget=new_budget if new_budget else 0,
-                payment_required=False,
-                payment_url=None
-            )
-        
-        logger.info(
-            f"Level upgrade initiated: user={current_user.username} "
-            f"from {current_level} to {target_level}"
-        )
-        
-        return UserLevelUpgradeResponse(
-            success=True,
-            message=f"Upgrade to {target_level} initiated. Complete payment to activate.",
-            current_level=current_level,
-            new_level=target_level,
-            new_budget=new_budget if new_budget else 0,
-            payment_required=True,
-            payment_url=payment_url
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to initiate level upgrade: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to initiate upgrade. Please try again later."
-        )
 
 
 def _get_client_ip(request: Request) -> str:

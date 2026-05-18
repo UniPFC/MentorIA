@@ -105,8 +105,22 @@ class Settings(BaseSettings):
     COST_TIER_MIN_MULTIPLIER: float = 0.1  # Minimum multiplier for cost tier 0
     COST_TIER_MAX_MULTIPLIER: float = 3.0  # Maximum multiplier for cost tier 9
 
+    # Pagar.me Configuration
+    PAGARME_API_KEY: str = ""
+    PAGARME_WEBHOOK_SECRET: str = ""
+    PAGARME_API_URL: str = "https://api.pagar.me/core/v5"
+    
+    # Pagar.me Plan IDs (one per level, configure in .env)
+    PAGARME_PLAN_LEVEL_02: str = ""  # Plan ID for LEVEL_02 subscription
+    PAGARME_PLAN_LEVEL_03: str = ""  # Plan ID for LEVEL_03 subscription
+    PAGARME_PLAN_LEVEL_04: str = ""  # Plan ID for LEVEL_04 subscription
+    
+    # Pagar.me Refill item price ID
+    PAGARME_REFILL_ITEM_ID: str = ""  # One-time charge item for token refill
+
     # Development Configuration
     DEV_MODE: bool = False
+    SKIP_PAYMENT: bool = False  # Skip payment processing (for testing without Pagar.me)
 
     model_config = ConfigDict(
         env_file=".env",
