@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 from uuid import UUID
 from zxcvbn import zxcvbn
+from shared.database.models.user import UserLevel
 
 
 # Mapeamento de traduções para dicas e avisos do zxcvbn
@@ -134,6 +135,35 @@ class UserResponse(BaseModel):
     username: str
     email: str
     created_at: datetime
+    level: Optional[UserLevel] = None
+    token_budget: Optional[int] = None
+    max_token_budget: Optional[int] = None
+    remaining_tokens: Optional[int] = None
+
+
+class UserLevelUpgradeRequest(BaseModel):
+    """Schema for user level upgrade request."""
+    target_level: UserLevel = Field(..., description="Target level to upgrade to")
+    skip_payment: bool = Field(False, description="Skip payment and apply upgrade immediately (DEV_MODE only)")
+    
+    @field_validator('target_level')
+    @classmethod
+    def validate_level_upgrade(cls, v):
+        """Validate that the level is not LEVEL_05 (admin)."""
+        if v == UserLevel.LEVEL_05:
+            raise ValueError('LEVEL_05 is reserved for admins and cannot be upgraded to.')
+        return v
+
+
+class UserLevelUpgradeResponse(BaseModel):
+    """Schema for user level upgrade response."""
+    success: bool
+    message: str
+    current_level: UserLevel
+    new_level: UserLevel
+    new_budget: int
+    payment_required: bool
+    payment_url: Optional[str] = None
 
 
 class LogoutResponse(BaseModel):

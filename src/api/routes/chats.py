@@ -15,6 +15,7 @@ from shared.database.models.user import User
 from src.services.chat import ChatService
 from src.services.background import schedule_title_generation
 from src.services.instant_responses import InstantResponseService
+from src.services.user import UserService
 from src.api.schemas.chat import (
     ChatCreate,
     ChatResponse,
@@ -53,14 +54,28 @@ def get_available_models(
     """
     try:
         available_models_data = settings.get_available_models()
-        available_models = [
-            LLMModelInfo(
-                model=m.get("model"),
-                provider=m.get("provider"),
-                description=m.get("description")
+        available_models = []
+        
+        for m in available_models_data:
+            input_mult = m.get("input_token_multiplier", 1.0)
+            output_mult = m.get("output_token_multiplier", 1.0)
+            avg_mult = (input_mult + output_mult) / 2
+            
+            # Calculate cost tier (0-9)
+            # Range: COST_TIER_MIN_MULTIPLIER = 0, COST_TIER_MAX_MULTIPLIER = 9
+            min_mult = settings.COST_TIER_MIN_MULTIPLIER
+            max_mult = settings.COST_TIER_MAX_MULTIPLIER
+            tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
+            tier = max(0, min(9, tier))
+            
+            available_models.append(
+                LLMModelInfo(
+                    model=m.get("model"),
+                    provider=m.get("provider"),
+                    description=m.get("description"),
+                    cost_tier=tier
+                )
             )
-            for m in available_models_data
-        ]
         
         current_default = f"{settings.LLM_MODEL} ({settings.LLM_PROVIDER})"
         
@@ -335,6 +350,27 @@ async def send_message(
         input_tokens = count_tokens(message_data.content, mode=token_mode)
         logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
         
+        # Check user token budget before sending message
+        user_service = UserService(db)
+        
+        # Get model cost multipliers
+        available_models = settings.get_available_models()
+        input_multiplier = 1.0
+        output_multiplier = 1.0
+        for model in available_models:
+            if model["model"] == chat.llm_model and model["provider"] == chat.llm_provider:
+                input_multiplier = model.get("input_token_multiplier", 1.0)
+                output_multiplier = model.get("output_token_multiplier", 1.0)
+                break
+        
+        # Check if user can afford input tokens + reserve (only check input, not output)
+        actual_input_tokens = int(input_tokens * input_multiplier)
+        if not user_service.can_afford_tokens(current_user, input_tokens, 0, settings.TOKEN_BUDGET_MINIMUM_RESERVE, input_multiplier, 1.0):
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)"
+            )
+        
         # Run RAG pipeline in a thread to avoid blocking the event loop
         rag_pipeline = RAGPipeline()
         
@@ -358,6 +394,9 @@ async def send_message(
             f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
             f"total_tokens={input_tokens + output_tokens}"
         )
+        
+        # Deduct tokens from user budget
+        user_service.deduct_tokens(current_user.id, input_tokens, output_tokens, input_multiplier, output_multiplier)
         
         # Format chunks for response (and storage)
         chunks_response = [
@@ -440,6 +479,27 @@ async def send_message_stream(
     input_tokens = count_tokens(message_data.content, mode=token_mode)
     logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
     
+    # Check user token budget before sending message
+    user_service = UserService(db)
+    
+    # Get model cost multipliers
+    available_models = settings.get_available_models()
+    input_multiplier = 1.0
+    output_multiplier = 1.0
+    for model in available_models:
+        if model["model"] == chat.llm_model and model["provider"] == chat.llm_provider:
+            input_multiplier = model.get("input_token_multiplier", 1.0)
+            output_multiplier = model.get("output_token_multiplier", 1.0)
+            break
+    
+    # Check if user can afford input tokens + reserve (only check input, not output)
+    actual_input_tokens = int(input_tokens * input_multiplier)
+    if not user_service.can_afford_tokens(current_user, input_tokens, 0, settings.TOKEN_BUDGET_MINIMUM_RESERVE, input_multiplier, 1.0):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)"
+        )
+    
     # Initialize pipeline
     rag_pipeline = RAGPipeline()
     
@@ -511,6 +571,9 @@ async def send_message_stream(
                 f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
                 f"total_tokens={input_tokens + output_tokens}"
             )
+            
+            # Deduct tokens from user budget
+            user_service.deduct_tokens(current_user.id, input_tokens, output_tokens, input_multiplier, output_multiplier)
             
             logger.info(f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}")
             

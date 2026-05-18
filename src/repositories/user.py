@@ -2,7 +2,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from shared.database.models.user import User
+from shared.database.models.user import User, UserLevel
 from shared.database.models.user_token import UserToken
 from shared.database.models.password_reset_token import PasswordResetToken
 
@@ -114,3 +114,29 @@ class UserRepository:
             (PasswordResetToken.expires_at <= now) | (PasswordResetToken.is_active == False)
         ).delete()
         self.db.commit()
+
+    def deduct_tokens(self, user_id: UUID, tokens: int) -> User:
+        """Deduct tokens from user budget. Returns updated user."""
+        user = self.get_by_id(user_id)
+        if user and not user.has_unlimited_budget and user.token_budget is not None:
+            user.token_budget = max(0, user.token_budget - tokens)
+            self.update(user)
+        return user
+
+    def set_token_budget(self, user_id: UUID, budget: int) -> User:
+        """Set user token budget. Returns updated user."""
+        user = self.get_by_id(user_id)
+        if user:
+            user.token_budget = budget
+            self.update(user)
+        return user
+
+    def set_user_level(self, user_id: UUID, level: UserLevel, budget: Optional[int] = None) -> User:
+        """Set user level and optionally budget. Returns updated user."""
+        user = self.get_by_id(user_id)
+        if user:
+            user.level = level
+            if budget is not None:
+                user.token_budget = budget
+            self.update(user)
+        return user

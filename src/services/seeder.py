@@ -5,7 +5,7 @@ import os
 import logging
 from sqlalchemy.orm import Session
 from shared.database.session import SessionLocal
-from shared.database.models.user import User
+from shared.database.models.user import User, UserLevel
 from shared.database.models.chat_type import ChatType
 from shared.database.models.knowledge_chunk import KnowledgeChunk
 from src.services.ingestion import ChunkIngestionService
@@ -48,17 +48,20 @@ def seed_default_knowledge():
                 email=system_email,
                 password_hash=auth_service.get_password_hash(settings.SYSTEM_USER_PASSWORD),
                 username=system_username,
-                is_active=True
+                is_active=True,
+                level=UserLevel.LEVEL_05
             )
             db.add(system_user)
             db.commit()
             db.refresh(system_user)
-            logger.info(f"MentorIA system user created with ID: {system_user.id}")
+            logger.info(f"MentorIA system user created with ID: {system_user.id} and level: {system_user.level}")
         else:
-            # Ensure username is 'MentorIA' if found by email
-            if system_user.username != system_username:
-                logger.info(f"Updating system user username to '{system_username}'...")
+            # Ensure username is 'MentorIA' and level is LEVEL_05
+            if system_user.username != system_username or system_user.level != UserLevel.LEVEL_05:
+                logger.info(f"Updating system user username to '{system_username}' and level to LEVEL_05...")
                 system_user.username = system_username
+                system_user.level = UserLevel.LEVEL_05
+                system_user.token_budget = None  # Admin has unlimited budget
                 db.commit()
                 db.refresh(system_user)
             
