@@ -122,6 +122,7 @@ app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 def root():
     return {
         "message": "RAG Chat API",
+        "version": app.version,
         "docs": "/docs"
     }
 

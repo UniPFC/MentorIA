@@ -208,7 +208,6 @@ def main():
 
         logger.info(f"Encrypted backups created: {backups}")
 
-        # Optional: Clean old backups (keep last 7 days)
         cleanup_old_backups(days=7)
 
     except Exception as e:
