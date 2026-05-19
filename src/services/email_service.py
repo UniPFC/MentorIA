@@ -1,7 +1,10 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timezone
 from typing import Optional
+
+from qdrant_client.models import datetime
 from config.settings import settings
 from config.logger import logger
 import secrets
@@ -136,6 +139,40 @@ class EmailService:
         
         return self._send_email(to_email, "Senha Alterada - MentorIA", html_body)
 
+    def send_password_reset_notification(self, to_email: str, username:str) -> bool:
+        """Nofifica o usuário sobre o reset de senha.
+            Envia ANTES do link de reset, serve como alerta de segurança.
+        """
+        try:
+            subject = "⚠️ Solicitação de redefinição de senha - MentorIA"
+            html_body = f"""
+            <html><body>
+            <h2>Olá, {username}!</h2>
+            <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>MentorIA</strong>.</p>
+            <p><strong>Data/Hora:</strong> {datetime.utcnow().strftime('%d/%m/%Y às %H:%M')}
+ (UTC)</p>
 
+          <p>Se <strong>você fez essa solicitação</strong>, pode ignorar este email —
+          um segundo email com o link de redefinição foi enviado para você.</p>
+
+           <p>Se <strong>você NÃO fez essa solicitação</strong>, sua senha ainda está segura.
+           Recomendamos que você:
+           <ul>
+              <li>Altere sua senha assim que possível</li>
+              <li>Revise os acessos recentes à sua conta</li>
+               <li>Entre em contato com o suporte se suspeitar de algo</li>
+         </ul>
+
+          <p style="color: gray; font-size: 12px;">
+               Este é um email automático de segurança. Não responda a este email.
+           </p>
+           </body></html>
+          """
+            return self._send_email(to_email, subject, html_body)
+    
+        except Exception as e:
+            logger.error(f"Failed to send password reset notification to {to_email}: {str(e)}")
+            return False
+    
 # Instância global do serviço
 email_service = EmailService()

@@ -280,6 +280,10 @@ async def forgot_password(
         logger.info(f"Password reset requested for non-existent email: {request.email}")
         return {"message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha", "success": True}
     
+    notification_sent = email_service.send_password_reset_notification(user.email, user.username)
+    if not notification_sent:
+        logger.warning(f"Failed to send password reset notification to user: {user.username}")
+
     # Gerar token de reset
     reset_token = email_service.generate_reset_token()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
