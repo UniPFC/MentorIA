@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { LayoutDashboard, MessageSquare, Upload, FolderOpen, LogOut, Menu, X, BookOpen, UserCircle, Clock } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import BudgetIndicator from './BudgetIndicator';
 import { authService } from '@/lib/auth';
 
 interface SidebarProps {
@@ -108,6 +109,10 @@ export default function Sidebar({ userName, userEmail, userInitials }: SidebarPr
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Tema</span>
             <ThemeToggle />
+          </div>
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Créditos</span>
+            <BudgetIndicator />
           </div>
           <button
             onClick={handleLogout}

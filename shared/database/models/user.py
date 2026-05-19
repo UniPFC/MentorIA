@@ -33,6 +33,7 @@ class User(Base):
     pagarme_customer_id = Column(String(255), nullable=True, index=True)
     subscription_id = Column(String(255), nullable=True, index=True)
     subscription_status = Column(String(50), nullable=True)  # active, canceled, past_due, unpaid, ended
+    subscription_period_start = Column(DateTime(timezone=True), nullable=True)
     subscription_period_end = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships

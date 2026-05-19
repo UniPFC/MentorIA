@@ -54,4 +54,5 @@ class SubscriptionStatusResponse(BaseModel):
     has_subscription: bool
     status: Optional[str] = None
     current_level: UserLevel
+    period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None

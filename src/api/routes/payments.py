@@ -7,6 +7,8 @@ No card or sensitive payment data is handled on our side.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone, timedelta
+import uuid
 from shared.database.session import get_db
 from shared.database.models.user import User, UserLevel
 from src.repositories.user import UserRepository
@@ -69,8 +71,16 @@ async def create_subscription(
         if request.skip_payment and settings.SKIP_PAYMENT:
             user_repo = UserRepository(db)
             current_level = current_user.level
+            now = datetime.now(timezone.utc)
+            period_end = now + timedelta(days=30)
             current_user.level = target_level
             current_user.token_budget = new_budget
+            current_user.subscription_id = f"skip_sub_{uuid.uuid4().hex[:12]}"
+            current_user.subscription_status = "active"
+            current_user.subscription_period_start = now
+            current_user.subscription_period_end = period_end
+            if not current_user.pagarme_customer_id:
+                current_user.pagarme_customer_id = f"skip_cus_{uuid.uuid4().hex[:12]}"
             user_repo.update(current_user)
             
             logger.info(
@@ -299,6 +309,7 @@ async def get_subscription_status(
         has_subscription=current_user.subscription_id is not None,
         status=current_user.subscription_status,
         current_level=current_user.level,
+        period_start=current_user.subscription_period_start,
         period_end=current_user.subscription_period_end
     )
 
@@ -434,11 +445,16 @@ async def _handle_subscription_event(
         )
     
     elif event_type == "subscription.payment_failed":
+        user.level = UserLevel.LEVEL_01
+        user.token_budget = settings.TOKEN_BUDGET_LEVEL_01
         user.subscription_status = "past_due"
+        user.subscription_id = None
+        user.subscription_period_end = None
         user_repo.update(user)
-        
+
         logger.warning(
-            f"Subscription payment failed: user={user.username} sub_id={subscription_id}"
+            f"Subscription payment failed: user={user.username} downgraded to LEVEL_01 "
+            f"budget={settings.TOKEN_BUDGET_LEVEL_01}"
         )
 
 
