@@ -1,8 +1,19 @@
-from sqlalchemy import Column, String, DateTime, Boolean, Uuid
+from sqlalchemy import Column, String, DateTime, Boolean, Uuid, Integer, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import uuid
+import enum
 from shared.database.session import Base
+from config.settings import settings
+
+
+class UserLevel(str, enum.Enum):
+    """User subscription levels with token budgets."""
+    LEVEL_01 = "LEVEL_01"
+    LEVEL_02 = "LEVEL_02"
+    LEVEL_03 = "LEVEL_03"
+    LEVEL_04 = "LEVEL_04"
+    LEVEL_05 = "LEVEL_05"
 
 
 class User(Base):
@@ -15,6 +26,15 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    level = Column(SQLEnum(UserLevel), nullable=False, default=UserLevel.LEVEL_01)
+    token_budget = Column(Integer, nullable=True)
+    
+    # Subscription fields (Pagar.me integration)
+    pagarme_customer_id = Column(String(255), nullable=True, index=True)
+    subscription_id = Column(String(255), nullable=True, index=True)
+    subscription_status = Column(String(50), nullable=True)  # active, canceled, past_due, unpaid, ended
+    subscription_period_start = Column(DateTime(timezone=True), nullable=True)
+    subscription_period_end = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
     chat_types = relationship("ChatType", back_populates="owner", cascade="all, delete-orphan")
@@ -25,4 +45,38 @@ class User(Base):
 
     
     def __repr__(self):
-        return f"<User(id={self.id}, username='{self.username}', email='{self.email}', active={self.is_active})>"
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}', active={self.is_active}, level={self.level})>"
+    
+    @property
+    def has_unlimited_budget(self) -> bool:
+        """Check if user has unlimited token budget (LEVEL_05)."""
+        return self.level == UserLevel.LEVEL_05
+    
+    def can_afford_tokens(self, tokens_needed: int) -> bool:
+        """Check if user has enough budget for the required tokens."""
+        if self.has_unlimited_budget:
+            return True
+        if self.token_budget is None:
+            return False
+        return self.token_budget >= tokens_needed
+    
+    @property
+    def max_token_budget(self) -> int:
+        """Get the maximum token budget for the user's level."""
+        if self.has_unlimited_budget:
+            return None
+        budget_map = {
+            UserLevel.LEVEL_01: settings.TOKEN_BUDGET_LEVEL_01,
+            UserLevel.LEVEL_02: settings.TOKEN_BUDGET_LEVEL_02,
+            UserLevel.LEVEL_03: settings.TOKEN_BUDGET_LEVEL_03,
+            UserLevel.LEVEL_04: settings.TOKEN_BUDGET_LEVEL_04,
+            UserLevel.LEVEL_05: None,
+        }
+        return budget_map.get(self.level, 0)
+    
+    @property
+    def remaining_tokens(self) -> int:
+        """Get the remaining tokens (same as token_budget for non-unlimited users)."""
+        if self.has_unlimited_budget:
+            return None
+        return self.token_budget

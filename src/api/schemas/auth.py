@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 from uuid import UUID
 from zxcvbn import zxcvbn
+from shared.database.models.user import UserLevel
 
 
 # Mapeamento de traduções para dicas e avisos do zxcvbn
@@ -134,6 +135,10 @@ class UserResponse(BaseModel):
     username: str
     email: str
     created_at: datetime
+    level: Optional[UserLevel] = None
+    token_budget: Optional[int] = None
+    max_token_budget: Optional[int] = None
+    remaining_tokens: Optional[int] = None
 
 
 class LogoutResponse(BaseModel):

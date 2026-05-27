@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
-from shared.database.models.user import User
+from shared.database.models.user import User, UserLevel
 from src.repositories.user import UserRepository
 from src.api.schemas.auth import (
     UserRegister, UserLogin, Token, TokenRefresh, TokenVerifyResponse,
@@ -12,6 +12,7 @@ from src.api.dependencies import get_current_active_user, get_user_repo, securit
 from src.services.auth import auth_service
 from src.services.email import email_service
 from src.services.security_cache import security_cache
+from src.services.user import UserService
 from config.logger import logger
 from config.settings import settings
 from datetime import datetime, timedelta, timezone
@@ -23,7 +24,8 @@ router = APIRouter()
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_data: UserRegister,
-    user_repo: UserRepository = Depends(get_user_repo)
+    user_repo: UserRepository = Depends(get_user_repo),
+    db: Session = Depends(get_db)
 ):
     """
     Registra um novo usuário
@@ -57,7 +59,9 @@ async def register_user(
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        password_hash=hashed_password
+        password_hash=hashed_password,
+        level=UserLevel.LEVEL_01,
+        token_budget=settings.TOKEN_BUDGET_LEVEL_01
     )
     
     user_repo.create(new_user)
@@ -238,7 +242,7 @@ async def logout(
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
     """
-    Obtém informações do usuário atual
+    Obtém informações do usuário atual incluindo budget de tokens
     """
     return current_user
 
@@ -329,3 +333,24 @@ async def confirm_reset_password(
     
     logger.info(f"Password reset confirmed for user: {user.username}")
     return {"message": "Senha alterada com sucesso", "success": True}
+
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Obtém o IP real do cliente considerando proxies
+    """
+    # Verificar headers comuns de proxy
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Pega o primeiro IP da lista
+        return forwarded_for.split(",")[0].strip()
+    
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback para o IP da conexão
+    if hasattr(request, 'client') and request.client:
+        return request.client.host
+    
+    return "unknown"

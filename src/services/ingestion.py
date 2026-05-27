@@ -173,11 +173,13 @@ class ChunkIngestionService:
             
             # Generate embeddings in batches
             all_embeddings = []
+            total_batches = (len(texts) - 1) // batch_size + 1
             for i in range(0, len(texts), batch_size):
                 batch_texts = texts[i:i + batch_size]
                 batch_embeddings = self.embedding_engine.embed(batch_texts)
                 all_embeddings.extend(batch_embeddings)
-                logger.debug(f"Generated embeddings for batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}")
+                current_batch = i // batch_size + 1
+                logger.info(f"[EMBEDDING] Batch {current_batch}/{total_batches} ({len(all_embeddings)}/{len(texts)} chunks embedded)")
             
             # Insert into Qdrant
             point_ids = self.qdrant_manager.insert_chunks(

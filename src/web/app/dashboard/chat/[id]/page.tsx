@@ -12,6 +12,7 @@ import { authService } from '@/lib/auth';
 import api, { checkSTTEnabled } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import AudioRecorder from '@/components/AudioRecorder';
+import BudgetIndicator, { BudgetIndicatorRef } from '@/components/BudgetIndicator';
 
 const processLatex = (content: string): string => {
   let result = content;
@@ -70,6 +71,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
+  const budgetIndicatorRef = useRef<BudgetIndicatorRef>(null);
 
   useEffect(() => {
     const userData = authService.getUser();
@@ -292,11 +294,17 @@ export default function ChatPage() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      setError('Erro ao enviar mensagem. Tente novamente.');
+      if (error?.response?.status === 402) {
+        setError('Créditos insuficientes. Recarregue seu plano para continuar.');
+      } else {
+        setError('Erro ao enviar mensagem. Tente novamente.');
+      }
     } finally {
       setSending(false);
+      // Refresh budget indicator after message is sent
+      budgetIndicatorRef.current?.refreshUserData();
     }
   };
 
@@ -486,6 +494,7 @@ export default function ChatPage() {
             </div>
 
             {/* Header actions */}
+            <BudgetIndicator ref={budgetIndicatorRef} popoverPosition="bottom" />
             <button
               onClick={() => setShowSources(!showSources)}
               className="p-2 rounded-xl text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-all duration-200 ring-2 ring-amber-500/20 dark:ring-amber-400/20"
