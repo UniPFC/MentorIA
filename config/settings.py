@@ -26,7 +26,8 @@ class Settings(BaseSettings):
 
     @property
     def POSTGRES_URL(self):
-        ssl_mode = "require" if not self.DEV_MODE else "prefer"
+        # Alterado temporariamente para prefer para testar local sem SSL
+        ssl_mode = "prefer" 
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}?sslmode={ssl_mode}"
 
     # Vector Database
