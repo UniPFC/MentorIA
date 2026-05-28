@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Vector Database
     QDRANT_HOST: str
     QDRANT_PORT: int = 6333
+    QDRANT_STORAGE_DIR: str = "/qdrant/storage"
 
     @property
     def QDRANT_URL(self):

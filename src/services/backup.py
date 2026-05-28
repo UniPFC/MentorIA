@@ -70,6 +70,7 @@ def backup_qdrant() -> str:
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = get_backup_dir()
     tar_file = os.path.join(backup_dir, f"qdrant_backup_{timestamp}.tar.gz")
+    storage_path = getattr(settings, 'QDRANT_STORAGE_DIR', os.getenv('QDRANT_STORAGE_DIR', '/qdrant/storage'))
 
     try:
         collections = client.get_collections().collections
@@ -78,13 +79,11 @@ def backup_qdrant() -> str:
             snapshot = client.create_snapshot(collection_name=name)
             logger.info(f"Snapshot created for collection {name}: {snapshot}")
 
-        # Tar the entire Qdrant storage directory
+        if not os.path.isdir(storage_path):
+            raise FileNotFoundError(f"Qdrant storage directory not found: {storage_path}")
+
         with tarfile.open(tar_file, "w:gz") as tar:
-            for item in os.listdir("/qdrant/storage"):
-                tar.add(
-                    os.path.join("/qdrant/storage", item),
-                    arcname=item
-                )
+            tar.add(storage_path, arcname='qdrant_storage')
 
         logger.info(f"Qdrant backup created: {tar_file}")
         return tar_file
@@ -110,6 +109,34 @@ def encrypt_file(file_path: str, passphrase: str) -> str:
     except Exception as e:
         logger.error(f"Failed to encrypt {file_path}: {e}")
         raise
+
+def decrypt_file(file_path: str, passphrase: str, output_path: str = None) -> str:
+    """Decrypt a GPG-encrypted file and return the decrypted file path"""
+    gpg = gnupg.GPG()
+
+    if output_path is None:
+        if file_path.endswith('.gpg'):
+            output_path = file_path[:-4]
+        else:
+            output_path = file_path + '.dec'
+
+    try:
+        with open(file_path, 'rb') as f:
+            decrypted = gpg.decrypt_file(f, passphrase=passphrase)
+
+        if not decrypted.ok:
+            raise ValueError(f"Decryption failed: {decrypted.status}")
+
+        with open(output_path, 'wb') as out_f:
+            out_f.write(decrypted.data)
+
+        os.remove(file_path)
+        logger.info(f"File decrypted: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"Failed to decrypt {file_path}: {e}")
+        raise
+
 
 def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
     """Decrypts PostgreSQL backup and restores directly to the database via memory"""
@@ -285,12 +312,12 @@ def restore_backups(
         logger.info(
             f"All backups restored successfully for date {date_str}"
         )
-
     except Exception as e:
         logger.error(
             f"Failed to restore backups for date {date_str}: {e}"
         )
         raise
+
 
 def main():
     """Main backup function"""
