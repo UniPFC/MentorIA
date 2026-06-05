@@ -108,8 +108,33 @@ class Settings(BaseSettings):
     LOGIN_WINDOW_MINUTES: int = 5
     LOGIN_BLOCK_MINUTES: int = 10
 
+    # Token Budget Configuration per User Level
+    TOKEN_BUDGET_LEVEL_01: int = 10000         # Free
+    TOKEN_BUDGET_LEVEL_02: int = 50000         # Lite
+    TOKEN_BUDGET_LEVEL_03: int = 200000        # Plus
+    TOKEN_BUDGET_LEVEL_04: int = 1000000       # Max
+    TOKEN_BUDGET_MINIMUM_RESERVE: int = 200
+    
+    # Cost Tier Configuration
+    COST_TIER_MIN_MULTIPLIER: float = 0.1  # Minimum multiplier for cost tier 0
+    COST_TIER_MAX_MULTIPLIER: float = 3.0  # Maximum multiplier for cost tier 9
+
+    # Pagar.me Configuration
+    PAGARME_API_KEY: str = ""
+    PAGARME_WEBHOOK_SECRET: str = ""
+    PAGARME_API_URL: str = "https://api.pagar.me/core/v5"
+    
+    # Pagar.me Plan IDs (one per level, configure in .env)
+    PAGARME_PLAN_LEVEL_02: str = ""  # Plan ID for LEVEL_02 subscription
+    PAGARME_PLAN_LEVEL_03: str = ""  # Plan ID for LEVEL_03 subscription
+    PAGARME_PLAN_LEVEL_04: str = ""  # Plan ID for LEVEL_04 subscription
+    
+    # Pagar.me Refill item price ID
+    PAGARME_REFILL_ITEM_ID: str = ""  # One-time charge item for token refill
+
     # Development Configuration
     DEV_MODE: bool = False
+    SKIP_PAYMENT: bool = False  # Skip payment processing (for testing without Pagar.me)
 
     # CORS Configuration
     CORS_ALLOWED_ORIGINS: List[str] = [
@@ -131,24 +156,36 @@ class Settings(BaseSettings):
         Retorna os modelos LLM disponíveis para seleção.
         O modelo padrão (LLM_MODEL + LLM_PROVIDER) é sempre incluído.
         Configure modelos adicionais editando a lista abaixo.
+        
+        input_token_multiplier: Multiplicador de custo para tokens de entrada
+        output_token_multiplier: Multiplicador de custo para tokens de saída
+        - 1.0 = custo base
+        - >1.0 = modelo mais caro (deduz mais tokens do budget)
+        - <1.0 = modelo mais barato (deduz menos tokens do budget)
         """
         additional_models = [
             {
                 "model": "llama3.2:3b",
                 "provider": "ollama",
-                "description": "Llama 3.2 3B model via Ollama (local)"
+                "description": "Llama 3.2 3B model via Ollama (local)",
+                "input_token_multiplier": 1.1,
+                "output_token_multiplier": 1.1
             },
             {
                 "model": "llama3.1:8b",
                 "provider": "ollama",
-                "description": "Llama 3.1 8B model via Ollama (local)"
+                "description": "Llama 3.1 8B model via Ollama (local)",
+                "input_token_multiplier": 1.5,
+                "output_token_multiplier": 1.5
             },
         ]
         
         default_model = {
             "model": self.LLM_MODEL,
             "provider": self.LLM_PROVIDER,
-            "description": f"Default model ({self.LLM_MODEL} via {self.LLM_PROVIDER})"
+            "description": f"Default model ({self.LLM_MODEL} via {self.LLM_PROVIDER})",
+            "input_token_multiplier": 1.0,
+            "output_token_multiplier": 1.0
         }
         
         models = [default_model]

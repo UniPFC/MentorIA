@@ -72,6 +72,7 @@ class LLMModelInfo(BaseModel):
     model: str = Field(..., description="Model identifier")
     provider: str = Field(..., description="Provider name")
     description: Optional[str] = Field(None, description="Model description")
+    cost_tier: int = Field(5, ge=0, le=9, description="Cost tier 0-9 (0=cheapest, 9=most expensive)")
 
 
 class AvailableModelsResponse(BaseModel):

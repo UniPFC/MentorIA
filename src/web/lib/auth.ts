@@ -6,6 +6,10 @@ export interface User {
   username?: string;
   email: string;
   name?: string;
+  level?: string;
+  token_budget?: number;
+  max_token_budget?: number;
+  remaining_tokens?: number;
 }
 
 export interface LoginResponse {
