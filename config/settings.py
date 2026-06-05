@@ -26,11 +26,14 @@ class Settings(BaseSettings):
 
     @property
     def POSTGRES_URL(self):
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        # Alterado temporariamente para prefer para testar local sem SSL
+        ssl_mode = "prefer" 
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}?sslmode={ssl_mode}"
 
     # Vector Database
     QDRANT_HOST: str
     QDRANT_PORT: int = 6333
+    QDRANT_STORAGE_DIR: str = "/qdrant/storage"
 
     @property
     def QDRANT_URL(self):
@@ -75,10 +78,21 @@ class Settings(BaseSettings):
     SYSTEM_USER_PASSWORD: str
 
     # JWT Configuration
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str 
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # Password Security Configuration
+    PASSWORD_PEPPER: str 
+    
+    # CSRF Protection Configuration
+    CSRF_SECRET_KEY: str
+    CSRF_COOKIE_NAME: str = "csrf_token"
+    CSRF_TOKEN_AGE: int = 3600  # 1 hora
+    
+    # Encryption Configuration
+    ENCRYPTION_SALT: str
 
     # Email Configuration
     SMTP_SERVER: str = "smtp.gmail.com"
@@ -96,6 +110,14 @@ class Settings(BaseSettings):
 
     # Development Configuration
     DEV_MODE: bool = False
+
+    # CORS Configuration
+    CORS_ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
 
     model_config = ConfigDict(
         env_file=".env",

@@ -9,6 +9,13 @@ from config.settings import settings
 from shared.database.migration import run_migrations
 from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket
 from src.services.seeder import seed_default_knowledge
+from src.middleware.https_security import (
+    HTTPSRedirectMiddleware, 
+    SecurityHeadersMiddleware, 
+    SecureCookieMiddleware
+)
+from src.middleware.csrf_protection import CSRFProtectionMiddleware, create_csrf_protect
+from fastapi_csrf_protect import CsrfProtect
 import asyncio
 
 @asynccontextmanager
@@ -36,10 +43,26 @@ app = FastAPI(
     openapi_url="/openapi.json", #if settings.DEV_MODE else None
 )
 
-# Configure CORS
+# Criar instância de CSRF protection
+csrf_protect = create_csrf_protect()
+
+# Adicionar middlewares de segurança (ordem importa!)
+# 1. Forçar HTTPS em produção
+app.add_middleware(HTTPSRedirectMiddleware)
+
+# 2. Adicionar headers de segurança
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 3. Garantir cookies seguros
+app.add_middleware(SecureCookieMiddleware)
+
+# 4. Proteção CSRF
+app.add_middleware(CSRFProtectionMiddleware, csrf_protect=csrf_protect)
+
+# Configure CORS (depois dos middlewares de segurança)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -99,7 +122,7 @@ app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 def root():
     return {
         "message": "RAG Chat API",
-        "version": "1.0.0",
+        "version": app.version,
         "docs": "/docs"
     }
 
