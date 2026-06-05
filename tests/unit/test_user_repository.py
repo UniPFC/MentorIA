@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from src.repositories.user import UserRepository
+from src.services.auth import AuthService
 from shared.database.models.user import User
 from shared.database.models.user_token import UserToken
 from shared.database.models.password_reset_token import PasswordResetToken
@@ -40,6 +41,26 @@ class TestUserRepository:
         user = repo.get_by_email("nonexistent@example.com")
         
         assert user is None
+
+    def test_get_by_email_with_short_encrypted_email(self, db_session: Session):
+        repo = UserRepository(db_session)
+        auth_service = AuthService()
+        
+        user = User(
+            username="shortuser",
+            email="a@b.co",
+            password_hash=auth_service.get_password_hash("Password123!"),
+            is_active=True
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+
+        found = repo.get_by_email("a@b.co")
+
+        assert found is not None
+        assert found.email == "a@b.co"
+        assert found.id == user.id
         
     def test_get_by_username(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)

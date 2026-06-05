@@ -10,7 +10,7 @@ ENV PYTHONPATH=/app
 ENV UV_CACHE_DIR=/root/.cache/uv
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && apt-get install -y --no-install-recommends gcc libpq-dev gnupg cron postgresql-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

@@ -37,9 +37,7 @@ class TestPerformanceAndLoad:
         elapsed_time = time.time() - start_time
         
         # Verificar que todos foram criados
-        all_users = db_session.query(User).filter(
-            User.email.like("user%@test.com")
-        ).all()
+        all_users = db_session.query(User).all()
         
         assert len(all_users) == num_users
         

@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from src.repositories.chat import ChatRepository
 from shared.database.models.chat import Chat
@@ -162,3 +162,77 @@ class TestChatRepository:
         
         deleted_chat = db_session.query(Chat).filter(Chat.id == chat_id).first()
         assert deleted_chat is None
+    
+    def test_get_by_user_ordered_by_updated_at(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+        """Test that chats are ordered by updated_at descending"""
+        # Create chats with different update times
+        chat1 = Chat(
+            id=uuid4(),
+            title="Chat 1",
+            user_id=sample_user.id,
+            chat_type_id=sample_chat_type.id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=2)
+        )
+        chat2 = Chat(
+            id=uuid4(),
+            title="Chat 2",
+            user_id=sample_user.id,
+            chat_type_id=sample_chat_type.id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=1)
+        )
+        chat3 = Chat(
+            id=uuid4(),
+            title="Chat 3",
+            user_id=sample_user.id,
+            chat_type_id=sample_chat_type.id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)  # Most recent
+        )
+        db_session.add_all([chat1, chat2, chat3])
+        db_session.commit()
+        
+        result = chat_repo.get_by_user(sample_user.id)
+        
+        # Should be ordered by updated_at descending
+        assert len(result) == 3
+        assert result[0].title == "Chat 3"  # Most recent
+        assert result[1].title == "Chat 2"
+        assert result[2].title == "Chat 1"  # Oldest
+    
+    def test_get_by_user_with_zero_skip_and_limit(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+        """Test edge case with skip=0 and limit"""
+        for i in range(3):
+            chat = Chat(
+                id=uuid4(),
+                title=f"Chat {i}",
+                user_id=sample_user.id,
+                chat_type_id=sample_chat_type.id,
+                created_at=datetime.now(timezone.utc)
+            )
+            db_session.add(chat)
+        db_session.commit()
+        
+        result = chat_repo.get_by_user(sample_user.id, skip=0, limit=2)
+        
+        assert len(result) == 2
+        assert result[0].title in ["Chat 0", "Chat 1", "Chat 2"]
+        assert result[1].title in ["Chat 0", "Chat 1", "Chat 2"]
+    
+    def test_get_by_user_with_large_limit(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+        """Test with limit larger than available chats"""
+        for i in range(2):
+            chat = Chat(
+                id=uuid4(),
+                title=f"Chat {i}",
+                user_id=sample_user.id,
+                chat_type_id=sample_chat_type.id,
+                created_at=datetime.now(timezone.utc)
+            )
+            db_session.add(chat)
+        db_session.commit()
+        
+        result = chat_repo.get_by_user(sample_user.id, limit=10)
+        
+        assert len(result) == 2  # Should return all available chats

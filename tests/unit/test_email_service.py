@@ -1,13 +1,13 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from src.services.email import EmailService
+from src.services.email_service import EmailService
 
 
 @pytest.mark.unit
 class TestEmailService:
     @pytest.fixture
     def email_service(self):
-        with patch('src.services.email.settings') as mock_settings:
+        with patch('src.services.email_service.settings') as mock_settings:
             mock_settings.SMTP_SERVER = 'smtp.test.com'
             mock_settings.SMTP_PORT = 587
             mock_settings.SMTP_USERNAME = 'test@test.com'
@@ -25,7 +25,7 @@ class TestEmailService:
         assert email_service.frontend_url == 'http://localhost:3000'
     
     def test_init_with_defaults(self):
-        with patch('src.services.email.settings') as mock_settings:
+        with patch('src.services.email_service.settings') as mock_settings:
             del mock_settings.SMTP_SERVER
             del mock_settings.SMTP_PORT
             del mock_settings.SMTP_USERNAME
@@ -44,7 +44,7 @@ class TestEmailService:
         assert isinstance(token, str)
         assert len(token) > 0
     
-    @patch('src.services.email.smtplib.SMTP')
+    @patch('src.services.email_service.smtplib.SMTP')
     def test_send_email_success(self, mock_smtp, email_service):
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -60,7 +60,7 @@ class TestEmailService:
         mock_server.login.assert_called_once_with('test@test.com', 'password')
         mock_server.send_message.assert_called_once()
     
-    @patch('src.services.email.smtplib.SMTP')
+    @patch('src.services.email_service.smtplib.SMTP')
     def test_send_email_failure(self, mock_smtp, email_service):
         mock_smtp.side_effect = Exception("SMTP error")
         
@@ -72,7 +72,7 @@ class TestEmailService:
         
         assert result is False
     
-    @patch('src.services.email.smtplib.SMTP')
+    @patch('src.services.email_service.smtplib.SMTP')
     def test_send_password_reset_email_success(self, mock_smtp, email_service):
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -91,7 +91,7 @@ class TestEmailService:
         assert 'Reset de Senha' in call_args['Subject']
         assert 'user@test.com' in call_args['To']
     
-    @patch('src.services.email.smtplib.SMTP')
+    @patch('src.services.email_service.smtplib.SMTP')
     def test_send_password_reset_email_failure(self, mock_smtp, email_service):
         mock_smtp.side_effect = Exception("SMTP error")
         
@@ -103,7 +103,7 @@ class TestEmailService:
         
         assert result is False
     
-    @patch('src.services.email.smtplib.SMTP')
+    @patch('src.services.email_service.smtplib.SMTP')
     def test_send_password_changed_email_success(self, mock_smtp, email_service):
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -120,7 +120,7 @@ class TestEmailService:
         assert 'Senha Alterada' in call_args['Subject']
         assert 'user@test.com' in call_args['To']
     
-    @patch('src.services.email.smtplib.SMTP')
+    @patch('src.services.email_service.smtplib.SMTP')
     def test_send_password_changed_email_failure(self, mock_smtp, email_service):
         mock_smtp.side_effect = Exception("SMTP error")
         
