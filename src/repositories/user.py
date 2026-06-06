@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from shared.database.models.user import User, UserLevel
 from shared.database.models.user_token import UserToken
 from shared.database.models.password_reset_token import PasswordResetToken
+from src.services.encryption import encrypt_sensitive_data, decrypt_sensitive_data
 
 class UserRepository:
     def __init__(self, db: Session):
@@ -14,18 +15,25 @@ class UserRepository:
         return self.db.query(User).filter(User.id == user_id).first()
 
     def get_by_email(self, email: str) -> Optional[User]:
-        return self.db.query(User).filter(User.email == email).first()
+        """Busca usuário por email (busca todos e decripta para comparação)"""
+        users = self.db.query(User).all()
+        for user in users:
+            if user.email == email:  # user.email já retorna decriptado
+                return user
+        return None
 
     def get_by_username(self, username: str) -> Optional[User]:
         return self.db.query(User).filter(User.username == username).first()
 
     def create(self, user: User) -> User:
+        # O email property já cuida da criptografia automaticamente
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
         return user
 
     def update(self, user: User) -> User:
+        # O email property já cuida da criptografia automaticamente
         self.db.commit()
         self.db.refresh(user)
         return user

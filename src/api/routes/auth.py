@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi_csrf_protect import CsrfProtect
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.database.models.user import User, UserLevel
@@ -10,7 +11,7 @@ from src.api.schemas.auth import (
 )
 from src.api.dependencies import get_current_active_user, get_user_repo, security
 from src.services.auth import auth_service
-from src.services.email import email_service
+from src.services.email_service import email_service
 from src.services.security_cache import security_cache
 from src.services.user import UserService
 from config.logger import logger
@@ -20,6 +21,14 @@ from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
 
+@router.get("/csrf-token")
+async def get_csrf_token(csrf_protect: CsrfProtect = Depends()):
+    """
+    Retorna o CSRF token
+    """
+    # Usar o método correto para gerar token
+    token = csrf_protect.generate_csrf_token()
+    return {"csrf_token": token}
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
@@ -46,7 +55,7 @@ async def register_user(
             detail="Nome de usuário já existe"
         )
     
-    # Verificar se email já existe
+    # Verificar se email já existe (usando busca criptografada)
     existing_email = user_repo.get_by_email(user_data.email)
     if existing_email:
         raise HTTPException(
@@ -54,7 +63,7 @@ async def register_user(
             detail="Email já cadastrado"
         )
     
-    # Criar novo usuário
+    # Criar novo usuário com email criptografado
     hashed_password = auth_service.get_password_hash(user_data.password)
     new_user = User(
         username=user_data.username,
@@ -275,6 +284,10 @@ async def forgot_password(
         logger.info(f"Password reset requested for non-existent email: {request.email}")
         return {"message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha", "success": True}
     
+    notification_sent = email_service.send_password_reset_notification(user.email, user.username)
+    if not notification_sent:
+        logger.warning(f"Failed to send password reset notification to user: {user.username}")
+
     # Gerar token de reset
     reset_token = email_service.generate_reset_token()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)

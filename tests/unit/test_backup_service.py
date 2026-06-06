@@ -1,0 +1,260 @@
+import io
+import os
+import sys
+import time
+import tarfile
+from types import SimpleNamespace
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.services import backup
+
+
+@pytest.mark.unit
+class TestBackupService:
+    def test_get_backup_dir_creates_date_folder(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        backup_dir = backup.get_backup_dir(date_folder=True)
+
+        assert os.path.isdir(backup_dir)
+        assert backup_dir.startswith(str(tmp_path / 'cache' / 'backups'))
+        assert len(Path(backup_dir).name) == 8
+
+    def test_get_backup_dir_without_date_folder(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        backup_dir = backup.get_backup_dir(date_folder=False)
+
+        assert os.path.isdir(backup_dir)
+        assert backup_dir == str(tmp_path / 'cache' / 'backups')
+
+    def test_backup_postgres_runs_pg_dump(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.POSTGRES_HOST = 'localhost'
+        mock_settings.POSTGRES_PORT = 5432
+        mock_settings.POSTGRES_USER = 'user'
+        mock_settings.POSTGRES_DB = 'db'
+        mock_settings.POSTGRES_PASSWORD = 'pass'
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
+
+        mock_run = MagicMock()
+        monkeypatch.setattr(backup.subprocess, 'run', mock_run)
+
+        dump_path = backup.backup_postgres()
+
+        assert dump_path.endswith('.sql')
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == 'pg_dump'
+        assert '-f' in cmd
+        assert dump_path in cmd
+
+    def test_backup_data_creates_tar_archive(self, tmp_path, monkeypatch):
+        data_dir = tmp_path / 'data_dir'
+        data_dir.mkdir()
+        file_path = data_dir / 'file.txt'
+        file_path.write_text('hello world')
+
+        mock_settings = MagicMock()
+        mock_settings.DATA_DIR = str(data_dir)
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
+
+        tar_path = backup.backup_data()
+
+        assert tar_path.endswith('.tar.gz')
+        assert os.path.exists(tar_path)
+
+        with tarfile.open(tar_path, 'r:gz') as tar:
+            names = tar.getnames()
+            assert 'data/file.txt' in names
+
+    def test_backup_qdrant_calls_snapshot_and_tars_storage(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.QDRANT_URL = 'http://localhost'
+        mock_settings.QDRANT_STORAGE_DIR = str(tmp_path / 'qdrant_storage')
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
+
+        (tmp_path / 'qdrant_storage').mkdir()
+
+        client = MagicMock()
+        client.get_collections.return_value = SimpleNamespace(collections=[SimpleNamespace(name='test_collection')])
+        client.create_snapshot.return_value = 'snapshot-id'
+
+        fake_module = MagicMock()
+        fake_module.QdrantClient.return_value = client
+        monkeypatch.setitem(sys.modules, 'qdrant_client', fake_module)
+
+        fake_tar = MagicMock()
+        fake_context = MagicMock()
+        fake_context.__enter__.return_value = fake_tar
+        fake_context.__exit__.return_value = False
+        monkeypatch.setattr(backup.tarfile, 'open', MagicMock(return_value=fake_context))
+
+        qdrant_path = backup.backup_qdrant()
+
+        assert qdrant_path.endswith('.tar.gz')
+        client.get_collections.assert_called_once()
+        client.create_snapshot.assert_called_once_with(collection_name='test_collection')
+        fake_tar.add.assert_called_once_with(str(tmp_path / 'qdrant_storage'), arcname='qdrant_storage')
+
+    def test_encrypt_and_decrypt_file_using_gpg_mock(self, tmp_path, monkeypatch):
+        file_path = tmp_path / 'plain.txt'
+        file_path.write_bytes(b'secret data')
+        passphrase = 'testpass'
+
+        gpg_instance = MagicMock()
+        gpg_instance.encrypt_file.return_value = MagicMock(data=b'encrypted-bytes')
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=b'restored-bytes')
+
+        gpg_class = MagicMock(return_value=gpg_instance)
+        monkeypatch.setattr(backup.gnupg, 'GPG', gpg_class)
+
+        encrypted_path = backup.encrypt_file(str(file_path), passphrase)
+        assert encrypted_path.endswith('.gpg')
+        assert not file_path.exists()
+        assert Path(encrypted_path).read_bytes() == b'encrypted-bytes'
+
+        decrypted_path = backup.decrypt_file(encrypted_path, passphrase)
+        assert decrypted_path.endswith('plain.txt')
+        assert Path(decrypted_path).read_bytes() == b'restored-bytes'
+
+    def test_restore_postgres_in_memory_calls_psql(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.POSTGRES_HOST = 'localhost'
+        mock_settings.POSTGRES_PORT = 5432
+        mock_settings.POSTGRES_USER = 'user'
+        mock_settings.POSTGRES_DB = 'db'
+        mock_settings.POSTGRES_PASSWORD = 'pass'
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        encrypted_path = tmp_path / 'backup.sql.gpg'
+        encrypted_path.write_text('encrypted')
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=b'SELECT 1;')
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        process_mock = MagicMock()
+        process_mock.returncode = 0
+        process_mock.communicate.return_value = (b'', b'')
+        monkeypatch.setattr(backup.subprocess, 'Popen', MagicMock(return_value=process_mock))
+
+        backup.restore_postgres_in_memory(str(encrypted_path), 'passphrase')
+
+        backup.subprocess.Popen.assert_called_once()
+        assert process_mock.communicate.called
+
+    def test_restore_tar_in_memory_extracts_files(self, tmp_path, monkeypatch):
+        encrypted_path = tmp_path / 'backup.tar.gz.gpg'
+        encrypted_path.write_text('encrypted')
+
+        tar_bytes = io.BytesIO()
+        with tarfile.open(fileobj=tar_bytes, mode='w:gz') as tar:
+            content = tmp_path / 'hello.txt'
+            content.write_text('hello')
+            tar.add(str(content), arcname='hello.txt')
+        tar_bytes.seek(0)
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=tar_bytes.getvalue())
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        extract_path = tmp_path / 'extract'
+        backup.restore_tar_in_memory(str(encrypted_path), 'passphrase', str(extract_path))
+
+        assert (extract_path / 'hello.txt').read_text() == 'hello'
+
+    def test_wait_for_postgres_ready_returns_when_connected(self, monkeypatch):
+        conn_mock = MagicMock()
+        monkeypatch.setattr(backup.psycopg2, 'connect', MagicMock(return_value=conn_mock))
+
+        backup.wait_for_postgres_ready()
+
+        backup.psycopg2.connect.assert_called_once()
+
+    def test_wait_for_qdrant_ready_returns_on_http_200(self, monkeypatch):
+        mock_response = MagicMock(status_code=200)
+        monkeypatch.setattr(backup.requests, 'get', MagicMock(return_value=mock_response))
+        mock_settings = MagicMock()
+        mock_settings.QDRANT_URL = 'http://localhost'
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        backup.wait_for_qdrant_ready()
+
+        backup.requests.get.assert_called_once_with('http://localhost/collections')
+
+    def test_restore_backups_dispatches_to_restore_functions(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        mock_settings.DATA_DIR = str(tmp_path / 'data' / 'file.txt')
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'wait_for_postgres_ready', MagicMock())
+        monkeypatch.setattr(backup, 'wait_for_qdrant_ready', MagicMock())
+
+        date_str = '01012026'
+        backup_date_dir = tmp_path / 'cache' / 'backups' / date_str
+        backup_date_dir.mkdir(parents=True)
+        (backup_date_dir / 'postgres_backup_1.sql.gpg').write_text('dummy')
+        (backup_date_dir / 'data_backup_1.tar.gz.gpg').write_text('dummy')
+        (backup_date_dir / 'qdrant_backup_1.tar.gz.gpg').write_text('dummy')
+
+        restore_postgres = MagicMock()
+        restore_tar = MagicMock()
+        monkeypatch.setattr(backup, 'restore_postgres_in_memory', restore_postgres)
+        monkeypatch.setattr(backup, 'restore_tar_in_memory', restore_tar)
+
+        backup.restore_backups(date_str=date_str, passphrase='secret', second_pass=True)
+
+        restore_postgres.assert_called_once()
+        assert restore_tar.call_count == 2
+        restore_tar.assert_any_call(str(backup_date_dir / 'data_backup_1.tar.gz.gpg'), 'secret', str(tmp_path / 'data'))
+        restore_tar.assert_any_call(str(backup_date_dir / 'qdrant_backup_1.tar.gz.gpg'), 'secret', '/qdrant/storage')
+
+    def test_main_performs_backups_and_cleanup(self, monkeypatch):
+        monkeypatch.setenv('BACKUP_PASSPHRASE', 'secret')
+
+        monkeypatch.setattr(backup, 'backup_postgres', MagicMock(return_value='postgres.sql'))
+        monkeypatch.setattr(backup, 'backup_data', MagicMock(return_value='data.tar.gz'))
+        monkeypatch.setattr(backup, 'backup_qdrant', MagicMock(return_value='qdrant.tar.gz'))
+        monkeypatch.setattr(backup, 'encrypt_file', MagicMock(side_effect=['postgres.sql.gpg', 'data.tar.gz.gpg', 'qdrant.tar.gz.gpg']))
+        cleanup_mock = MagicMock()
+        monkeypatch.setattr(backup, 'cleanup_old_backups', cleanup_mock)
+
+        backup.main()
+
+        backup.backup_postgres.assert_called_once()
+        backup.backup_data.assert_called_once()
+        backup.backup_qdrant.assert_called_once()
+        cleanup_mock.assert_called_once()
+
+    def test_cleanup_old_backups_removes_old_date_folder(self, tmp_path, monkeypatch):
+        base_dir = tmp_path / 'cache' / 'backups'
+        base_dir.mkdir(parents=True)
+
+        old_folder = base_dir / '01012026'
+        old_folder.mkdir()
+        recent_folder = base_dir / '02012026'
+        recent_folder.mkdir()
+
+        old_mtime = time.time() - (10 * 86400)
+        recent_mtime = time.time()
+        os.utime(old_folder, (old_mtime, old_mtime))
+        os.utime(recent_folder, (recent_mtime, recent_mtime))
+
+        backup.cleanup_old_backups(days=7, base_dir=str(base_dir))
+
+        assert not old_folder.exists()
+        assert recent_folder.exists()

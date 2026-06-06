@@ -3,8 +3,12 @@ import subprocess
 import datetime
 import tarfile
 import gnupg
+import io
 from config.settings import settings
 from config.logger import logger
+import time
+import requests
+import psycopg2
 
 def get_backup_dir(date_folder: bool = True) -> str:
     """Get or create backup directory with optional date-based folder"""
@@ -66,6 +70,7 @@ def backup_qdrant() -> str:
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = get_backup_dir()
     tar_file = os.path.join(backup_dir, f"qdrant_backup_{timestamp}.tar.gz")
+    storage_path = getattr(settings, 'QDRANT_STORAGE_DIR', os.getenv('QDRANT_STORAGE_DIR', '/qdrant/storage'))
 
     try:
         collections = client.get_collections().collections
@@ -74,9 +79,11 @@ def backup_qdrant() -> str:
             snapshot = client.create_snapshot(collection_name=name)
             logger.info(f"Snapshot created for collection {name}: {snapshot}")
 
-        # Tar the entire Qdrant storage directory
+        if not os.path.isdir(storage_path):
+            raise FileNotFoundError(f"Qdrant storage directory not found: {storage_path}")
+
         with tarfile.open(tar_file, "w:gz") as tar:
-            tar.add("/qdrant/storage", arcname="qdrant_storage")
+            tar.add(storage_path, arcname='qdrant_storage')
 
         logger.info(f"Qdrant backup created: {tar_file}")
         return tar_file
@@ -103,82 +110,214 @@ def encrypt_file(file_path: str, passphrase: str) -> str:
         logger.error(f"Failed to encrypt {file_path}: {e}")
         raise
 
-def decrypt_file(encrypted_file_path: str, passphrase: str, output_path: str = None) -> str:
-    """Decrypt GPG encrypted file"""
+def decrypt_file(file_path: str, passphrase: str, output_path: str = None) -> str:
+    """Decrypt a GPG-encrypted file and return the decrypted file path"""
     gpg = gnupg.GPG()
-    
+
     if output_path is None:
-        output_path = encrypted_file_path.replace('.gpg', '')
+        if file_path.endswith('.gpg'):
+            output_path = file_path[:-4]
+        else:
+            output_path = file_path + '.dec'
+
+    try:
+        with open(file_path, 'rb') as f:
+            decrypted = gpg.decrypt_file(f, passphrase=passphrase)
+
+        if not decrypted.ok:
+            raise ValueError(f"Decryption failed: {decrypted.status}")
+
+        with open(output_path, 'wb') as out_f:
+            out_f.write(decrypted.data)
+
+        os.remove(file_path)
+        logger.info(f"File decrypted: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"Failed to decrypt {file_path}: {e}")
+        raise
+
+
+def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
+    """Decrypts PostgreSQL backup and restores directly to the database via memory"""
+    gpg = gnupg.GPG()
     
     try:
         with open(encrypted_file_path, 'rb') as f:
             decrypted = gpg.decrypt_file(f, passphrase=passphrase)
-        
+            
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
+
+        cmd = [
+            "psql",
+            "-h", settings.POSTGRES_HOST,
+            "-p", str(settings.POSTGRES_PORT),
+            "-U", settings.POSTGRES_USER,
+            "-d", settings.POSTGRES_DB
+        ]
         
-        with open(output_path, 'wb') as f:
-            f.write(decrypted.data)
+        env = os.environ.copy()
+        env['PGPASSWORD'] = settings.POSTGRES_PASSWORD
+
+        process = subprocess.Popen(cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate(input=decrypted.data)
         
-        logger.info(f"File decrypted: {output_path}")
-        return output_path
+        if process.returncode != 0:
+            raise Exception(f"psql error: {stderr.decode('utf-8')}")
+            
+        logger.info(f"PostgreSQL restored successfully from {encrypted_file_path}")
     except Exception as e:
-        logger.error(f"Failed to decrypt {encrypted_file_path}: {e}")
+        logger.error(f"Failed to restore PostgreSQL from memory: {e}")
         raise
 
-def decrypt_backups(date_str: str = None, passphrase: str = None, output_dir: str = None) -> list:
-    """Decrypt all backups from a specific date
+def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_path: str):
+    """Decrypts tar.gz backup and extracts directly to the target path via memory"""
+    gpg = gnupg.GPG()
     
-    Args:
-        date_str: Date in format "15052026" (ddmmyyyy). If None, uses today's date
-        passphrase: Decryption passphrase. If None, uses BACKUP_PASSPHRASE env var
-        output_dir: Directory to save decrypted files. If None, creates DECRYPTED folder inside backup date folder
-    
-    Returns:
-        List of decrypted file paths
-    """
+    try:
+        with open(encrypted_file_path, 'rb') as f:
+            decrypted = gpg.decrypt_file(f, passphrase=passphrase)
+            
+        if not decrypted.ok:
+            raise ValueError(f"Decryption failed: {decrypted.status}")
+
+        file_like_object = io.BytesIO(decrypted.data)
+        
+        with tarfile.open(fileobj=file_like_object, mode="r:gz") as tar:
+            tar.extractall(path=extract_path)
+            
+        logger.info(f"Files extracted successfully to {extract_path}")
+    except Exception as e:
+        logger.error(f"Failed to extract tar from memory: {e}")
+        raise
+
+def wait_for_postgres_ready():
+    for _ in range(30):
+        try:
+            psycopg2.connect(
+                host=settings.POSTGRES_HOST,
+                port=settings.POSTGRES_PORT,
+                user=settings.POSTGRES_USER,
+                password=settings.POSTGRES_PASSWORD,
+                database=settings.POSTGRES_DB
+            ).close()
+            logger.info("PostgreSQL is ready")
+            return
+            
+        except Exception as e:
+            logger.warning(f"PostgreSQL not ready: {e}")
+            time.sleep(1)
+    else:
+        raise Exception("PostgreSQL not ready after 30 attempts")
+
+def wait_for_qdrant_ready():
+    for _ in range(30):
+        try:
+            response = requests.get(f"{settings.QDRANT_URL}/collections")
+            if response.status_code == 200:
+                logger.info("Qdrant is ready")
+                return
+            else:
+                logger.warning(f"Qdrant not ready, status code: {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Qdrant not ready: {e}")
+        time.sleep(1)
+    else:
+        raise Exception("Qdrant not ready after 30 attempts")
+
+def restore_backups(
+    date_str: str = None,
+    passphrase: str = None,
+    second_pass: bool = False
+):
+    """Restore all backups from a specific date directly into memory/services"""
+
+    wait_for_postgres_ready()
+    wait_for_qdrant_ready()
+
     if date_str is None:
         date_str = datetime.datetime.now().strftime("%d%m%Y")
-    
+
     if passphrase is None:
         passphrase = os.getenv('BACKUP_PASSPHRASE')
         if not passphrase:
             raise ValueError("BACKUP_PASSPHRASE not set")
-    
-    backup_date_dir = os.path.join(settings.BASE_DIR, 'cache', 'backups', date_str)
-    
+
+    backup_date_dir = os.path.join(
+        settings.BASE_DIR,
+        'cache',
+        'backups',
+        date_str
+    )
+
     if not os.path.exists(backup_date_dir):
         logger.error(f"Backup directory not found: {backup_date_dir}")
-        raise FileNotFoundError(f"No backups found for date {date_str}")
-    
-    if output_dir is None:
-        output_dir = os.path.join(backup_date_dir, 'DECRYPTED')
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    decrypted_files = []
-    
+        raise FileNotFoundError(
+            f"No backups found for date {date_str}"
+        )
+
     try:
         for filename in os.listdir(backup_date_dir):
-            # Skip DECRYPTED folder
-            if filename == 'DECRYPTED':
+            if not filename.endswith('.gpg'):
                 continue
-            
-            if filename.endswith('.gpg'):
-                encrypted_path = os.path.join(backup_date_dir, filename)
-                decrypted_filename = filename.replace('.gpg', '')
-                output_path = os.path.join(output_dir, decrypted_filename)
-                
-                decrypted_path = decrypt_file(encrypted_path, passphrase, output_path)
-                decrypted_files.append(decrypted_path)
-                logger.info(f"Backup decrypted: {decrypted_filename}")
-        
-        logger.info(f"Total files decrypted: {len(decrypted_files)}")
-        return decrypted_files
-    
+
+            encrypted_path = os.path.join(
+                backup_date_dir,
+                filename
+            )
+
+            if "postgres_backup" in filename:
+                logger.info(
+                    f"Restoring PostgreSQL from: {filename}"
+                )
+
+                restore_postgres_in_memory(
+                    encrypted_path,
+                    passphrase
+                )
+
+            elif "data_backup" in filename:
+                logger.info(f"Restoring Data from: {filename}")
+
+                extract_path = os.path.dirname(
+                    settings.DATA_DIR
+                )
+
+                restore_tar_in_memory(
+                    encrypted_path,
+                    passphrase,
+                    extract_path
+                )
+
+            elif "qdrant_backup" in filename:
+                logger.info(f"Restoring Qdrant from: {filename}")
+
+                restore_tar_in_memory(
+                    encrypted_path,
+                    passphrase,
+                    "/qdrant/storage"
+                )
+
+        # roda uma segunda vez automaticamente
+        if not second_pass:
+            logger.info("Running second restore pass...")
+
+            restore_backups(
+                date_str=date_str,
+                passphrase=passphrase,
+                second_pass=True
+            )
+
+        logger.info(
+            f"All backups restored successfully for date {date_str}"
+        )
     except Exception as e:
-        logger.error(f"Failed to decrypt backups for date {date_str}: {e}")
+        logger.error(
+            f"Failed to restore backups for date {date_str}: {e}"
+        )
         raise
+
 
 def main():
     """Main backup function"""
@@ -208,7 +347,6 @@ def main():
 
         logger.info(f"Encrypted backups created: {backups}")
 
-        # Optional: Clean old backups (keep last 7 days)
         cleanup_old_backups(days=7)
 
     except Exception as e:

@@ -237,7 +237,7 @@ class TestAuthRoutes:
 
     def test_forgot_password_existing_email(self, client, sample_user):
         """Testa forgot password com email existente"""
-        with patch('src.services.email.email_service.send_password_reset_email', return_value=True):
+        with patch('src.services.email_service.email_service.send_password_reset_email', return_value=True):
             response = client.post("/api/v1/auth/forgot-password", json={
                 "email": sample_user.email
             })
@@ -247,7 +247,7 @@ class TestAuthRoutes:
 
     def test_forgot_password_email_send_failure(self, client, sample_user):
         """Testa forgot password quando envio de email falha"""
-        with patch('src.services.email.email_service.send_password_reset_email', return_value=False):
+        with patch('src.services.email_service.email_service.send_password_reset_email', return_value=False):
             response = client.post("/api/v1/auth/forgot-password", json={
                 "email": sample_user.email
             })
@@ -256,7 +256,7 @@ class TestAuthRoutes:
 
     def test_confirm_reset_password_success(self, client, sample_user, sample_password_reset_token):
         """Testa confirmação de reset de senha com sucesso"""
-        with patch('src.services.email.email_service.send_password_changed_email', return_value=True):
+        with patch('src.services.email_service.email_service.send_password_changed_email', return_value=True):
             response = client.post("/api/v1/auth/confirm-reset-password", json={
                 "token": sample_password_reset_token.token,
                 "new_password": "NewStrongPassword123!"
