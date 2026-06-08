@@ -383,7 +383,7 @@ async def _handle_subscription_event(
         metadata = data.get("metadata", {})
         user_id = metadata.get("user_id")
         if user_id:
-            user = user_repo.get_by_id(user_id)
+            user = user_repo.get_by_id(uuid.UUID(user_id))
     
     if not user:
         logger.warning(f"User not found for subscription {subscription_id}")
@@ -478,7 +478,7 @@ async def _handle_order_event(
         logger.warning("Refill order without user_id in metadata")
         return
     
-    user = user_repo.get_by_id(user_id)
+    user = user_repo.get_by_id(uuid.UUID(user_id))
     if not user:
         logger.warning(f"User not found for refill order: user_id={user_id}")
         return

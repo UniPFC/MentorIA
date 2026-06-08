@@ -185,7 +185,7 @@ def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_pat
         file_like_object = io.BytesIO(decrypted.data)
         
         with tarfile.open(fileobj=file_like_object, mode="r:gz") as tar:
-            tar.extractall(path=extract_path)
+            tar.extractall(path=extract_path, filter='data')
             
         logger.info(f"Files extracted successfully to {extract_path}")
     except Exception as e:

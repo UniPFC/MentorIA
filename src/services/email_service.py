@@ -4,7 +4,6 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 from typing import Optional
 
-from qdrant_client.models import datetime
 from config.settings import settings
 from config.logger import logger
 import secrets
@@ -149,7 +148,7 @@ class EmailService:
             <html><body>
             <h2>Olá, {username}!</h2>
             <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>MentorIA</strong>.</p>
-            <p><strong>Data/Hora:</strong> {datetime.utcnow().strftime('%d/%m/%Y às %H:%M')}
+            <p><strong>Data/Hora:</strong> {datetime.now(timezone.utc).strftime('%d/%m/%Y às %H:%M')}
  (UTC)</p>
 
           <p>Se <strong>você fez essa solicitação</strong>, pode ignorar este email —

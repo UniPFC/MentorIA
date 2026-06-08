@@ -136,6 +136,9 @@ class Settings(BaseSettings):
     DEV_MODE: bool = False
     SKIP_PAYMENT: bool = False  # Skip payment processing (for testing without Pagar.me)
 
+    # HTTPS Configuration
+    FORCE_HTTPS: bool = True
+
     # CORS Configuration
     CORS_ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",

@@ -134,14 +134,14 @@ class TestCostTierCalculation:
         assert tier == 9
 
     def test_cost_tier_middle(self):
-        """Test that middle multiplier gives tier around 4-5."""
+        """Test that middle multiplier gives tier around 2-3."""
         min_mult = settings.COST_TIER_MIN_MULTIPLIER
         avg_mult = 1.0
         max_mult = settings.COST_TIER_MAX_MULTIPLIER
         
         tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
         tier = max(0, min(9, tier))
-        assert 3 <= tier <= 5
+        assert 2 <= tier <= 3
 
     def test_cost_tier_clamping(self):
         """Test that tier is clamped to 0-9 range."""

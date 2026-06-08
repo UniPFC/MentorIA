@@ -71,3 +71,21 @@ class TestAuthRoutes:
         
         ip = _get_client_ip(request)
         assert ip == "192.168.1.2"
+
+    def test_get_csrf_token(self):
+        """Testa geração de CSRF token"""
+        import asyncio
+        from fastapi_csrf_protect import CsrfProtect
+        from unittest.mock import MagicMock
+        
+        mock_csrf = MagicMock(spec=CsrfProtect)
+        mock_csrf.generate_csrf_tokens.return_value = "test_token_123"
+        
+        # Importar a função da rota
+        from src.api.routes.auth import get_csrf_token
+        
+        # Chamar a função async com o mock
+        result = asyncio.run(get_csrf_token(mock_csrf))
+        
+        assert result == {"csrf_token": "test_token_123"}
+        mock_csrf.generate_csrf_tokens.assert_called_once()

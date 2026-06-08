@@ -1,3 +1,4 @@
+import os
 from alembic.config import Config
 from alembic import command
 from config.settings import settings
@@ -7,7 +8,8 @@ def run_migrations():
     """Run Alembic migrations to upgrade the database to the latest version."""
     try:
         logger.info("Starting database migrations...")
-        alembic_cfg = Config("/app/alembic.ini")
+        alembic_ini = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "alembic.ini")
+        alembic_cfg = Config(alembic_ini)
         alembic_cfg.set_main_option("sqlalchemy.url", settings.POSTGRES_URL)
         
         logger.info("Running upgrade command...")

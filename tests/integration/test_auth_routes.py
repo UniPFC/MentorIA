@@ -293,3 +293,123 @@ class TestAuthRoutes:
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Token inválido" in response.json()["detail"]
+
+    def test_register_reserved_username_uppercase(self, client):
+        """Testa registro com username reservado em maiúsculas (Pydantic valida primeiro)"""
+        response = client.post("/api/v1/auth/register", json={
+            "username": "Mentoria",
+            "email": "test@example.com",
+            "password": "StrongPassword123!"
+        })
+        
+        # Pydantic validation returns 422 for reserved username
+        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_CONTENT]
+
+
+
+    def test_login_post_failure_anomaly_high(self, client, sample_user):
+        """Testa login com anomalia HIGH após falha de autenticação"""
+        with patch('src.api.routes.auth.security_cache') as mock_cache:
+            mock_cache.should_block_ip.return_value = (False, None)
+            # First call returns LOW, second call (post-failure) returns HIGH
+            mock_cache.detect_anomalies.side_effect = [
+                {'risk_score': 'LOW', 'anomalies': []},
+                {'risk_score': 'HIGH', 'anomalies': ['too_many_failures']}
+            ]
+            
+            response = client.post("/api/v1/auth/login", json={
+                "email": sample_user.email,
+                "password": "wrongpassword"
+            })
+            
+            assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+            assert "excessivo de tentativas" in response.json()["detail"]
+
+    def test_login_post_failure_anomaly_critical(self, client, sample_user):
+        """Testa login com anomalia CRITICAL após falha de autenticação"""
+        with patch('src.api.routes.auth.security_cache') as mock_cache:
+            mock_cache.should_block_ip.return_value = (False, None)
+            # First call returns LOW, second call (post-failure) returns CRITICAL
+            mock_cache.detect_anomalies.side_effect = [
+                {'risk_score': 'LOW', 'anomalies': []},
+                {'risk_score': 'CRITICAL', 'anomalies': ['critical_anomaly']}
+            ]
+            
+            response = client.post("/api/v1/auth/login", json={
+                "email": sample_user.email,
+                "password": "wrongpassword"
+            })
+            
+            assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    def test_get_client_ip_with_x_forwarded_for(self, client):
+        """Testa obtenção de IP com header X-Forwarded-For"""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "wrong"},
+            headers={"X-Forwarded-For": "192.168.1.1, 10.0.0.1"}
+        )
+        # Request will fail but we're testing the IP extraction logic
+        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_429_TOO_MANY_REQUESTS]
+
+    def test_get_client_ip_with_x_real_ip(self, client):
+        """Testa obtenção de IP com header X-Real-IP"""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "wrong"},
+            headers={"X-Real-IP": "192.168.1.2"}
+        )
+        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_429_TOO_MANY_REQUESTS]
+
+    def test_get_client_ip_fallback_to_client_host(self, client):
+        """Testa obtenção de IP usando fallback para client.host"""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "wrong"}
+        )
+        # Should use client.host as fallback
+        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_429_TOO_MANY_REQUESTS]
+
+    def test_login_with_x_forwarded_for_header(self, client, sample_user):
+        """Testa login com header X-Forwarded-For para cobrir _get_client_ip"""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": sample_user.email, "password": "password123"},
+            headers={"X-Forwarded-For": "192.168.1.100, 10.0.0.1"}
+        )
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert "access_token" in response.json()
+
+    def test_login_with_x_real_ip_header(self, client, sample_user):
+        """Testa login com header X-Real-IP para cobrir _get_client_ip"""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": sample_user.email, "password": "password123"},
+            headers={"X-Real-IP": "192.168.1.200"}
+        )
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert "access_token" in response.json()
+
+    def test_confirm_reset_password_user_not_found(self, client, sample_password_reset_token, db_session):
+        """Testa reset de senha quando usuário não é encontrado"""
+        # Create a token but delete the user
+        from shared.database.models.user import User
+        from shared.database.models.password_reset_token import PasswordResetToken
+        
+        # First, create a valid token for a user
+        token = sample_password_reset_token.token
+        user_id = sample_password_reset_token.user_id
+        
+        # Delete the user
+        db_session.query(User).filter(User.id == user_id).delete()
+        db_session.commit()
+        
+        response = client.post("/api/v1/auth/confirm-reset-password", json={
+            "token": token,
+            "new_password": "NewPassword123!"
+        })
+        
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert "Usuário não encontrado" in response.json()["detail"]

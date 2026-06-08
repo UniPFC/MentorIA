@@ -258,3 +258,287 @@ class TestBackupService:
 
         assert not old_folder.exists()
         assert recent_folder.exists()
+
+    def test_backup_postgres_error(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.POSTGRES_HOST = 'localhost'
+        mock_settings.POSTGRES_PORT = 5432
+        mock_settings.POSTGRES_USER = 'user'
+        mock_settings.POSTGRES_DB = 'db'
+        mock_settings.POSTGRES_PASSWORD = 'pass'
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
+
+        mock_run = MagicMock(side_effect=backup.subprocess.CalledProcessError(1, 'pg_dump'))
+        monkeypatch.setattr(backup.subprocess, 'run', mock_run)
+
+        with pytest.raises(backup.subprocess.CalledProcessError):
+            backup.backup_postgres()
+
+    def test_backup_data_error(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.DATA_DIR = str(tmp_path / 'non_existent_data_dir')
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
+
+        # tarfile opening or adding non-existent directory will raise an error
+        with pytest.raises(Exception):
+            backup.backup_data()
+
+    def test_backup_qdrant_file_not_found(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.QDRANT_URL = 'http://localhost'
+        mock_settings.QDRANT_STORAGE_DIR = str(tmp_path / 'non_existent_qdrant_storage')
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
+
+        client = MagicMock()
+        client.get_collections.return_value = SimpleNamespace(collections=[SimpleNamespace(name='test_collection')])
+        client.create_snapshot.return_value = 'snapshot-id'
+
+        fake_module = MagicMock()
+        fake_module.QdrantClient.return_value = client
+        monkeypatch.setitem(sys.modules, 'qdrant_client', fake_module)
+
+        with pytest.raises(FileNotFoundError):
+            backup.backup_qdrant()
+
+    def test_backup_qdrant_generic_error(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.QDRANT_URL = 'http://localhost'
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        client = MagicMock()
+        client.get_collections.side_effect = Exception("Qdrant generic error")
+
+        fake_module = MagicMock()
+        fake_module.QdrantClient.return_value = client
+        monkeypatch.setitem(sys.modules, 'qdrant_client', fake_module)
+
+        with pytest.raises(Exception):
+            backup.backup_qdrant()
+
+    def test_encrypt_file_error(self, tmp_path, monkeypatch):
+        gpg_instance = MagicMock()
+        gpg_instance.encrypt_file.side_effect = Exception("Encryption error")
+        gpg_class = MagicMock(return_value=gpg_instance)
+        monkeypatch.setattr(backup.gnupg, 'GPG', gpg_class)
+
+        with pytest.raises(Exception):
+            backup.encrypt_file(str(tmp_path / 'non_existent.txt'), 'pass')
+
+    def test_decrypt_file_non_gpg_suffix(self, tmp_path, monkeypatch):
+        file_path = tmp_path / 'encrypted.dec'
+        file_path.write_bytes(b'data')
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=b'restored-bytes')
+        gpg_class = MagicMock(return_value=gpg_instance)
+        monkeypatch.setattr(backup.gnupg, 'GPG', gpg_class)
+
+        decrypted_path = backup.decrypt_file(str(file_path), 'pass')
+        assert decrypted_path.endswith('encrypted.dec.dec')
+
+    def test_decrypt_file_not_ok(self, tmp_path, monkeypatch):
+        file_path = tmp_path / 'encrypted.gpg'
+        file_path.write_bytes(b'data')
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=False, status='Decryption failed status')
+        gpg_class = MagicMock(return_value=gpg_instance)
+        monkeypatch.setattr(backup.gnupg, 'GPG', gpg_class)
+
+        with pytest.raises(ValueError):
+            backup.decrypt_file(str(file_path), 'pass')
+
+    def test_decrypt_file_exception(self, tmp_path, monkeypatch):
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.side_effect = Exception("Decryption exception")
+        gpg_class = MagicMock(return_value=gpg_instance)
+        monkeypatch.setattr(backup.gnupg, 'GPG', gpg_class)
+
+        with pytest.raises(Exception):
+            backup.decrypt_file(str(tmp_path / 'non_existent.gpg'), 'pass')
+
+    def test_restore_postgres_in_memory_not_ok(self, tmp_path, monkeypatch):
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=False, status='Decryption failed status')
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        encrypted_path = tmp_path / 'backup.sql.gpg'
+        encrypted_path.write_text('encrypted')
+
+        with pytest.raises(ValueError):
+            backup.restore_postgres_in_memory(str(encrypted_path), 'pass')
+
+    def test_restore_postgres_in_memory_psql_error(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.POSTGRES_HOST = 'localhost'
+        mock_settings.POSTGRES_PORT = 5432
+        mock_settings.POSTGRES_USER = 'user'
+        mock_settings.POSTGRES_DB = 'db'
+        mock_settings.POSTGRES_PASSWORD = 'pass'
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=b'SELECT 1;')
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        process_mock = MagicMock()
+        process_mock.returncode = 1
+        process_mock.communicate.return_value = (b'', b'some psql stderr')
+        monkeypatch.setattr(backup.subprocess, 'Popen', MagicMock(return_value=process_mock))
+
+        encrypted_path = tmp_path / 'backup.sql.gpg'
+        encrypted_path.write_text('encrypted')
+
+        with pytest.raises(Exception) as exc:
+            backup.restore_postgres_in_memory(str(encrypted_path), 'pass')
+        assert "psql error" in str(exc.value)
+
+    def test_restore_postgres_in_memory_exception(self, tmp_path, monkeypatch):
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.side_effect = Exception("Error decrypting")
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        encrypted_path = tmp_path / 'backup.sql.gpg'
+        encrypted_path.write_text('encrypted')
+
+        with pytest.raises(Exception):
+            backup.restore_postgres_in_memory(str(encrypted_path), 'pass')
+
+    def test_restore_tar_in_memory_not_ok(self, tmp_path, monkeypatch):
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=False, status='Decryption failed status')
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        encrypted_path = tmp_path / 'backup.tar.gz.gpg'
+        encrypted_path.write_text('encrypted')
+
+        with pytest.raises(ValueError):
+            backup.restore_tar_in_memory(str(encrypted_path), 'pass', str(tmp_path))
+
+    def test_restore_tar_in_memory_exception(self, tmp_path, monkeypatch):
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.side_effect = Exception("Error decrypting")
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        encrypted_path = tmp_path / 'backup.tar.gz.gpg'
+        encrypted_path.write_text('encrypted')
+
+        with pytest.raises(Exception):
+            backup.restore_tar_in_memory(str(encrypted_path), 'pass', str(tmp_path))
+
+    def test_wait_for_postgres_ready_timeout(self, monkeypatch):
+        monkeypatch.setattr(backup.psycopg2, 'connect', MagicMock(side_effect=Exception("DB not ready yet")))
+        monkeypatch.setattr(backup.time, 'sleep', lambda x: None)
+
+        with pytest.raises(Exception) as exc:
+            backup.wait_for_postgres_ready()
+        assert "PostgreSQL not ready after" in str(exc.value)
+
+    def test_wait_for_qdrant_ready_timeout(self, monkeypatch):
+        mock_response = MagicMock(status_code=500)
+        monkeypatch.setattr(backup.requests, 'get', MagicMock(return_value=mock_response))
+        monkeypatch.setattr(backup.time, 'sleep', lambda x: None)
+        mock_settings = MagicMock()
+        mock_settings.QDRANT_URL = 'http://localhost'
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        with pytest.raises(Exception) as exc:
+            backup.wait_for_qdrant_ready()
+        assert "Qdrant not ready after" in str(exc.value)
+
+    def test_wait_for_qdrant_ready_exception(self, monkeypatch):
+        monkeypatch.setattr(backup.requests, 'get', MagicMock(side_effect=Exception("Network error")))
+        monkeypatch.setattr(backup.time, 'sleep', lambda x: None)
+        mock_settings = MagicMock()
+        mock_settings.QDRANT_URL = 'http://localhost'
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        with pytest.raises(Exception) as exc:
+            backup.wait_for_qdrant_ready()
+        assert "Qdrant not ready after" in str(exc.value)
+
+    def test_restore_backups_no_passphrase(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'wait_for_postgres_ready', MagicMock())
+        monkeypatch.setattr(backup, 'wait_for_qdrant_ready', MagicMock())
+        monkeypatch.delenv('BACKUP_PASSPHRASE', raising=False)
+
+        with pytest.raises(ValueError) as exc:
+            backup.restore_backups(date_str='01012026')
+        assert "BACKUP_PASSPHRASE not set" in str(exc.value)
+
+    def test_restore_backups_directory_not_found(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'wait_for_postgres_ready', MagicMock())
+        monkeypatch.setattr(backup, 'wait_for_qdrant_ready', MagicMock())
+
+        with pytest.raises(FileNotFoundError) as exc:
+            backup.restore_backups(date_str='01012026', passphrase='pass')
+        assert "No backups found for date" in str(exc.value)
+
+    def test_restore_backups_skips_non_gpg_and_raises(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'wait_for_postgres_ready', MagicMock())
+        monkeypatch.setattr(backup, 'wait_for_qdrant_ready', MagicMock())
+
+        date_str = '01012026'
+        backup_date_dir = tmp_path / 'cache' / 'backups' / date_str
+        backup_date_dir.mkdir(parents=True)
+        # Create non-.gpg file to test skipping
+        (backup_date_dir / 'readme.txt').write_text('info')
+        # Create .gpg file that triggers error on restore to test raising exception
+        (backup_date_dir / 'postgres_backup_1.sql.gpg').write_text('dummy')
+
+        restore_postgres = MagicMock(side_effect=Exception("Failed to restore DB"))
+        monkeypatch.setattr(backup, 'restore_postgres_in_memory', restore_postgres)
+
+        with pytest.raises(Exception) as exc:
+            backup.restore_backups(date_str=date_str, passphrase='pass')
+        assert "Failed to restore DB" in str(exc.value)
+
+    def test_main_missing_passphrase(self, monkeypatch):
+        monkeypatch.delenv('BACKUP_PASSPHRASE', raising=False)
+        with pytest.raises(ValueError) as exc:
+            backup.main()
+        assert "BACKUP_PASSPHRASE not set" in str(exc.value)
+
+    def test_main_generic_error(self, monkeypatch):
+        monkeypatch.setenv('BACKUP_PASSPHRASE', 'secret')
+        monkeypatch.setattr(backup, 'backup_postgres', MagicMock(side_effect=Exception("Postgres failed")))
+
+        with pytest.raises(Exception) as exc:
+            backup.main()
+        assert "Postgres failed" in str(exc.value)
+
+    def test_cleanup_old_backups_skips_non_dir_and_DECRYPTED(self, tmp_path, monkeypatch):
+        base_dir = tmp_path / 'cache' / 'backups'
+        base_dir.mkdir(parents=True)
+
+        decrypted_folder = base_dir / 'DECRYPTED'
+        decrypted_folder.mkdir()
+        file_path = base_dir / 'some_file.txt'
+        file_path.write_text('hello')
+
+        # This should not raise and should keep decrypted_folder and file_path
+        backup.cleanup_old_backups(days=7, base_dir=str(base_dir))
+        assert decrypted_folder.exists()
+        assert file_path.exists()
+
+    def test_cleanup_old_backups_error(self, tmp_path, monkeypatch):
+        # Passing non-existent base_dir without ignore might raise/log error, let's verify raise
+        with pytest.raises(Exception):
+            backup.cleanup_old_backups(days=7, base_dir=str(tmp_path / 'non_existent_directory_error'))
+

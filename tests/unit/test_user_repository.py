@@ -337,3 +337,96 @@ class TestUserRepository:
         remaining_tokens = db_session.query(PasswordResetToken).filter(PasswordResetToken.user_id == sample_user.id).all()
         assert len(remaining_tokens) == 1
         assert remaining_tokens[0].token == "valid_reset_789"
+
+    def test_deduct_tokens_unlimited_budget(self, db_session: Session, sample_user: User):
+        """Testa deduct_tokens quando usuário tem budget ilimitado"""
+        from shared.database.models.user import UserLevel
+        repo = UserRepository(db_session)
+        
+        # Set user to unlimited budget level
+        sample_user.level = UserLevel.LEVEL_05
+        sample_user.token_budget = None
+        db_session.commit()
+        
+        initial_budget = sample_user.token_budget
+        repo.deduct_tokens(sample_user.id, 100)
+        
+        db_session.refresh(sample_user)
+        # Budget should remain None (unlimited)
+        assert sample_user.token_budget is None
+
+    def test_deduct_tokens_limited_budget(self, db_session: Session, sample_user: User):
+        """Testa deduct_tokens quando usuário tem budget limitado"""
+        repo = UserRepository(db_session)
+        
+        sample_user.token_budget = 1000
+        db_session.commit()
+        
+        repo.deduct_tokens(sample_user.id, 100)
+        
+        db_session.refresh(sample_user)
+        assert sample_user.token_budget == 900
+
+    def test_deduct_tokens_not_negative(self, db_session: Session, sample_user: User):
+        """Testa deduct_tokens não deixa budget negativo"""
+        repo = UserRepository(db_session)
+        
+        sample_user.token_budget = 50
+        db_session.commit()
+        
+        repo.deduct_tokens(sample_user.id, 100)
+        
+        db_session.refresh(sample_user)
+        assert sample_user.token_budget == 0
+
+    def test_deduct_tokens_user_not_found(self, db_session: Session):
+        """Testa deduct_tokens quando usuário não existe"""
+        repo = UserRepository(db_session)
+        
+        result = repo.deduct_tokens(uuid4(), 100)
+        assert result is None
+
+    def test_set_token_budget(self, db_session: Session, sample_user: User):
+        """Testa set_token_budget"""
+        repo = UserRepository(db_session)
+        
+        repo.set_token_budget(sample_user.id, 5000)
+        
+        db_session.refresh(sample_user)
+        assert sample_user.token_budget == 5000
+
+    def test_set_token_budget_user_not_found(self, db_session: Session):
+        """Testa set_token_budget quando usuário não existe"""
+        repo = UserRepository(db_session)
+        
+        result = repo.set_token_budget(uuid4(), 5000)
+        assert result is None
+
+    def test_set_user_level(self, db_session: Session, sample_user: User):
+        """Testa set_user_level sem budget"""
+        from shared.database.models.user import UserLevel
+        repo = UserRepository(db_session)
+        
+        repo.set_user_level(sample_user.id, UserLevel.LEVEL_03)
+        
+        db_session.refresh(sample_user)
+        assert sample_user.level == UserLevel.LEVEL_03
+
+    def test_set_user_level_with_budget(self, db_session: Session, sample_user: User):
+        """Testa set_user_level com budget"""
+        from shared.database.models.user import UserLevel
+        repo = UserRepository(db_session)
+        
+        repo.set_user_level(sample_user.id, UserLevel.LEVEL_04, 10000)
+        
+        db_session.refresh(sample_user)
+        assert sample_user.level == UserLevel.LEVEL_04
+        assert sample_user.token_budget == 10000
+
+    def test_set_user_level_user_not_found(self, db_session: Session):
+        """Testa set_user_level quando usuário não existe"""
+        from shared.database.models.user import UserLevel
+        repo = UserRepository(db_session)
+        
+        result = repo.set_user_level(uuid4(), UserLevel.LEVEL_02)
+        assert result is None

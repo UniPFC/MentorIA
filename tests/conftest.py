@@ -7,6 +7,13 @@ from unittest.mock import Mock, MagicMock, patch
 from sqlalchemy import create_engine, event, DateTime
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
+from dotenv import load_dotenv
+import os
+
+# Load test environment variables before importing any modules that depend on settings
+test_env_path = Path(__file__).parent / ".env.test"
+if test_env_path.exists():
+    load_dotenv(test_env_path, override=True)
 
 from shared.database.session import Base
 from shared.database.models.user import User
@@ -240,37 +247,25 @@ def mock_llm_provider():
 def client(db_session):
     """Create a test client for FastAPI app."""
     from fastapi.testclient import TestClient
+    from shared.database.session import get_db
+    from src.api.main import app
     
-    # Mock migrations and seeder before importing app
+    # Override the database dependency
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+    
+    app.dependency_overrides[get_db] = override_get_db
+    
+    # Patch lifespan hooks (run_migrations and seed_default_knowledge) while starting the client
     with patch('src.api.main.run_migrations'), \
-         patch('src.services.seeder.seed_default_knowledge'):
-        from src.api.main import app
-        
-        # Override the database dependency
-        def override_get_db():
-            try:
-                yield db_session
-            finally:
-                pass
-        
-        from src.api.routes.auth import get_db
-        from src.api.routes.chats import get_db as get_db_chats
-        from src.api.routes.chat_types import get_db as get_db_chat_types
-        from src.api.routes.jobs import get_db as get_db_jobs
-        from src.api.routes.upload import get_db as get_db_upload
-        from src.api.routes.websocket import get_db as get_db_ws
-        
-        app.dependency_overrides[get_db] = override_get_db
-        app.dependency_overrides[get_db_chats] = override_get_db
-        app.dependency_overrides[get_db_chat_types] = override_get_db
-        app.dependency_overrides[get_db_jobs] = override_get_db
-        app.dependency_overrides[get_db_upload] = override_get_db
-        app.dependency_overrides[get_db_ws] = override_get_db
-        
+         patch('src.api.main.seed_default_knowledge'):
         with TestClient(app) as test_client:
             yield test_client
-        
-        # Clean up overrides
-        app.dependency_overrides.clear()
+    
+    # Clean up overrides
+    app.dependency_overrides.clear()
 
 

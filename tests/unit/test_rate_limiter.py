@@ -230,13 +230,58 @@ class TestSimpleRateLimiter:
         limiter = SimpleRateLimiter(block_minutes=5)
         key = "test_key"
         
-        # Set expired block
+        # Set expired block and also have attempts
         block_time = datetime.now(timezone.utc) - timedelta(minutes=10)
         limiter.blocks[key] = block_time
+        limiter.attempts[key] = [datetime.now(timezone.utc)]
         
-        # Check is_blocked - should remove expired block
+        # Check is_blocked - should remove expired block and also attempts
         is_blocked, remaining = limiter.is_blocked(key)
         
         assert is_blocked is False
         assert remaining is None
         assert key not in limiter.blocks
+        assert key not in limiter.attempts
+
+    def test_check_attempt_blocked(self):
+        """Test check_attempt returns False and remaining time if blocked"""
+        limiter = SimpleRateLimiter(block_minutes=10)
+        key = "test_key"
+        
+        block_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        limiter.blocks[key] = block_time
+        
+        allowed, remaining = limiter.check_attempt(key)
+        assert allowed is False
+        assert remaining is not None
+        assert remaining > 0
+
+    def test_record_success_cleans_attempts_and_blocks(self):
+        """Test record_success deletes key from attempts and blocks if present"""
+        limiter = SimpleRateLimiter()
+        key = "test_key"
+        
+        limiter.attempts[key] = [datetime.now(timezone.utc)]
+        limiter.blocks[key] = datetime.now(timezone.utc) + timedelta(minutes=10)
+        
+        limiter.record_success(key)
+        
+        assert key not in limiter.attempts
+        assert key not in limiter.blocks
+
+    def test_get_remaining_attempts_blocked(self):
+        """Test get_remaining_attempts returns 0 if blocked"""
+        limiter = SimpleRateLimiter()
+        key = "test_key"
+        limiter.blocks[key] = datetime.now(timezone.utc) + timedelta(minutes=10)
+        
+        assert limiter.get_remaining_attempts(key) == 0
+
+    def test_get_remaining_attempts_under_limit(self):
+        """Test get_remaining_attempts returns max_attempts minus current attempts"""
+        limiter = SimpleRateLimiter(max_attempts=5)
+        key = "test_key"
+        limiter.attempts[key] = [datetime.now(timezone.utc)]
+        
+        assert limiter.get_remaining_attempts(key) == 4
+

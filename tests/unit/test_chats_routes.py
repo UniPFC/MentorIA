@@ -945,6 +945,406 @@ class TestChatsRoutes:
                 assert len(body) > 0
 
     @pytest.mark.asyncio
+    async def test_send_message_insufficient_budget(self):
+        """Testa envio de mensagem com budget insuficiente (linhas 362-364, 369)"""
+        from src.api.routes.chats import send_message
+        from shared.database.models.chat import Chat
+        from datetime import datetime, timezone
+        from fastapi import HTTPException
+        
+        chat_repo = Mock()
+        current_user = Mock()
+        current_user.id = uuid4()
+        current_user.token_budget = 10
+        
+        chat = Chat(
+            id=uuid4(),
+            user_id=current_user.id,
+            chat_type_id=uuid4(),
+            title="Test Chat",
+            title_auto_generated=False,
+            llm_model="gpt-4",
+            llm_provider="openai",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        chat.messages = []
+        
+        chat_repo.get_by_id.return_value = chat
+        
+        message_data = Mock()
+        message_data.content = "Hello"
+        
+        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
+             patch('src.api.routes.chats.UserService') as mock_user_service, \
+             patch('src.api.routes.chats.settings') as mock_settings:
+            
+            chat_service = Mock()
+            chat_service.save_message.return_value = Mock()
+            chat_service.get_chat_history.return_value = []
+            mock_chat_service.return_value = chat_service
+            
+            user_service = Mock()
+            user_service.can_afford_tokens.return_value = False
+            mock_user_service.return_value = user_service
+            
+            mock_settings.get_available_models.return_value = [
+                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 2.0, "output_token_multiplier": 2.0}
+            ]
+            mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
+            
+            with pytest.raises(HTTPException) as exc_info:
+                await send_message(
+                    chat_id=chat.id,
+                    message_data=message_data,
+                    db=Mock(),
+                    current_user=current_user,
+                    chat_repo=chat_repo
+                )
+            
+            assert exc_info.value.status_code == 402
+            assert "Insufficient token budget" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_send_message_stream_insufficient_budget(self):
+        """Testa streaming com budget insuficiente (linhas 491-493, 498)"""
+        from src.api.routes.chats import send_message_stream
+        from fastapi import HTTPException
+        
+        chat_repo = Mock()
+        current_user = Mock()
+        current_user.id = uuid4()
+        current_user.token_budget = 10
+        
+        chat = Mock()
+        chat.id = uuid4()
+        chat.user_id = current_user.id
+        chat.chat_type_id = uuid4()
+        chat.llm_model = "gpt-4"
+        chat.llm_provider = "openai"
+        
+        chat_repo.get_by_id.return_value = chat
+        
+        message_data = Mock()
+        message_data.content = "Hello"
+        
+        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
+             patch('src.api.routes.chats.UserService') as mock_user_service, \
+             patch('src.api.routes.chats.settings') as mock_settings:
+            
+            chat_service = Mock()
+            chat_service.save_message.return_value = Mock()
+            chat_service.get_chat_history.return_value = []
+            mock_chat_service.return_value = chat_service
+            
+            user_service = Mock()
+            user_service.can_afford_tokens.return_value = False
+            mock_user_service.return_value = user_service
+            
+            mock_settings.get_available_models.return_value = [
+                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 2.0, "output_token_multiplier": 2.0}
+            ]
+            mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
+            
+            with pytest.raises(HTTPException) as exc_info:
+                await send_message_stream(
+                    chat_id=chat.id,
+                    message_data=message_data,
+                    db=Mock(),
+                    current_user=current_user,
+                    chat_repo=chat_repo
+                )
+            
+            assert exc_info.value.status_code == 402
+
+    @pytest.mark.asyncio
+    async def test_send_message_stream_generator_exit(self):
+        """Testa GeneratorExit durante streaming (linhas 548-551)"""
+        from src.api.routes.chats import send_message_stream
+        
+        chat_repo = Mock()
+        current_user = Mock()
+        current_user.id = uuid4()
+        
+        chat = Mock()
+        chat.id = uuid4()
+        chat.user_id = current_user.id
+        chat.chat_type_id = uuid4()
+        chat.llm_model = "gpt-4"
+        chat.llm_provider = "openai"
+        
+        chat_repo.get_by_id.return_value = chat
+        
+        message_data = Mock()
+        message_data.content = "Hello"
+        
+        def mock_run_stream(*args, **kwargs):
+            chunks = [
+                {"type": "token", "content": "Hello"},
+                {"type": "sources", "content": []}
+            ]
+            for chunk in chunks:
+                yield chunk
+        
+        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
+             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
+             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
+             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
+             patch('src.api.routes.chats.schedule_title_generation'):
+            
+            chat_service = Mock()
+            chat_service.save_message.return_value = Mock()
+            chat_service.get_chat_history.return_value = []
+            mock_chat_service.return_value = chat_service
+            
+            mock_instant.get_instant_response.return_value = None
+            
+            rag = Mock()
+            rag.run_stream = mock_run_stream
+            mock_rag.return_value = rag
+            
+            mock_session = Mock()
+            mock_session_local.return_value = mock_session
+            
+            response = await send_message_stream(
+                chat_id=chat.id,
+                message_data=message_data,
+                db=Mock(),
+                current_user=current_user,
+                chat_repo=chat_repo
+            )
+            
+            # Consume only first chunk then stop (simulates client disconnect)
+            body = []
+            async for chunk in response.body_iterator:
+                body.append(chunk)
+                break  # Client disconnects after first chunk
+            
+            # Should have gotten at least one chunk
+            assert len(body) > 0
+
+    @pytest.mark.asyncio
+    async def test_send_message_stream_message_response_yield(self):
+        """Testa yield de message_response quando cliente conectado (linha 583)"""
+        from src.api.routes.chats import send_message_stream
+        from datetime import datetime, timezone
+        import json
+        
+        chat_repo = Mock()
+        current_user = Mock()
+        current_user.id = uuid4()
+        
+        chat = Mock()
+        chat.id = uuid4()
+        chat.user_id = current_user.id
+        chat.chat_type_id = uuid4()
+        chat.llm_model = "gpt-4"
+        chat.llm_provider = "openai"
+        
+        chat_repo.get_by_id.return_value = chat
+        
+        message_data = Mock()
+        message_data.content = "Hello"
+        
+        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
+             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
+             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
+             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
+             patch('src.api.routes.chats.schedule_title_generation'), \
+             patch('src.api.routes.chats.UserService') as mock_user_service, \
+             patch('src.api.routes.chats.settings') as mock_settings:
+            
+            chat_service = Mock()
+            saved_message = Mock()
+            saved_message.id = uuid4()
+            saved_message.chat_id = chat.id
+            saved_message.role = "assistant"
+            saved_message.content = "Response"
+            saved_message.created_at = datetime.now(timezone.utc)
+            saved_message.model_dump_json.return_value = '{"id": "123", "role": "assistant", "content": "Response"}'
+            chat_service.save_message.return_value = saved_message
+            chat_service.get_chat_history.return_value = []
+            mock_chat_service.return_value = chat_service
+            
+            user_service = Mock()
+            user_service.can_afford_tokens.return_value = True
+            mock_user_service.return_value = user_service
+            
+            mock_settings.get_available_models.return_value = [
+                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 1.0, "output_token_multiplier": 1.0}
+            ]
+            mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
+            
+            mock_instant.get_instant_response.return_value = None
+            
+            rag = Mock()
+            rag.run_stream.return_value = [
+                {"type": "token", "content": "Response"},
+                {"type": "sources", "content": []}
+            ]
+            mock_rag.return_value = rag
+            
+            mock_session = Mock()
+            mock_session_local.return_value = mock_session
+            
+            response = await send_message_stream(
+                chat_id=chat.id,
+                message_data=message_data,
+                db=Mock(),
+                current_user=current_user,
+                chat_repo=chat_repo
+            )
+            
+            # Consume all chunks
+            body = []
+            async for chunk in response.body_iterator:
+                body.append(chunk)
+            
+            # Should have message type chunk at the end
+            message_chunks = [c for c in body if "message" in c]
+            assert len(message_chunks) > 0
+
+    @pytest.mark.asyncio
+    async def test_send_message_stream_save_error_after_disconnect(self):
+        """Testa erro ao salvar após desconexão (linhas 603-604)"""
+        from src.api.routes.chats import send_message_stream
+        
+        chat_repo = Mock()
+        current_user = Mock()
+        current_user.id = uuid4()
+        
+        chat = Mock()
+        chat.id = uuid4()
+        chat.user_id = current_user.id
+        chat.chat_type_id = uuid4()
+        chat.llm_model = "gpt-4"
+        chat.llm_provider = "openai"
+        
+        chat_repo.get_by_id.return_value = chat
+        
+        message_data = Mock()
+        message_data.content = "Hello"
+        
+        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
+             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
+             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
+             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
+             patch('src.api.routes.chats.schedule_title_generation'), \
+             patch('src.api.routes.chats.UserService') as mock_user_service, \
+             patch('src.api.routes.chats.settings') as mock_settings, \
+             patch('src.services.chat.ChatService') as mock_chat_service_class:
+            
+            chat_service = Mock()
+            # First call (user message) succeeds, second call (assistant message) fails
+            call_count = [0]
+            def side_effect(*args, **kwargs):
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return Mock()  # User message save succeeds
+                else:
+                    raise Exception("Save error")  # Assistant message save fails
+            chat_service.save_message.side_effect = side_effect
+            chat_service.get_chat_history.return_value = []
+            mock_chat_service.return_value = chat_service
+            mock_chat_service_class.return_value = chat_service
+            
+            user_service = Mock()
+            user_service.can_afford_tokens.return_value = True
+            mock_user_service.return_value = user_service
+            
+            mock_settings.get_available_models.return_value = [
+                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 1.0, "output_token_multiplier": 1.0}
+            ]
+            mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
+            
+            mock_instant.get_instant_response.return_value = None
+            
+            rag = Mock()
+            rag.run_stream.return_value = [
+                {"type": "token", "content": "Response"},
+                {"type": "sources", "content": []}
+            ]
+            mock_rag.return_value = rag
+            
+            mock_session = Mock()
+            mock_session_local.return_value = mock_session
+            
+            response = await send_message_stream(
+                chat_id=chat.id,
+                message_data=message_data,
+                db=Mock(),
+                current_user=current_user,
+                chat_repo=chat_repo
+            )
+            
+            # Consume all chunks - should handle save error gracefully
+            body = []
+            async for chunk in response.body_iterator:
+                body.append(chunk)
+            
+            # Should complete despite save error
+            assert len(body) > 0
+
+    @pytest.mark.asyncio
+    async def test_send_message_stream_error_generator_exit(self):
+        """Testa GeneratorExit no error handling (linhas 625-626)"""
+        from src.api.routes.chats import send_message_stream
+        
+        chat_repo = Mock()
+        current_user = Mock()
+        current_user.id = uuid4()
+        
+        chat = Mock()
+        chat.id = uuid4()
+        chat.user_id = current_user.id
+        chat.chat_type_id = uuid4()
+        chat.llm_model = "gpt-4"
+        chat.llm_provider = "openai"
+        
+        chat_repo.get_by_id.return_value = chat
+        
+        message_data = Mock()
+        message_data.content = "Hello"
+        
+        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
+             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
+             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
+             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
+             patch('src.api.routes.chats.schedule_title_generation'):
+            
+            chat_service = Mock()
+            chat_service.save_message.return_value = Mock()
+            chat_service.get_chat_history.return_value = []
+            mock_chat_service.return_value = chat_service
+            
+            mock_instant.get_instant_response.return_value = None
+            
+            rag = Mock()
+            rag.run_stream.side_effect = Exception("RAG error")
+            mock_rag.return_value = rag
+            
+            mock_session = Mock()
+            mock_session_local.return_value = mock_session
+            
+            response = await send_message_stream(
+                chat_id=chat.id,
+                message_data=message_data,
+                db=Mock(),
+                current_user=current_user,
+                chat_repo=chat_repo
+            )
+            
+            # Consume only error chunk then disconnect
+            body = []
+            async for chunk in response.body_iterator:
+                body.append(chunk)
+                if "error" in chunk:
+                    break  # Client disconnects on error
+            
+            # Should have gotten error message
+            assert len(body) > 0
+
+    @pytest.mark.asyncio
     async def test_send_message_stream_message_response(self):
         """Testa yield de message_response quando cliente permanece conectado"""
         from src.api.routes.chats import send_message_stream

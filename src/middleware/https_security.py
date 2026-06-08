@@ -11,8 +11,7 @@ class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
     """
     
     async def dispatch(self, request: Request, call_next):
-        # Em desenvolvimento, não forçar HTTPS
-        if settings.DEV_MODE:
+        if not settings.FORCE_HTTPS:
             return await call_next(request)
         
         # Verificar se já é HTTPS

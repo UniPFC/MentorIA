@@ -21,7 +21,8 @@ class TestMigration:
             
             run_migrations()
             
-            mock_config.assert_called_once_with("/app/alembic.ini")
+            called_path = mock_config.call_args[0][0]
+            assert called_path.endswith("alembic.ini"), f"Expected path ending in alembic.ini, got: {called_path}"
             mock_cfg.set_main_option.assert_called_once_with("sqlalchemy.url", "postgresql://user:pass@localhost/db")
             mock_command.upgrade.assert_called_once_with(mock_cfg, "head")
             mock_logger.info.assert_called()
