@@ -648,28 +648,17 @@ class TestBackupService:
         gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=tar_bytes.getvalue())
         monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
 
-        # Setup fake app structure
-        app_path = tmp_path / 'app'
-        app_path.mkdir()
-        data_path = app_path / 'data'
-        data_path.mkdir()
-        sub_dir = data_path / 'sub'
-        sub_dir.mkdir()
-        old_file = data_path / 'old.txt'
-        old_file.write_text('old')
-        other_app_file = app_path / 'important_code.py'
-        other_app_file.write_text('import os')
-
+        # Mock os.path.exists to return True for /app and /app/data to trigger lines 225-239
         orig_exists = os.path.exists
-        exists_mock = lambda path: True if any(str(path).replace('\\', '/').endswith(suffix) for suffix in ['/app', '/app/data']) else orig_exists(path)
+        exists_mock = lambda path: True if str(path).replace('\\', '/') in ['/app', '/app/data'] else orig_exists(path)
         monkeypatch.setattr(backup.os.path, 'exists', exists_mock)
         
         orig_listdir = os.listdir
-        listdir_mock = lambda path: ['sub', 'old.txt'] if str(path).replace('\\', '/').endswith('app/data') else orig_listdir(path)
+        listdir_mock = lambda path: ['sub', 'old.txt'] if str(path).replace('\\', '/') == '/app/data' else orig_listdir(path)
         monkeypatch.setattr(backup.os, 'listdir', listdir_mock)
 
         orig_isdir = os.path.isdir
-        isdir_mock = lambda path: True if str(path).replace('\\', '/').endswith('app/data/sub') else orig_isdir(path)
+        isdir_mock = lambda path: True if str(path).replace('\\', '/') == '/app/data/sub' else orig_isdir(path)
         monkeypatch.setattr(backup.os.path, 'isdir', isdir_mock)
 
         # Mock shutil.rmtree to raise error for 'sub' to cover lines 238-239 exception handling
