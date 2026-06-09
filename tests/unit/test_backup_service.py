@@ -637,22 +637,22 @@ class TestBackupService:
         encrypted_path = tmp_path / 'backup.tar.gz.gpg'
         encrypted_path.write_text('encrypted')
 
-        tar_bytes = io.BytesIO()
-        with tarfile.open(fileobj=tar_bytes, mode='w:gz') as tar:
-            content = tmp_path / 'hello.txt'
-            content.write_text('hello')
-            tar.add(str(content), arcname='hello.txt')
-        tar_bytes.seek(0)
-
         gpg_instance = MagicMock()
-        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=tar_bytes.getvalue())
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=b'fake-tar-data')
         monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        # Mock tarfile.open to avoid actual extraction to /app
+        fake_tar = MagicMock()
+        fake_tar_ctx = MagicMock()
+        fake_tar_ctx.__enter__ = MagicMock(return_value=fake_tar)
+        fake_tar_ctx.__exit__ = MagicMock(return_value=False)
+        monkeypatch.setattr(backup.tarfile, 'open', MagicMock(return_value=fake_tar_ctx))
 
         # Mock os.path.exists to return True for /app and /app/data to trigger lines 225-239
         orig_exists = os.path.exists
         exists_mock = lambda path: True if str(path).replace('\\', '/') in ['/app', '/app/data'] else orig_exists(path)
         monkeypatch.setattr(backup.os.path, 'exists', exists_mock)
-        
+
         orig_listdir = os.listdir
         listdir_mock = lambda path: ['sub', 'old.txt'] if str(path).replace('\\', '/') == '/app/data' else orig_listdir(path)
         monkeypatch.setattr(backup.os, 'listdir', listdir_mock)
@@ -675,7 +675,7 @@ class TestBackupService:
         monkeypatch.setattr(backup.os, 'remove', remove_mock)
 
         backup.restore_tar_in_memory(str(encrypted_path), 'passphrase', '/app')
-        
+
         # 'sub' is a dir, so rmtree is called on it
         assert len(rmtree_calls) == 1
         assert 'sub' in str(rmtree_calls[0])
