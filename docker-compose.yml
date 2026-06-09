@@ -48,6 +48,7 @@ services:
       - ./alembic.ini:/app/alembic.ini
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock
+      - qdrant_storage:/qdrant/storage
     networks:
       - rag_network
     depends_on:

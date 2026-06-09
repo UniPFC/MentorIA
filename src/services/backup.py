@@ -83,7 +83,9 @@ def backup_qdrant() -> str:
             raise FileNotFoundError(f"Qdrant storage directory not found: {storage_path}")
 
         with tarfile.open(tar_file, "w:gz") as tar:
-            tar.add(storage_path, arcname='qdrant_storage')
+            for item in os.listdir(storage_path):
+                item_path = os.path.join(storage_path, item)
+                tar.add(item_path, arcname=item)
 
         logger.info(f"Qdrant backup created: {tar_file}")
         return tar_file
@@ -149,6 +151,34 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
 
+        # Drop and recreate database
+        logger.info("Dropping and recreating database...")
+        drop_recreate_cmd = [
+            "psql",
+            "-h", settings.POSTGRES_HOST,
+            "-p", str(settings.POSTGRES_PORT),
+            "-U", settings.POSTGRES_USER,
+            "-d", "postgres"
+        ]
+        
+        env = os.environ.copy()
+        env['PGPASSWORD'] = settings.POSTGRES_PASSWORD
+
+        drop_recreate_sql = f"""
+        SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{settings.POSTGRES_DB}' AND pid <> pg_backend_pid();
+        DROP DATABASE IF EXISTS {settings.POSTGRES_DB};
+        CREATE DATABASE {settings.POSTGRES_DB};
+        """
+        
+        process = subprocess.Popen(drop_recreate_cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate(input=drop_recreate_sql.encode('utf-8'))
+        
+        if process.returncode != 0:
+            raise Exception(f"Failed to drop/recreate database: {stderr.decode('utf-8')}")
+        
+        logger.info("Database dropped and recreated successfully")
+
+        # Restore the backup
         cmd = [
             "psql",
             "-h", settings.POSTGRES_HOST,
@@ -156,9 +186,6 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
             "-U", settings.POSTGRES_USER,
             "-d", settings.POSTGRES_DB
         ]
-        
-        env = os.environ.copy()
-        env['PGPASSWORD'] = settings.POSTGRES_PASSWORD
 
         process = subprocess.Popen(cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate(input=decrypted.data)
@@ -181,6 +208,35 @@ def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_pat
             
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
+
+        # Clear the extract path before restoring (only if it's a subdirectory, not root)
+        if os.path.exists(extract_path) and extract_path != '/app':
+            logger.info(f"Clearing directory contents: {extract_path}")
+            import shutil
+            for item in os.listdir(extract_path):
+                item_path = os.path.join(extract_path, item)
+                try:
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+                except Exception as e:
+                    logger.warning(f"Could not remove {item_path}: {e}")
+        elif extract_path == '/app':
+            # For /app, only clear data subdirectory contents
+            data_path = os.path.join(extract_path, 'data')
+            if os.path.exists(data_path):
+                logger.info(f"Clearing data directory contents: {data_path}")
+                import shutil
+                for item in os.listdir(data_path):
+                    item_path = os.path.join(data_path, item)
+                    try:
+                        if os.path.isdir(item_path):
+                            shutil.rmtree(item_path)
+                        else:
+                            os.remove(item_path)
+                    except Exception as e:
+                        logger.warning(f"Could not remove {item_path}: {e}")
 
         file_like_object = io.BytesIO(decrypted.data)
         
@@ -258,55 +314,51 @@ def restore_backups(
         )
 
     try:
+        postgres_files = []
+        data_files = []
+        qdrant_files = []
+
         for filename in os.listdir(backup_date_dir):
             if not filename.endswith('.gpg'):
                 continue
+            
+            if "postgres_backup" in filename:
+                postgres_files.append(filename)
+            elif "data_backup" in filename:
+                data_files.append(filename)
+            elif "qdrant_backup" in filename:
+                qdrant_files.append(filename)
 
-            encrypted_path = os.path.join(
-                backup_date_dir,
-                filename
+        # Sort to find the latest (works perfectly because of YYYYMMDD_HHMMSS format)
+        postgres_files.sort()
+        data_files.sort()
+        qdrant_files.sort()
+
+        if postgres_files:
+            latest_postgres = postgres_files[-1]
+            logger.info(f"Restoring PostgreSQL from latest backup: {latest_postgres}")
+            restore_postgres_in_memory(
+                os.path.join(backup_date_dir, latest_postgres),
+                passphrase
             )
 
-            if "postgres_backup" in filename:
-                logger.info(
-                    f"Restoring PostgreSQL from: {filename}"
-                )
+        if data_files:
+            latest_data = data_files[-1]
+            logger.info(f"Restoring Data from latest backup: {latest_data}")
+            extract_path = os.path.dirname(settings.DATA_DIR)
+            restore_tar_in_memory(
+                os.path.join(backup_date_dir, latest_data),
+                passphrase,
+                extract_path
+            )
 
-                restore_postgres_in_memory(
-                    encrypted_path,
-                    passphrase
-                )
-
-            elif "data_backup" in filename:
-                logger.info(f"Restoring Data from: {filename}")
-
-                extract_path = os.path.dirname(
-                    settings.DATA_DIR
-                )
-
-                restore_tar_in_memory(
-                    encrypted_path,
-                    passphrase,
-                    extract_path
-                )
-
-            elif "qdrant_backup" in filename:
-                logger.info(f"Restoring Qdrant from: {filename}")
-
-                restore_tar_in_memory(
-                    encrypted_path,
-                    passphrase,
-                    "/qdrant/storage"
-                )
-
-        # roda uma segunda vez automaticamente
-        if not second_pass:
-            logger.info("Running second restore pass...")
-
-            restore_backups(
-                date_str=date_str,
-                passphrase=passphrase,
-                second_pass=True
+        if qdrant_files:
+            latest_qdrant = qdrant_files[-1]
+            logger.info(f"Restoring Qdrant from latest backup: {latest_qdrant}")
+            restore_tar_in_memory(
+                os.path.join(backup_date_dir, latest_qdrant),
+                passphrase,
+                "/qdrant/storage"
             )
 
         logger.info(

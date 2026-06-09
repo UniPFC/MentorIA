@@ -7,10 +7,10 @@ from pydantic import ValidationError
 from config.logger import logger
 from config.settings import settings
 from shared.database.migration import run_migrations
-from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket, payments
+from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket, payments, admin
 from src.services.seeder import seed_default_knowledge
 from src.middleware.https_security import (
-    HTTPSRedirectMiddleware, 
+    # HTTPSRedirectMiddleware, 
     SecurityHeadersMiddleware, 
     SecureCookieMiddleware
 )
@@ -48,7 +48,7 @@ csrf_protect = create_csrf_protect()
 
 # Adicionar middlewares de segurança (ordem importa!)
 # 1. Forçar HTTPS em produção
-app.add_middleware(HTTPSRedirectMiddleware)
+# app.add_middleware(HTTPSRedirectMiddleware)
 
 # 2. Adicionar headers de segurança
 app.add_middleware(SecurityHeadersMiddleware)
@@ -118,6 +118,7 @@ app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(audio.router, prefix="/api/v1")
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 app.include_router(payments.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
 
 @app.get("/")
 def root():

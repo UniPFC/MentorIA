@@ -131,6 +131,9 @@ class AuthService:
 
     def create_user_tokens(self, user: User, user_repo: Any) -> Dict[str, Any]:
         """Cria tokens de acesso e refresh para o usuário e os registra no banco"""
+        # Invalidar tokens antigos do usuário para evitar duplicatas
+        user_repo.invalidate_all_user_tokens(user.id)
+        
         access_data = {
             "sub": str(user.id),
             "username": user.username,

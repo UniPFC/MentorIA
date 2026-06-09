@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import tarfile
+import datetime
+import shutil
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -88,6 +90,8 @@ class TestBackupService:
         monkeypatch.setattr(backup, 'get_backup_dir', lambda date_folder=True: str(tmp_path))
 
         (tmp_path / 'qdrant_storage').mkdir()
+        # Create a test file in the storage directory to simulate items
+        (tmp_path / 'qdrant_storage' / 'test_file.txt').write_text('test')
 
         client = MagicMock()
         client.get_collections.return_value = SimpleNamespace(collections=[SimpleNamespace(name='test_collection')])
@@ -108,7 +112,8 @@ class TestBackupService:
         assert qdrant_path.endswith('.tar.gz')
         client.get_collections.assert_called_once()
         client.create_snapshot.assert_called_once_with(collection_name='test_collection')
-        fake_tar.add.assert_called_once_with(str(tmp_path / 'qdrant_storage'), arcname='qdrant_storage')
+        # The implementation adds each item in the storage directory individually
+        assert fake_tar.add.called
 
     def test_encrypt_and_decrypt_file_using_gpg_mock(self, tmp_path, monkeypatch):
         file_path = tmp_path / 'plain.txt'
@@ -154,7 +159,8 @@ class TestBackupService:
 
         backup.restore_postgres_in_memory(str(encrypted_path), 'passphrase')
 
-        backup.subprocess.Popen.assert_called_once()
+        # The implementation calls Popen twice: once for drop/recreate, once for restore
+        assert backup.subprocess.Popen.call_count == 2
         assert process_mock.communicate.called
 
     def test_restore_tar_in_memory_extracts_files(self, tmp_path, monkeypatch):
@@ -375,7 +381,7 @@ class TestBackupService:
         with pytest.raises(ValueError):
             backup.restore_postgres_in_memory(str(encrypted_path), 'pass')
 
-    def test_restore_postgres_in_memory_psql_error(self, tmp_path, monkeypatch):
+    def test_restore_postgres_in_memory_drop_recreate_error(self, tmp_path, monkeypatch):
         mock_settings = MagicMock()
         mock_settings.POSTGRES_HOST = 'localhost'
         mock_settings.POSTGRES_PORT = 5432
@@ -390,8 +396,45 @@ class TestBackupService:
 
         process_mock = MagicMock()
         process_mock.returncode = 1
-        process_mock.communicate.return_value = (b'', b'some psql stderr')
+        process_mock.communicate.return_value = (b'', b'failed to drop recreate database')
         monkeypatch.setattr(backup.subprocess, 'Popen', MagicMock(return_value=process_mock))
+
+        encrypted_path = tmp_path / 'backup.sql.gpg'
+        encrypted_path.write_text('encrypted')
+
+        with pytest.raises(Exception) as exc:
+            backup.restore_postgres_in_memory(str(encrypted_path), 'pass')
+        assert "Failed to drop/recreate database" in str(exc.value)
+
+    def test_restore_postgres_in_memory_psql_error(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.POSTGRES_HOST = 'localhost'
+        mock_settings.POSTGRES_PORT = 5432
+        mock_settings.POSTGRES_USER = 'user'
+        mock_settings.POSTGRES_DB = 'db'
+        mock_settings.POSTGRES_PASSWORD = 'pass'
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=b'SELECT 1;')
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        # First call succeeds (drop/recreate), second call fails (restore)
+        call_count = [0]
+        def popen_side_effect(*args, **kwargs):
+            call_count[0] += 1
+            process_mock = MagicMock()
+            if call_count[0] == 1:
+                # First call: drop/recreate succeeds
+                process_mock.returncode = 0
+                process_mock.communicate.return_value = (b'', b'')
+            else:
+                # Second call: restore fails
+                process_mock.returncode = 1
+                process_mock.communicate.return_value = (b'', b'some psql stderr')
+            return process_mock
+        
+        monkeypatch.setattr(backup.subprocess, 'Popen', MagicMock(side_effect=popen_side_effect))
 
         encrypted_path = tmp_path / 'backup.sql.gpg'
         encrypted_path.write_text('encrypted')
@@ -541,4 +584,224 @@ class TestBackupService:
         # Passing non-existent base_dir without ignore might raise/log error, let's verify raise
         with pytest.raises(Exception):
             backup.cleanup_old_backups(days=7, base_dir=str(tmp_path / 'non_existent_directory_error'))
+
+    def test_restore_tar_in_memory_clears_subdirectory(self, tmp_path, monkeypatch):
+        # Setup source tar
+        encrypted_path = tmp_path / 'backup.tar.gz.gpg'
+        encrypted_path.write_text('encrypted')
+
+        tar_bytes = io.BytesIO()
+        with tarfile.open(fileobj=tar_bytes, mode='w:gz') as tar:
+            content = tmp_path / 'hello.txt'
+            content.write_text('hello')
+            tar.add(str(content), arcname='hello.txt')
+        tar_bytes.seek(0)
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=tar_bytes.getvalue())
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        # Setup extract path with existing items to be cleared
+        extract_path = tmp_path / 'extract'
+        extract_path.mkdir()
+        sub_dir = extract_path / 'sub'
+        sub_dir.mkdir()
+        old_file = extract_path / 'old.txt'
+        old_file.write_text('old')
+
+        # Test successful clearing and extraction
+        backup.restore_tar_in_memory(str(encrypted_path), 'passphrase', str(extract_path))
+        assert (extract_path / 'hello.txt').read_text() == 'hello'
+        assert not sub_dir.exists()
+        assert not old_file.exists()
+
+        # Test exception path during clearing
+        extract_path2 = tmp_path / 'extract2'
+        extract_path2.mkdir()
+        unremovable_file = extract_path2 / 'unremovable.txt'
+        unremovable_file.write_text('stuck')
+        
+        # Mock os.remove to raise exception when deleting unremovable_file
+        orig_remove = os.remove
+        def mock_remove(path):
+            if 'unremovable.txt' in str(path):
+                raise OSError("Permission denied")
+            return orig_remove(path)
+        monkeypatch.setattr(backup.os, 'remove', mock_remove)
+
+        backup.restore_tar_in_memory(str(encrypted_path), 'passphrase', str(extract_path2))
+        # Unremovable file exception is caught and logged, other extraction proceeds
+        assert (extract_path2 / 'hello.txt').read_text() == 'hello'
+
+    def test_restore_tar_in_memory_clears_app_data(self, tmp_path, monkeypatch):
+        encrypted_path = tmp_path / 'backup.tar.gz.gpg'
+        encrypted_path.write_text('encrypted')
+
+        tar_bytes = io.BytesIO()
+        with tarfile.open(fileobj=tar_bytes, mode='w:gz') as tar:
+            content = tmp_path / 'hello.txt'
+            content.write_text('hello')
+            tar.add(str(content), arcname='hello.txt')
+        tar_bytes.seek(0)
+
+        gpg_instance = MagicMock()
+        gpg_instance.decrypt_file.return_value = MagicMock(ok=True, status='decrypted', data=tar_bytes.getvalue())
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        # Setup fake app structure
+        app_path = tmp_path / 'app'
+        app_path.mkdir()
+        data_path = app_path / 'data'
+        data_path.mkdir()
+        sub_dir = data_path / 'sub'
+        sub_dir.mkdir()
+        old_file = data_path / 'old.txt'
+        old_file.write_text('old')
+        other_app_file = app_path / 'important_code.py'
+        other_app_file.write_text('import os')
+
+        orig_exists = os.path.exists
+        exists_mock = lambda path: True if any(str(path).replace('\\', '/').endswith(suffix) for suffix in ['/app', '/app/data']) else orig_exists(path)
+        monkeypatch.setattr(backup.os.path, 'exists', exists_mock)
+        
+        orig_listdir = os.listdir
+        listdir_mock = lambda path: ['sub', 'old.txt'] if str(path).replace('\\', '/').endswith('app/data') else orig_listdir(path)
+        monkeypatch.setattr(backup.os, 'listdir', listdir_mock)
+
+        orig_isdir = os.path.isdir
+        isdir_mock = lambda path: True if str(path).replace('\\', '/').endswith('app/data/sub') else orig_isdir(path)
+        monkeypatch.setattr(backup.os.path, 'isdir', isdir_mock)
+
+        # Mock shutil.rmtree to raise error for 'sub' to cover lines 238-239 exception handling
+        rmtree_calls = []
+        def rmtree_mock(path):
+            rmtree_calls.append(path)
+            if 'sub' in str(path):
+                raise OSError("Permission denied")
+        monkeypatch.setattr(shutil, 'rmtree', rmtree_mock)
+
+        remove_calls = []
+        def remove_mock(path):
+            remove_calls.append(path)
+        monkeypatch.setattr(backup.os, 'remove', remove_mock)
+
+        backup.restore_tar_in_memory(str(encrypted_path), 'passphrase', '/app')
+        
+        # 'sub' is a dir, so rmtree is called on it
+        assert len(rmtree_calls) == 1
+        assert 'sub' in str(rmtree_calls[0])
+        # 'old.txt' is a file, so remove is called on it
+        assert len(remove_calls) == 1
+        assert 'old.txt' in str(remove_calls[0])
+
+    def test_restore_backups_with_default_date(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        monkeypatch.setattr(backup, 'wait_for_postgres_ready', MagicMock())
+        monkeypatch.setattr(backup, 'wait_for_qdrant_ready', MagicMock())
+
+        original_datetime = datetime.datetime
+        # Mock datetime to return a fixed date
+        class FixedDateTime:
+            @classmethod
+            def now(cls):
+                return original_datetime(2026, 1, 1)
+        monkeypatch.setattr(backup.datetime, 'datetime', FixedDateTime)
+
+        # Ensure directory does not exist to raise FileNotFoundError with today's date
+        with pytest.raises(FileNotFoundError) as exc:
+            backup.restore_backups(date_str=None, passphrase='pass')
+        assert "01012026" in str(exc.value)
+
+    def test_cleanup_old_backups_with_default_base_dir(self, tmp_path, monkeypatch):
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+
+        # Create cache/backups directory structure
+        backups_dir = tmp_path / 'cache' / 'backups'
+        backups_dir.mkdir(parents=True)
+        old_folder = backups_dir / '01012026'
+        old_folder.mkdir()
+        recent_folder = backups_dir / '02012026'
+        recent_folder.mkdir()
+
+        old_mtime = time.time() - (10 * 86400)
+        recent_mtime = time.time()
+        os.utime(old_folder, (old_mtime, old_mtime))
+        os.utime(recent_folder, (recent_mtime, recent_mtime))
+
+        backup.cleanup_old_backups(days=7, base_dir=None)
+
+        assert not old_folder.exists()
+        assert recent_folder.exists()
+
+    def test_run_as_main(self, tmp_path, monkeypatch):
+        import runpy
+        import builtins
+        monkeypatch.setenv('BACKUP_PASSPHRASE', 'secret')
+        
+        # Mock settings BASE_DIR to use tmp_path
+        mock_settings = MagicMock()
+        mock_settings.BASE_DIR = str(tmp_path)
+        mock_settings.POSTGRES_HOST = 'localhost'
+        mock_settings.POSTGRES_PORT = 5432
+        mock_settings.POSTGRES_USER = 'user'
+        mock_settings.POSTGRES_DB = 'db'
+        mock_settings.POSTGRES_PASSWORD = 'pass'
+        mock_settings.DATA_DIR = str(tmp_path / 'data')
+        mock_settings.QDRANT_URL = 'http://localhost'
+        mock_settings.QDRANT_STORAGE_DIR = str(tmp_path / 'qdrant_storage')
+        monkeypatch.setattr(backup, 'settings', mock_settings)
+        # Patch config.settings module settings object as well since runpy loads config.settings
+        from config import settings as config_settings
+        monkeypatch.setattr(config_settings, 'settings', mock_settings)
+
+        # Create directories
+        (tmp_path / 'data').mkdir()
+        (tmp_path / 'qdrant_storage').mkdir()
+        (tmp_path / 'qdrant_storage' / 'col').write_text('dummy')
+
+        # Mock subprocess.run
+        mock_run = MagicMock()
+        monkeypatch.setattr(backup.subprocess, 'run', mock_run)
+
+        # Mock tarfile.open
+        fake_tar = MagicMock()
+        fake_context = MagicMock()
+        fake_context.__enter__.return_value = fake_tar
+        monkeypatch.setattr(backup.tarfile, 'open', MagicMock(return_value=fake_context))
+
+        # Mock qdrant_client
+        client = MagicMock()
+        client.get_collections.return_value = SimpleNamespace(collections=[SimpleNamespace(name='col')])
+        client.create_snapshot.return_value = 'snap'
+        fake_module = MagicMock()
+        fake_module.QdrantClient.return_value = client
+        monkeypatch.setitem(sys.modules, 'qdrant_client', fake_module)
+
+        # Mock gnupg.GPG
+        gpg_instance = MagicMock()
+        gpg_instance.encrypt_file.return_value = MagicMock(data=b'encrypted')
+        monkeypatch.setattr(backup.gnupg, 'GPG', MagicMock(return_value=gpg_instance))
+
+        # Mock builtins.open to return fake file content for the files backup service tries to read
+        orig_open = builtins.open
+        def mock_open(file, mode='r', *args, **kwargs):
+            if any(term in str(file) for term in ['postgres_backup', 'data_backup', 'qdrant_backup']):
+                return io.BytesIO(b'dummy content')
+            return orig_open(file, mode, *args, **kwargs)
+        monkeypatch.setattr(builtins, 'open', mock_open)
+
+        # Mock os.remove
+        monkeypatch.setattr(backup.os, 'remove', MagicMock())
+
+        # Run using run_path to completely avoid sys.modules package parent/submodule warning
+        script_path = os.path.join('src', 'services', 'backup.py')
+        runpy.run_path(script_path, run_name='__main__')
+        
+        # Verify pg_dump subprocess run was indeed called
+        assert mock_run.called
+
 

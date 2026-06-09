@@ -73,9 +73,10 @@ class Settings(BaseSettings):
     THRESHOLD: float = 0.0
     QUERY_EXPANSION_COUNT: int = 3
     
-    # System User
+    # Admin Configuration
     SYSTEM_USER_EMAIL: str
     SYSTEM_USER_PASSWORD: str
+    ADMIN_SLUG: str
 
     # JWT Configuration
     SECRET_KEY: str 
