@@ -36,7 +36,7 @@ export default function LoginPage() {
 
             <div className="mt-10 space-y-4">
               {[
-                { text: 'Upload de documentos PDF, TXT, CSV e mais', delay: '' },
+                { text: 'Upload de documentos Excel', delay: '' },
                 { text: 'Respostas baseadas nos seus próprios materiais', delay: 'animation-delay: 0.1s' },
                 { text: 'Chat inteligente com múltiplos contextos', delay: 'animation-delay: 0.2s' },
               ].map((item) => (
