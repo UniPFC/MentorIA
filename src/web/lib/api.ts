@@ -12,7 +12,7 @@ const api: AxiosInstance = axios.create({
 
 // Add token to requests
 api.interceptors.request.use((config) => {
-  const token = Cookies.get('authToken') || localStorage.getItem('authToken');
+  const token = Cookies.get('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -29,7 +29,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = Cookies.get('refreshToken') || localStorage.getItem('refreshToken');
+        const refreshToken = Cookies.get('refreshToken');
         if (!refreshToken) {
           throw new Error('No refresh token available');
         }
@@ -41,21 +41,15 @@ api.interceptors.response.use(
         const newAccessToken = response.data.access_token;
         const newRefreshToken = response.data.refresh_token;
 
-        // Update stored tokens
-        Cookies.set('authToken', newAccessToken);
-        localStorage.setItem('authToken', newAccessToken);
+        Cookies.set('authToken', newAccessToken, { sameSite: 'lax' });
         if (newRefreshToken) {
-          Cookies.set('refreshToken', newRefreshToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
+          Cookies.set('refreshToken', newRefreshToken, { sameSite: 'lax' });
         }
 
-        // Retry original request with new token
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, logout user
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         Cookies.remove('authToken');
         Cookies.remove('refreshToken');

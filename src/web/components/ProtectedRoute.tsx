@@ -19,19 +19,19 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       return;
     }
 
-    // Render children immediately if token exists
     setIsAuthenticated(true);
 
-    // Verify token validity in the background
     authService.verifyToken().then((isValid) => {
       if (!isValid) {
         setIsAuthenticated(false);
         router.push('/login');
+        return;
       }
+
+      setIsAuthenticated(true);
     });
   }, [router]);
 
-  // Only block render if there's clearly no token
   if (isAuthenticated === null) return null;
   if (!isAuthenticated) return null;
 

@@ -26,6 +26,9 @@ export interface RegisterResponse {
   created_at: string;
 }
 
+const persistentCookieOptions = { expires: 30, sameSite: 'lax' as const };
+const sessionCookieOptions = { sameSite: 'lax' as const };
+
 export const authService = {
   async login(email: string, password: string, rememberMe: boolean = false): Promise<LoginResponse> {
     try {
@@ -36,21 +39,11 @@ export const authService = {
 
       const token = response.data.access_token;
       const refreshToken = response.data.refresh_token;
-      
-      if (rememberMe) {
-        Cookies.set('authToken', token, { expires: 30 });
-        Cookies.set('refreshToken', refreshToken, { expires: 30 });
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('refreshToken', refreshToken);
-      } else {
-        // Session cookie only — no localStorage so token is gone after browser close
-        Cookies.set('authToken', token);
-        Cookies.set('refreshToken', refreshToken);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
-      }
+      const cookieOptions = rememberMe ? persistentCookieOptions : sessionCookieOptions;
 
-      // Buscar dados do usuário após login
+      Cookies.set('authToken', token, cookieOptions);
+      Cookies.set('refreshToken', refreshToken, cookieOptions);
+
       try {
         const userResponse = await api.get('/auth/me');
         localStorage.setItem('user', JSON.stringify(userResponse.data));
@@ -90,22 +83,19 @@ export const authService = {
           ? normalizedUsername
           : buildFallbackUsername();
 
-      // 1. Registrar usuário
       const response = await api.post<RegisterResponse>('/auth/register', {
         email,
         password,
         username: finalUsername,
       });
 
-      // 2. Fazer login automaticamente após registro
       const loginResponse = await api.post<LoginResponse>('/auth/login', {
         email,
         password,
       });
 
-      const token = loginResponse.data.access_token;
-      Cookies.set('authToken', token);
-      localStorage.setItem('authToken', token);
+      Cookies.set('authToken', loginResponse.data.access_token, sessionCookieOptions);
+      Cookies.set('refreshToken', loginResponse.data.refresh_token, sessionCookieOptions);
       localStorage.setItem('user', JSON.stringify(response.data));
 
       return response.data;
@@ -117,7 +107,7 @@ export const authService = {
 
   async verifyToken(): Promise<boolean> {
     try {
-      const token = Cookies.get('authToken') || localStorage.getItem('authToken');
+      const token = Cookies.get('authToken');
       if (!token) return false;
 
       const response = await api.post('/auth/verify-token', {});
@@ -130,15 +120,10 @@ export const authService = {
 
   async logout(): Promise<void> {
     try {
-      // Chamar endpoint de logout no backend para invalidar token no banco de dados
       await api.post('/auth/logout', {});
     } catch (error) {
-      // Continuar com logout mesmo se a chamada falhar
       console.error('Logout API error:', error);
     } finally {
-      // Remover tokens do frontend
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       Cookies.remove('authToken');
       Cookies.remove('refreshToken');
@@ -146,7 +131,7 @@ export const authService = {
   },
 
   getToken(): string | null {
-    return Cookies.get('authToken') || localStorage.getItem('authToken');
+    return Cookies.get('authToken') || null;
   },
 
   getUser(): User | null {

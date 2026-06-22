@@ -204,14 +204,7 @@ export default function ChatPage() {
     try {
       const apiUrl = 'http://localhost:8000';
       
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-        return null;
-      };
-      
-      const token = getCookie('authToken') || localStorage.getItem('authToken');
+      const token = authService.getToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };

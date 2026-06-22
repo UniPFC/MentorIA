@@ -110,12 +110,12 @@ docker-compose logs -f web
 1. Usuário insere e-mail e senha
 2. Requisição POST para `/auth/login`
 3. Token JWT retornado
-4. Token armazenado em localStorage + Cookie
+4. Token armazenado em Cookie
 5. User info armazenado em localStorage
 6. Redirecionamento para dashboard
 
 ### Token Management
-- Token armazenado em: `localStorage.authToken` + Cookie `authToken`
+- Token armazenado em: Cookie `authToken`
 - Verificação automática ao carregar páginas protegidas
 - Interceptadores Axios adicionam token em todas as requisições
 - Logout automático se token expirar (401)

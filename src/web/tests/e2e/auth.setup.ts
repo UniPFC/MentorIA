@@ -17,6 +17,6 @@ setup('Autenticar usuário do sistema', async ({ page }) => {
   // Aguarda o roteamento acontecer com sucesso
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
 
-  // Salva o localStorage e os Cookies (authToken, de acordo com o seu api.ts)
+  // Salva o estado do navegador, incluindo cookies de autenticação.
   await page.context().storageState({ path: authFile });
 });
