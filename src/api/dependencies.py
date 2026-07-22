@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
@@ -13,7 +13,7 @@ from config.logger import logger
 
 
 # Configuração do esquema de segurança
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 # Repository Dependencies
@@ -43,11 +43,12 @@ def get_ingestion_job_repo(db: Session = Depends(get_db)) -> IngestionJobReposit
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Obtém o usuário atual a partir do token JWT
+    Obtém o usuário atual a partir do token JWT no header ou cookie
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,8 +56,16 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    try:
+    token = None
+    if credentials:
         token = credentials.credentials
+    if not token:
+        token = request.cookies.get("authToken")
+        
+    if not token:
+        raise credentials_exception
+        
+    try:
         user_repo = UserRepository(db)
         user = auth_service.get_current_user_from_token(token, user_repo)
         if user is None:
@@ -76,6 +85,7 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
 
 
 def get_optional_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User | None:
@@ -83,11 +93,16 @@ def get_optional_current_user(
     Obtém o usuário atual se houver token, mas não falha se não houver
     Útil para endpoints que podem ser acessados com ou sem autenticação
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    if not token:
+        token = request.cookies.get("authToken")
+        
+    if not token:
         return None
     
     try:
-        token = credentials.credentials
         user_repo = UserRepository(db)
         user = auth_service.get_current_user_from_token(token, user_repo)
         return user

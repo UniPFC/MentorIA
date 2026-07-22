@@ -69,7 +69,10 @@ manager = ConnectionManager()
 @router.websocket("/ws/chats/{chat_id}")
 async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str = None):
     """WebSocket endpoint for real-time chat updates."""
-    # Authenticate via token query param (WebSocket doesn't support Authorization header in browser)
+    # Authenticate via token query param or cookie
+    if not token:
+        token = websocket.cookies.get("authToken")
+        
     if not token:
         await websocket.close(code=4001, reason="Missing token")
         return

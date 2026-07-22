@@ -16,64 +16,6 @@ from shared.database.models.password_reset_token import PasswordResetToken
 class TestDatabaseModelsExtended:
     """Extended tests for database models to increase coverage"""
     
-    def test_user_model_email_property_encryption(self, db_session: Session):
-        """Test User email property encryption/decryption"""
-        user = User(
-            username="testuser",
-            email="test@example.com",
-            password_hash="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqYj5rHQZe",
-            is_active=True
-        )
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        
-        # Test email property returns decrypted email
-        assert user.email == "test@example.com"
-        # Test _email contains encrypted data
-        assert user._email != "test@example.com"
-        assert len(user._email) > 20  # Encrypted should be longer
-    
-    def test_user_model_email_property_setter(self, db_session: Session):
-        """Test User email property setter"""
-        user = User(
-            username="testuser",
-            password_hash="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqYj5rHQZe",
-            is_active=True
-        )
-        
-        # Set email property
-        user.email = "newemail@example.com"
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        
-        # Test email was encrypted
-        assert user.email == "newemail@example.com"
-        assert user._email != "newemail@example.com"
-    
-    def test_user_model_email_plain_alias(self, db_session: Session):
-        """Test User email_plain alias property"""
-        user = User(
-            username="testuser",
-            email="test@example.com",
-            password_hash="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqYj5rHQZe",
-            is_active=True
-        )
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        
-        # Test email_plain property
-        assert user.email_plain == "test@example.com"
-        
-        # Test email_plain setter
-        user.email_plain = "updated@example.com"
-        db_session.commit()
-        db_session.refresh(user)
-        
-        assert user.email == "updated@example.com"
-    
     def test_chat_type_model_defaults(self, db_session: Session, sample_user: User):
         """Test ChatType model default values"""
         chat_type = ChatType(

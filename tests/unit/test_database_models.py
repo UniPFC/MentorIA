@@ -35,7 +35,7 @@ class TestUserModel:
         duplicate_user = User(
             id=uuid4(),
             username="anotheruser",
-            email=sample_user._email,  # Use raw encrypted email to trigger unique constraint
+            email=sample_user.email,
             password_hash="hashed_password",
             is_active=True
         )

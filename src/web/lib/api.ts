@@ -1,23 +1,16 @@
 import axios, { AxiosInstance } from 'axios';
-import Cookies from 'js-cookie';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add token to requests
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('authToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Token is sent automatically via HttpOnly cookie (withCredentials: true)
 
 // Handle errors with automatic token refresh
 api.interceptors.response.use(
@@ -29,30 +22,17 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = Cookies.get('refreshToken');
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
+        // O navegador enviará o cookie 'refreshToken' automaticamente
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+          withCredentials: true
         });
 
-        const newAccessToken = response.data.access_token;
-        const newRefreshToken = response.data.refresh_token;
-
-        Cookies.set('authToken', newAccessToken, { sameSite: 'lax' });
-        if (newRefreshToken) {
-          Cookies.set('refreshToken', newRefreshToken, { sameSite: 'lax' });
-        }
-
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        // O backend vai retornar novos cookies HttpOnly (authToken e refreshToken)
+        // Retry original request with credentials
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, logout user
         localStorage.removeItem('user');
-        Cookies.remove('authToken');
-        Cookies.remove('refreshToken');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

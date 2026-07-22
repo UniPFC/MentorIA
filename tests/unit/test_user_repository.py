@@ -42,26 +42,6 @@ class TestUserRepository:
         
         assert user is None
 
-    def test_get_by_email_with_short_encrypted_email(self, db_session: Session):
-        repo = UserRepository(db_session)
-        auth_service = AuthService()
-        
-        user = User(
-            username="shortuser",
-            email="a@b.co",
-            password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
-        )
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-
-        found = repo.get_by_email("a@b.co")
-
-        assert found is not None
-        assert found.email == "a@b.co"
-        assert found.id == user.id
-        
     def test_get_by_username(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
         

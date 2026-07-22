@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi_csrf_protect import CsrfProtect
 from sqlalchemy.orm import Session
@@ -73,8 +73,7 @@ async def register_user(
 
 
 @router.post("/login", response_model=Token)
-
-async def login(user_credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
+async def login(user_credentials: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)):
     """
     Autentica usuário e retorna tokens JWT
     """
@@ -172,6 +171,25 @@ async def login(user_credentials: UserLogin, request: Request, db: Session = Dep
     # Limpar cache antigo periodicamente
     security_cache.cleanup_old_data()
     
+    secure_cookie = not settings.DEV_MODE
+    response.set_cookie(
+        key="authToken",
+        value=tokens["access_token"],
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        max_age=tokens["expires_in"]
+    )
+    if "refresh_token" in tokens and tokens["refresh_token"]:
+        response.set_cookie(
+            key="refreshToken",
+            value=tokens["refresh_token"],
+            httponly=True,
+            secure=secure_cookie,
+            samesite="lax",
+            max_age=30 * 24 * 60 * 60  # 30 days
+        )
+    
     return tokens
 
 
@@ -198,13 +216,28 @@ def _get_client_ip(request: Request) -> str:
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
-    token_data: TokenRefresh,
+    request: Request,
+    response: Response,
+    token_data: TokenRefresh = None,
     user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
     Atualiza o token de acesso usando refresh token
     """
-    new_tokens = auth_service.refresh_access_token(token_data.refresh_token, user_repo)
+    token_val = None
+    if token_data:
+        token_val = token_data.refresh_token
+    if not token_val:
+        token_val = request.cookies.get("refreshToken")
+        
+    if not token_val:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token não fornecido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    new_tokens = auth_service.refresh_access_token(token_val, user_repo)
     if not new_tokens:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -213,6 +246,26 @@ async def refresh_token(
         )
     
     logger.info("Access token refreshed successfully")
+    
+    secure_cookie = not settings.DEV_MODE
+    response.set_cookie(
+        key="authToken",
+        value=new_tokens["access_token"],
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        max_age=new_tokens["expires_in"]
+    )
+    if "refresh_token" in new_tokens and new_tokens["refresh_token"]:
+        response.set_cookie(
+            key="refreshToken",
+            value=new_tokens["refresh_token"],
+            httponly=True,
+            secure=secure_cookie,
+            samesite="lax",
+            max_age=30 * 24 * 60 * 60  # 30 days
+        )
+        
     return {
         "access_token": new_tokens["access_token"],
         "refresh_token": new_tokens["refresh_token"],  # Novo refresh token (rotation)
@@ -223,6 +276,7 @@ async def refresh_token(
 
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(
+    response: Response,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_active_user),
     user_repo: UserRepository = Depends(get_user_repo)
@@ -236,6 +290,10 @@ async def logout(
     
     # Invalidar todos os tokens do usuário (access e refresh)
     user_repo.invalidate_all_user_tokens(current_user.id)
+    
+    # Limpar cookies
+    response.delete_cookie(key="authToken", httponly=True, samesite="lax", secure=not settings.DEV_MODE)
+    response.delete_cookie(key="refreshToken", httponly=True, samesite="lax", secure=not settings.DEV_MODE)
     
     logger.info(f"User logged out and all tokens invalidated: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}

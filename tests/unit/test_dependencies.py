@@ -59,7 +59,9 @@ class TestDependencies:
             
             mock_auth.get_current_user_from_token.return_value = mock_user
             
-            result = get_current_user(mock_credentials, Mock())
+            mock_request = Mock()
+            mock_request.cookies = {}
+            result = get_current_user(mock_request, mock_credentials, Mock())
             
             assert result == mock_user
             mock_auth.get_current_user_from_token.assert_called_once()
@@ -76,8 +78,10 @@ class TestDependencies:
             
             mock_auth.get_current_user_from_token.return_value = None
             
+            mock_request = Mock()
+            mock_request.cookies = {}
             with pytest.raises(HTTPException) as exc_info:
-                get_current_user(mock_credentials, Mock())
+                get_current_user(mock_request, mock_credentials, Mock())
             
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -93,10 +97,33 @@ class TestDependencies:
             
             mock_auth.get_current_user_from_token.side_effect = Exception("Auth error")
             
+            mock_request = Mock()
+            mock_request.cookies = {}
             with pytest.raises(HTTPException) as exc_info:
-                get_current_user(mock_credentials, Mock())
+                get_current_user(mock_request, mock_credentials, Mock())
             
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_current_user_from_cookie(self):
+        """Testa obtenção de usuário atual com token do cookie"""
+        from src.api.dependencies import get_current_user
+        
+        mock_user = Mock()
+        mock_user.id = "test-user-id"
+        
+        mock_request = Mock()
+        mock_request.cookies = {"authToken": "valid_cookie_token"}
+        
+        with patch('src.api.dependencies.UserRepository') as mock_repo, \
+             patch('src.api.dependencies.auth_service') as mock_auth:
+            
+            mock_auth.get_current_user_from_token.return_value = mock_user
+            
+            # Credentials is None
+            result = get_current_user(mock_request, None, Mock())
+            
+            assert result == mock_user
+            mock_auth.get_current_user_from_token.assert_called_once()
 
     def test_get_current_active_user(self):
         """Testa obtenção de usuário ativo"""
@@ -113,7 +140,9 @@ class TestDependencies:
         """Testa usuário opcional sem credenciais"""
         from src.api.dependencies import get_optional_current_user
         
-        result = get_optional_current_user(None, Mock())
+        mock_request = Mock()
+        mock_request.cookies = {}
+        result = get_optional_current_user(mock_request, None, Mock())
         
         assert result is None
 
@@ -130,7 +159,9 @@ class TestDependencies:
             
             mock_auth.get_current_user_from_token.return_value = mock_user
             
-            result = get_optional_current_user(mock_credentials, Mock())
+            mock_request = Mock()
+            mock_request.cookies = {}
+            result = get_optional_current_user(mock_request, mock_credentials, Mock())
             
             assert result == mock_user
 
@@ -146,6 +177,26 @@ class TestDependencies:
             
             mock_auth.get_current_user_from_token.side_effect = Exception("Auth error")
             
-            result = get_optional_current_user(mock_credentials, Mock())
+            mock_request = Mock()
+            mock_request.cookies = {}
+            result = get_optional_current_user(mock_request, mock_credentials, Mock())
             
             assert result is None
+
+    def test_get_optional_current_user_from_cookie(self):
+        """Testa usuário opcional com token do cookie"""
+        from src.api.dependencies import get_optional_current_user
+        
+        mock_user = Mock()
+        mock_request = Mock()
+        mock_request.cookies = {"authToken": "valid_cookie_token"}
+        
+        with patch('src.api.dependencies.UserRepository'), \
+             patch('src.api.dependencies.auth_service') as mock_auth:
+            
+            mock_auth.get_current_user_from_token.return_value = mock_user
+            
+            # Credentials is None
+            result = get_optional_current_user(mock_request, None, Mock())
+            
+            assert result == mock_user

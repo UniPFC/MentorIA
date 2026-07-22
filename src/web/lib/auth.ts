@@ -1,4 +1,3 @@
-import Cookies from 'js-cookie';
 import api from './api';
 
 export interface User {
@@ -26,8 +25,7 @@ export interface RegisterResponse {
   created_at: string;
 }
 
-const persistentCookieOptions = { expires: 30, sameSite: 'lax' as const };
-const sessionCookieOptions = { sameSite: 'lax' as const };
+// Cookies are now HttpOnly and managed by the backend
 
 export const authService = {
   async login(email: string, password: string, rememberMe: boolean = false): Promise<LoginResponse> {
@@ -37,12 +35,7 @@ export const authService = {
         password,
       });
 
-      const token = response.data.access_token;
-      const refreshToken = response.data.refresh_token;
-      const cookieOptions = rememberMe ? persistentCookieOptions : sessionCookieOptions;
-
-      Cookies.set('authToken', token, cookieOptions);
-      Cookies.set('refreshToken', refreshToken, cookieOptions);
+      // O backend agora injeta os cookies HttpOnly (authToken, refreshToken) na resposta automaticamente
 
       try {
         const userResponse = await api.get('/auth/me');
@@ -94,8 +87,7 @@ export const authService = {
         password,
       });
 
-      Cookies.set('authToken', loginResponse.data.access_token, sessionCookieOptions);
-      Cookies.set('refreshToken', loginResponse.data.refresh_token, sessionCookieOptions);
+      // O backend agora injeta os cookies HttpOnly automaticamente na resposta do login
       localStorage.setItem('user', JSON.stringify(response.data));
 
       return response.data;
@@ -107,8 +99,7 @@ export const authService = {
 
   async verifyToken(): Promise<boolean> {
     try {
-      const token = Cookies.get('authToken');
-      if (!token) return false;
+      // Deixa o navegador enviar o cookie automaticamente; o backend retorna se é válido
 
       const response = await api.post('/auth/verify-token', {});
       return response.data.valid;
@@ -125,13 +116,12 @@ export const authService = {
       console.error('Logout API error:', error);
     } finally {
       localStorage.removeItem('user');
-      Cookies.remove('authToken');
-      Cookies.remove('refreshToken');
     }
   },
 
   getToken(): string | null {
-    return Cookies.get('authToken') || null;
+    // Tokens não são mais acessíveis pelo Javascript (HttpOnly)
+    return null;
   },
 
   getUser(): User | null {

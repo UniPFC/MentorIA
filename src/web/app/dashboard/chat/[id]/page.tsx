@@ -202,20 +202,14 @@ export default function ChatPage() {
     setCurrentSources([]);
 
     try {
-      const apiUrl = 'http://localhost:8000';
-      
-      const token = authService.getToken();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL ? process.env.NEXT_PUBLIC_API_BASE_URL.replace('/api/v1', '') : 'http://localhost:8000';
       
       const response = await fetch(`${apiUrl}/api/v1/chats/${chatId}/messages/stream`, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
         body: JSON.stringify({ content: content.trim() }),
       });
 
