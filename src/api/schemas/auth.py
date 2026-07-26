@@ -106,6 +106,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr = Field(..., description="Email do usuário")
     password: str = Field(..., description="Senha")
+    remember_me: bool = Field(default=False, description="Manter conectado")
     
     @field_validator('password')
     @classmethod
@@ -124,7 +125,7 @@ class Token(BaseModel):
 
 
 class TokenRefresh(BaseModel):
-    refresh_token: str = Field(..., description="Token de atualização")
+    refresh_token: Optional[str] = Field(default=None, description="Token de atualização")
 
 
 class UserResponse(BaseModel):

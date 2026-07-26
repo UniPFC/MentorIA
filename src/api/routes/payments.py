@@ -33,7 +33,7 @@ async def create_subscription(
 ):
     """
     Upgrade user level via Pagar.me subscription checkout.
-    In DEV_MODE with skip_payment=True, applies upgrade immediately.
+    With skip_payment=True and settings.SKIP_PAYMENT, applies upgrade immediately.
     Otherwise, generates a Pagar.me checkout URL.
     """
     try:
@@ -158,7 +158,7 @@ async def create_refill(
 ):
     """
     Refill user's token budget to the maximum of their current level.
-    In DEV_MODE with skip_payment=True, applies refill immediately.
+    With skip_payment=True and settings.SKIP_PAYMENT, applies refill immediately.
     Otherwise, generates a Pagar.me checkout URL.
     """
     try:

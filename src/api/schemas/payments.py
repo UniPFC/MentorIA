@@ -14,7 +14,7 @@ from shared.database.models.user import UserLevel
 class CreateSubscriptionRequest(BaseModel):
     """Request to create a subscription checkout for level upgrade."""
     target_level: UserLevel = Field(..., description="Target level to subscribe to")
-    skip_payment: bool = Field(False, description="Skip payment and apply immediately (DEV_MODE only)")
+    skip_payment: bool = Field(False, description="Skip payment and apply immediately (requires SKIP_PAYMENT=True in env)")
 
 
 class CreateSubscriptionResponse(BaseModel):
@@ -29,7 +29,7 @@ class CreateSubscriptionResponse(BaseModel):
 
 class CreateRefillRequest(BaseModel):
     """Request to create a refill checkout or apply refill directly."""
-    skip_payment: bool = Field(False, description="Skip payment and apply immediately (DEV_MODE only)")
+    skip_payment: bool = Field(False, description="Skip payment and apply immediately (requires SKIP_PAYMENT=True in env)")
 
 
 class CreateRefillResponse(BaseModel):

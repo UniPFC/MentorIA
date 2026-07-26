@@ -10,12 +10,10 @@ from shared.database.migration import run_migrations
 from src.api.routes import chat_types, chats, upload, jobs, auth, audio, websocket, payments, admin
 from src.services.seeder import seed_default_knowledge
 from src.middleware.https_security import (
-    # HTTPSRedirectMiddleware, 
+    HTTPSRedirectMiddleware, 
     SecurityHeadersMiddleware, 
     SecureCookieMiddleware
 )
-from src.middleware.csrf_protection import CSRFProtectionMiddleware, create_csrf_protect
-from fastapi_csrf_protect import CsrfProtect
 import asyncio
 
 @asynccontextmanager
@@ -24,7 +22,7 @@ async def lifespan(app: FastAPI):
     run_migrations()
     
     try:
-        if not settings.DEV_MODE:
+        if settings.AUTO_RUN_SEEDER:
             logger.info("Running background seeder...")
             await asyncio.to_thread(seed_default_knowledge)
     except Exception as e:
@@ -38,13 +36,10 @@ app = FastAPI(
     description="Multi-tenant RAG chat system with custom knowledge bases",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs", #if settings.DEV_MODE else None,
-    redoc_url="/redoc", #if settings.DEV_MODE else None,
-    openapi_url="/openapi.json", #if settings.DEV_MODE else None
+    docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if settings.ENABLE_API_DOCS else None
 )
-
-# Criar instância de CSRF protection
-csrf_protect = create_csrf_protect()
 
 # Adicionar middlewares de segurança (ordem importa!)
 # 1. Forçar HTTPS em produção
@@ -55,9 +50,6 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # 3. Garantir cookies seguros
 app.add_middleware(SecureCookieMiddleware)
-
-# 4. Proteção CSRF
-app.add_middleware(CSRFProtectionMiddleware, csrf_protect=csrf_protect)
 
 # Configure CORS (depois dos middlewares de segurança)
 app.add_middleware(

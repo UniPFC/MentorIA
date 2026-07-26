@@ -29,8 +29,8 @@ class TestMain:
     @pytest.mark.asyncio
     async def test_lifespan_seeder_exception(self):
         with patch('src.api.main.run_migrations'):
-            with patch('src.api.main.settings') as mock_settings:
-                mock_settings.DEV_MODE = False
+            with patch('src.api.main.settings') as mock_settings:                # Mock AUTO_RUN_SEEDER para rodar o seeder
+                mock_settings.AUTO_RUN_SEEDER = True
                 with patch('src.api.main.seed_default_knowledge', side_effect=Exception("Seeder failed")):
                     async with lifespan(app):
                         pass

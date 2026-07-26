@@ -72,20 +72,54 @@ class TestAuthRoutes:
         ip = _get_client_ip(request)
         assert ip == "192.168.1.2"
 
-    def test_get_csrf_token(self):
-        """Testa geração de CSRF token"""
-        import asyncio
-        from fastapi_csrf_protect import CsrfProtect
-        from unittest.mock import MagicMock
+    @pytest.mark.asyncio
+    async def test_refresh_token_from_cookie(self):
+        """Testa refresh token pegando o token do cookie (linha 227)"""
+        from src.api.routes.auth import refresh_token
+        request = Mock()
+        request.cookies = {"refreshToken": "cookie_refresh_token"}
+        response = Mock()
+        user_repo = Mock()
         
-        mock_csrf = MagicMock(spec=CsrfProtect)
-        mock_csrf.generate_csrf_tokens.return_value = "test_token_123"
+        with patch("src.api.routes.auth.auth_service") as mock_auth, patch("src.api.routes.auth.settings") as mock_settings:
+            mock_settings.SECURE_COOKIES = False
+            mock_auth.refresh_access_token.return_value = {
+                "access_token": "new_access",
+                "refresh_token": "new_refresh",
+                "token_type": "bearer",
+                "expires_in": 3600
+            }
+            result = await refresh_token(request, response, None, user_repo)
+            assert result["access_token"] == "new_access"
+            mock_auth.refresh_access_token.assert_called_once_with("cookie_refresh_token", user_repo)
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_missing(self):
+        """Testa refresh token sem enviar token nenhum (linha 230)"""
+        from src.api.routes.auth import refresh_token
+        request = Mock()
+        request.cookies = {}
+        response = Mock()
+        user_repo = Mock()
         
-        # Importar a função da rota
-        from src.api.routes.auth import get_csrf_token
+        with pytest.raises(HTTPException) as exc:
+            await refresh_token(request, response, None, user_repo)
         
-        # Chamar a função async com o mock
-        result = asyncio.run(get_csrf_token(mock_csrf))
+        assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_logout_from_cookie(self):
+        """Testa logout pegando o token do cookie (linha 290)"""
+        from src.api.routes.auth import logout
+        request = Mock()
+        request.cookies = {"authToken": "cookie_auth_token"}
+        response = Mock()
+        current_user = Mock()
+        current_user.id = "user_123"
+        user_repo = Mock()
         
-        assert result == {"csrf_token": "test_token_123"}
-        mock_csrf.generate_csrf_tokens.assert_called_once()
+        # Simular que 'credentials' é None, forçando a busca no cookie
+        result = await logout(request, response, None, current_user, user_repo)
+        
+        assert result["success"] is True
+        user_repo.invalidate_token.assert_called_once_with("cookie_auth_token")

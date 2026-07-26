@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
-from fastapi_csrf_protect import CsrfProtect
+
 from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.database.models.user import User, UserLevel
@@ -20,15 +20,6 @@ from datetime import datetime, timedelta, timezone
 
 
 router = APIRouter()
-
-@router.get("/csrf-token")
-async def get_csrf_token(csrf_protect: CsrfProtect = Depends()):
-    """
-    Retorna o CSRF token
-    """
-    # Usar o método correto para gerar token
-    token = csrf_protect.generate_csrf_tokens()
-    return {"csrf_token": token}
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
@@ -171,23 +162,28 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
     # Limpar cache antigo periodicamente
     security_cache.cleanup_old_data()
     
-    secure_cookie = not settings.DEV_MODE
+    secure_cookie = settings.SECURE_COOKIES
+    max_age_auth = tokens["expires_in"] if user_credentials.remember_me else None
+    
     response.set_cookie(
         key="authToken",
         value=tokens["access_token"],
         httponly=True,
         secure=secure_cookie,
         samesite="lax",
-        max_age=tokens["expires_in"]
+        path="/",
+        max_age=max_age_auth
     )
     if "refresh_token" in tokens and tokens["refresh_token"]:
+        max_age_refresh = 30 * 24 * 60 * 60 if user_credentials.remember_me else None
         response.set_cookie(
             key="refreshToken",
             value=tokens["refresh_token"],
             httponly=True,
             secure=secure_cookie,
             samesite="lax",
-            max_age=30 * 24 * 60 * 60  # 30 days
+            path="/",
+            max_age=max_age_refresh
         )
     
     return tokens
@@ -247,13 +243,14 @@ async def refresh_token(
     
     logger.info("Access token refreshed successfully")
     
-    secure_cookie = not settings.DEV_MODE
+    secure_cookie = settings.SECURE_COOKIES
     response.set_cookie(
         key="authToken",
         value=new_tokens["access_token"],
         httponly=True,
         secure=secure_cookie,
         samesite="lax",
+        path="/",
         max_age=new_tokens["expires_in"]
     )
     if "refresh_token" in new_tokens and new_tokens["refresh_token"]:
@@ -263,6 +260,7 @@ async def refresh_token(
             httponly=True,
             secure=secure_cookie,
             samesite="lax",
+            path="/",
             max_age=30 * 24 * 60 * 60  # 30 days
         )
         
@@ -276,6 +274,7 @@ async def refresh_token(
 
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(
+    request: Request,
     response: Response,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_active_user),
@@ -284,16 +283,22 @@ async def logout(
     """
     Realiza logout do usuário invalidando o token e refresh tokens no banco de dados
     """
-    token = credentials.credentials
-    user_repo.invalidate_token(token)
+    token = None
+    if credentials:
+        token = credentials.credentials
+    if not token:
+        token = request.cookies.get("authToken")
+        
+    if token:
+        user_repo.invalidate_token(token)
     user_repo.invalidate_refresh_tokens(current_user.id)
     
     # Invalidar todos os tokens do usuário (access e refresh)
     user_repo.invalidate_all_user_tokens(current_user.id)
     
     # Limpar cookies
-    response.delete_cookie(key="authToken", httponly=True, samesite="lax", secure=not settings.DEV_MODE)
-    response.delete_cookie(key="refreshToken", httponly=True, samesite="lax", secure=not settings.DEV_MODE)
+    response.delete_cookie(key="authToken", httponly=True, samesite="lax", secure=settings.SECURE_COOKIES)
+    response.delete_cookie(key="refreshToken", httponly=True, samesite="lax", secure=settings.SECURE_COOKIES)
     
     logger.info(f"User logged out and all tokens invalidated: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}

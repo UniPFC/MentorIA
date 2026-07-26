@@ -33,6 +33,7 @@ export const authService = {
       const response = await api.post<LoginResponse>('/auth/login', {
         email,
         password,
+        remember_me: rememberMe,
       });
 
       // O backend agora injeta os cookies HttpOnly (authToken, refreshToken) na resposta automaticamente

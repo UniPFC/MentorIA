@@ -87,6 +87,7 @@ class TestWebsocketRoutes:
         from src.api.routes.websocket import websocket_endpoint
         
         mock_ws = Mock()
+        mock_ws.cookies = {}
         mock_ws.close = AsyncMock()
         mock_ws.accept = AsyncMock()
         
@@ -100,6 +101,7 @@ class TestWebsocketRoutes:
         from src.api.routes.websocket import websocket_endpoint
         
         mock_ws = Mock()
+        mock_ws.cookies = {}
         mock_ws.close = AsyncMock()
         mock_ws.accept = AsyncMock()
         
@@ -116,6 +118,7 @@ class TestWebsocketRoutes:
         from src.api.routes.websocket import websocket_endpoint
         
         mock_ws = Mock()
+        mock_ws.cookies = {}
         mock_ws.close = AsyncMock()
         mock_ws.accept = AsyncMock()
         user_id = uuid4()
@@ -144,6 +147,7 @@ class TestWebsocketRoutes:
         from src.api.routes.websocket import websocket_endpoint
         
         mock_ws = Mock()
+        mock_ws.cookies = {}
         mock_ws.close = AsyncMock()
         mock_ws.accept = AsyncMock()
         

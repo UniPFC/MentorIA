@@ -73,26 +73,9 @@ class TestSecurityHeadersMiddleware:
 
     @pytest.mark.asyncio
     @patch('src.middleware.https_security.settings')
-    async def test_dispatch_dev_mode(self, mock_settings):
-        """Testa que em DEV_MODE, não adiciona headers"""
-        mock_settings.DEV_MODE = True
-        
-        middleware = SecurityHeadersMiddleware(Mock())
-        request = Mock()
-        response = Mock()
-        response.headers = {}
-        call_next = AsyncMock(return_value=response)
-        
-        result = await middleware.dispatch(request, call_next)
-        
-        assert result == response
-        assert len(result.headers) == 0
-
-    @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
     async def test_dispatch_adds_security_headers(self, mock_settings):
         """Testa que adiciona headers de segurança em produção"""
-        mock_settings.DEV_MODE = False
+        # Não testamos mais a flag de DEV_MODE pois removemos o bypass.
         
         middleware = SecurityHeadersMiddleware(Mock())
         request = Mock()
@@ -122,100 +105,89 @@ class TestSecureCookieMiddleware:
 
     @pytest.mark.asyncio
     @patch('src.middleware.https_security.settings')
-    async def test_dispatch_dev_mode(self, mock_settings):
-        """Testa que em DEV_MODE, não modifica cookies"""
-        mock_settings.DEV_MODE = True
-        
-        middleware = SecureCookieMiddleware(Mock())
-        request = Mock()
-        response = Mock()
-        response.headers = {"Set-Cookie": "session=abc123"}
-        call_next = AsyncMock(return_value=response)
-        
-        result = await middleware.dispatch(request, call_next)
-        
-        assert result.headers["Set-Cookie"] == "session=abc123"
-
-    @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
     async def test_dispatch_adds_secure_flag(self, mock_settings):
         """Testa que adiciona flag Secure a cookies"""
-        mock_settings.DEV_MODE = False
+        # Não testamos mais a flag de DEV_MODE
         
         middleware = SecureCookieMiddleware(Mock())
         request = Mock()
         response = Mock()
-        response.headers = {"Set-Cookie": "session=abc123"}
+        response.raw_headers = [(b"Set-Cookie", b"session=abc123")]
         call_next = AsyncMock(return_value=response)
         
         result = await middleware.dispatch(request, call_next)
         
-        assert "Secure" in result.headers["Set-Cookie"]
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        assert "Secure" in updated_cookie
 
     @pytest.mark.asyncio
     @patch('src.middleware.https_security.settings')
     async def test_dispatch_adds_httponly_flag(self, mock_settings):
         """Testa que adiciona flag HttpOnly a cookies"""
-        mock_settings.DEV_MODE = False
+        # Não testamos mais a flag de DEV_MODE
         
         middleware = SecureCookieMiddleware(Mock())
         request = Mock()
         response = Mock()
-        response.headers = {"Set-Cookie": "session=abc123"}
+        response.raw_headers = [(b"Set-Cookie", b"session=abc123")]
         call_next = AsyncMock(return_value=response)
         
         result = await middleware.dispatch(request, call_next)
         
-        assert "HttpOnly" in result.headers["Set-Cookie"]
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        assert "HttpOnly" in updated_cookie
 
     @pytest.mark.asyncio
     @patch('src.middleware.https_security.settings')
     async def test_dispatch_adds_samesite_flag(self, mock_settings):
         """Testa que adiciona flag SameSite a cookies"""
-        mock_settings.DEV_MODE = False
+        # Não testamos mais a flag de DEV_MODE
         
         middleware = SecureCookieMiddleware(Mock())
         request = Mock()
         response = Mock()
-        response.headers = {"Set-Cookie": "session=abc123"}
+        response.raw_headers = [(b"Set-Cookie", b"session=abc123")]
         call_next = AsyncMock(return_value=response)
         
         result = await middleware.dispatch(request, call_next)
         
-        assert "SameSite=Strict" in result.headers["Set-Cookie"]
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        assert "SameSite=Lax" in updated_cookie
 
     @pytest.mark.asyncio
     @patch('src.middleware.https_security.settings')
     async def test_dispatch_preserves_existing_flags(self, mock_settings):
         """Testa que preserva flags existentes nos cookies"""
-        mock_settings.DEV_MODE = False
+        # Não testamos mais a flag de DEV_MODE
         
         middleware = SecureCookieMiddleware(Mock())
         request = Mock()
         response = Mock()
-        response.headers = {"Set-Cookie": "session=abc123; Secure"}
+        response.raw_headers = [(b"Set-Cookie", b"session=abc123; Secure")]
         call_next = AsyncMock(return_value=response)
         
         result = await middleware.dispatch(request, call_next)
         
         # Should not add Secure again (it already exists)
         # The middleware checks if 'secure=' is already present
-        assert "Secure" in result.headers["Set-Cookie"]
-        assert "HttpOnly" in result.headers["Set-Cookie"]
-        assert "SameSite=Strict" in result.headers["Set-Cookie"]
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        assert "Secure" in updated_cookie
+        assert "HttpOnly" in updated_cookie
+        assert "SameSite=Lax" in updated_cookie
 
     @pytest.mark.asyncio
     @patch('src.middleware.https_security.settings')
     async def test_dispatch_case_insensitive_cookie_name(self, mock_settings):
         """Testa que detecta cookies case-insensitive"""
-        mock_settings.DEV_MODE = False
+        # Não testamos mais a flag de DEV_MODE
         
         middleware = SecureCookieMiddleware(Mock())
         request = Mock()
         response = Mock()
-        response.headers = {"set-cookie": "session=abc123"}
+        response.raw_headers = [(b"set-cookie", b"session=abc123")]
         call_next = AsyncMock(return_value=response)
         
         result = await middleware.dispatch(request, call_next)
         
-        assert "Secure" in result.headers["set-cookie"]
+        updated_cookie = dict(result.raw_headers).get(b"set-cookie").decode('latin-1')
+        assert "Secure" in updated_cookie

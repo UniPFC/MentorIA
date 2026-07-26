@@ -47,9 +47,8 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """
-    Obtém o usuário atual a partir do token JWT no header ou cookie
-    """
+    logger.info(f"Checking auth for {request.url.path}. Cookies: {request.cookies.keys()}")
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Não foi possível validar as credenciais",

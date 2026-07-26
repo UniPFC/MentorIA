@@ -35,9 +35,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         
-        # Em desenvolvimento, headers mais relaxados
-        if settings.DEV_MODE:
-            return response
+        # Headers de segurança
         
         # Headers de segurança
         security_headers = {
@@ -86,23 +84,26 @@ class SecureCookieMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         
-        # Em desenvolvimento, cookies podem ser menos restritos
-        if settings.DEV_MODE:
-            return response
-        
         # Garantir que cookies sejam seguros
         # Note: FastAPI já define secure=True quando HTTPS é detectado
-        # Este middleware garante consistência
-        for cookie_name, cookie_value in response.headers.items():
-            if cookie_name.lower().startswith('set-cookie'):
-                # Garantir flags de segurança em cookies
-                if 'secure=' not in cookie_value.lower():
-                    cookie_value += '; Secure'
-                if 'httponly=' not in cookie_value.lower():
-                    cookie_value += '; HttpOnly'
-                if 'samesite=' not in cookie_value.lower():
-                    cookie_value += '; SameSite=Strict'
+        # Este middleware garante consistência iterando pelos raw_headers para não destruir múltiplos Set-Cookie
+        new_headers = []
+        for name, value in response.raw_headers:
+            if name.lower() == b'set-cookie':
+                cookie_str = value.decode('latin-1')
+                c_lower = cookie_str.lower()
                 
-                response.headers[cookie_name] = cookie_value
+                if '; secure' not in c_lower and ';secure' not in c_lower and not c_lower.endswith('secure'):
+                    cookie_str += '; Secure'
+                if '; httponly' not in c_lower and ';httponly' not in c_lower and not c_lower.endswith('httponly'):
+                    cookie_str += '; HttpOnly'
+                if '; samesite' not in c_lower and ';samesite' not in c_lower:
+                    cookie_str += '; SameSite=Lax'
+                    
+                new_headers.append((name, cookie_str.encode('latin-1')))
+            else:
+                new_headers.append((name, value))
+                
+        response.raw_headers = new_headers
         
         return response

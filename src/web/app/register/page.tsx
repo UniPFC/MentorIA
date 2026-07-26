@@ -7,6 +7,7 @@ import { User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import Toast from '@/components/Toast';
 import ThemeToggle from '@/components/ThemeToggle';
+import MarkdownModal from '@/components/MarkdownModal';
 import { authService } from '@/lib/auth';
 
 export default function RegisterPage() {
@@ -17,8 +18,13 @@ export default function RegisterPage() {
     confirmPassword: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState({ title: '', url: '' });
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,6 +47,10 @@ export default function RegisterPage() {
 
     if (!formData.email || !formData.password || !formData.confirmPassword) {
       setToast({ message: 'Preencha todos os campos', type: 'error' });
+      return;
+    }
+    if (!termsAccepted) {
+      setToast({ message: 'Você precisa aceitar os Termos de Uso e a Política de Privacidade', type: 'error' });
       return;
     }
     if (formData.username.trim().length > 0 && formData.username.trim().length < 3) {
@@ -200,8 +210,45 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div className="animate-slide-up-stagger-5 flex items-start gap-3 mt-4 mb-2">
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  name="terms"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-900"
+                />
+              </div>
+              <label htmlFor="terms" className="text-sm text-gray-600 dark:text-gray-400 leading-tight">
+                Eu li e concordo com os{' '}
+                <button
+                  type="button"
+                  className="text-brand-600 dark:text-brand-400 font-semibold hover:underline"
+                  onClick={() => {
+                    setModalConfig({ title: 'Termos de Uso', url: '/legal/terms.md' });
+                    setModalOpen(true);
+                  }}
+                >
+                  Termos de Uso
+                </button>{' '}
+                e a{' '}
+                <button
+                  type="button"
+                  className="text-brand-600 dark:text-brand-400 font-semibold hover:underline"
+                  onClick={() => {
+                    setModalConfig({ title: 'Política de Privacidade', url: '/legal/privacy.md' });
+                    setModalOpen(true);
+                  }}
+                >
+                  Política de Privacidade
+                </button>.
+              </label>
+            </div>
+
             <div className="animate-slide-up-stagger-5 pt-1">
-              <Button type="submit" loading={loading} className="w-full !py-3 !rounded-xl !text-sm !font-bold">
+              <Button type="submit" loading={loading} disabled={!termsAccepted} className="w-full !py-3 !rounded-xl !text-sm !font-bold disabled:opacity-50">
                 {loading ? 'Cadastrando...' : 'Criar conta'}
               </Button>
             </div>
@@ -215,6 +262,13 @@ export default function RegisterPage() {
           </p>
 
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+          
+          <MarkdownModal 
+            isOpen={modalOpen} 
+            onClose={() => setModalOpen(false)} 
+            title={modalConfig.title} 
+            markdownUrl={modalConfig.url} 
+          />
         </div>
       </div>
     </div>

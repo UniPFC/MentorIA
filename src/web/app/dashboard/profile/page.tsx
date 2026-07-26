@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { Button, Input } from '@/components/ui';
 import Toast from '@/components/Toast';
 import BudgetProgressBar from '@/components/BudgetProgressBar';
+import MarkdownModal from '@/components/MarkdownModal';
 import api from '@/lib/api';
 import { authService } from '@/lib/auth';
 
@@ -26,6 +27,10 @@ export default function ProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Modal states for legal docs
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState({ title: '', url: '' });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -312,10 +317,47 @@ export default function ProfilePage() {
               </div>
             </form>
           </div>
+
+          {/* Legal Documents */}
+          <div className="card overflow-hidden animate-slide-up" style={{ animationDelay: '0.25s', animationFillMode: 'both' }}>
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+              <Shield className="w-5 h-5 text-gray-500" />
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Legal</h2>
+            </div>
+            <div className="p-6 flex flex-col sm:flex-row gap-4">
+              <Button 
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  setModalConfig({ title: 'Termos de Uso', url: '/legal/terms.md' });
+                  setModalOpen(true);
+                }}
+              >
+                Ler Termos de Uso
+              </Button>
+              <Button 
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  setModalConfig({ title: 'Política de Privacidade', url: '/legal/privacy.md' });
+                  setModalOpen(true);
+                }}
+              >
+                Ler Política de Privacidade
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
+      <MarkdownModal 
+        isOpen={modalOpen} 
+        onClose={() => setModalOpen(false)} 
+        title={modalConfig.title} 
+        markdownUrl={modalConfig.url} 
+      />
     </DashboardLayout>
   );
 }

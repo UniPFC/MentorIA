@@ -86,11 +86,7 @@ class Settings(BaseSettings):
     
     # Password Security Configuration
     PASSWORD_PEPPER: str 
-    
-    # CSRF Protection Configuration
-    CSRF_SECRET_KEY: str
-    CSRF_COOKIE_NAME: str = "csrf_token"
-    CSRF_TOKEN_AGE: int = 3600  # 1 hora
+
     
     # Encryption Configuration
     ENCRYPTION_SALT: str
@@ -136,6 +132,11 @@ class Settings(BaseSettings):
     # Development Configuration
     DEV_MODE: bool = False
     SKIP_PAYMENT: bool = False  # Skip payment processing (for testing without Pagar.me)
+
+    # Security & Behavior Flags
+    SECURE_COOKIES: bool = True
+    AUTO_RUN_SEEDER: bool = True
+    ENABLE_API_DOCS: bool = False
 
     # HTTPS Configuration
     FORCE_HTTPS: bool = True
