@@ -88,7 +88,7 @@ class TestEmailService:
 
         call_args = mock_server.send_message.call_args[0][0]
         email_string = call_args.as_string()
-        assert "Reset de Senha" in call_args["Subject"]
+        assert "Recuperação de Senha - MentorIA" in call_args["Subject"]
         assert "user@test.com" in call_args["To"]
 
     @patch("src.services.email_service.smtplib.SMTP")
@@ -126,3 +126,34 @@ class TestEmailService:
         )
 
         assert result is False
+
+    def test_get_base_template_fallback(self, email_service):
+        with patch("builtins.open", side_effect=Exception("File read error")):
+            template = email_service._get_base_template()
+            assert "<html>" in template
+
+    @patch("src.services.email_service.smtplib.SMTP")
+    def test_send_password_reset_notification_success(self, mock_smtp, email_service):
+        mock_server = mock_smtp.return_value.__enter__.return_value
+        result = email_service.send_password_reset_notification(
+            to_email="user@test.com", username="testuser"
+        )
+        assert result is True
+        mock_server.send_message.assert_called_once()
+
+    @patch("src.services.email_service.smtplib.SMTP")
+    def test_send_password_reset_notification_failure(self, mock_smtp, email_service):
+        mock_smtp.side_effect = Exception("SMTP error")
+        result = email_service.send_password_reset_notification(
+            to_email="user@test.com", username="testuser"
+        )
+        assert result is False
+
+    @patch("src.services.email_service.smtplib.SMTP")
+    def test_send_verification_email_success(self, mock_smtp, email_service):
+        mock_server = mock_smtp.return_value.__enter__.return_value
+        result = email_service.send_verification_email(
+            to_email="user@test.com", username="testuser", token="test_token"
+        )
+        assert result is True
+        mock_server.send_message.assert_called_once()

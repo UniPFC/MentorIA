@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from shared.database.models.email_verification_token import EmailVerificationToken
 from shared.database.models.password_reset_token import PasswordResetToken
 from shared.database.models.user import User, UserLevel
 from shared.database.models.user_token import UserToken
@@ -106,6 +107,45 @@ class UserRepository:
         if reset_token:
             reset_token.is_active = False
             reset_token.used_at = datetime.now(UTC)
+            self.db.commit()
+
+    def create_email_verification_token(
+        self, user_id: UUID, token: str, expires_at: datetime
+    ) -> EmailVerificationToken:
+        # Invalidar tokens anteriores
+        self.db.query(EmailVerificationToken).filter(
+            EmailVerificationToken.user_id == user_id,
+            EmailVerificationToken.is_active == True,
+        ).update({"is_active": False})
+
+        verification_token = EmailVerificationToken(
+            user_id=user_id, token=token, expires_at=expires_at, is_active=True
+        )
+        self.db.add(verification_token)
+        self.db.commit()
+        self.db.refresh(verification_token)
+        return verification_token
+
+    def get_email_verification_token(self, token: str) -> EmailVerificationToken | None:
+        return (
+            self.db.query(EmailVerificationToken)
+            .filter(
+                EmailVerificationToken.token == token,
+                EmailVerificationToken.is_active == True,
+                EmailVerificationToken.expires_at > datetime.now(UTC),
+            )
+            .first()
+        )
+
+    def invalidate_email_verification_token(self, token: str):
+        verification_token = (
+            self.db.query(EmailVerificationToken)
+            .filter(EmailVerificationToken.token == token)
+            .first()
+        )
+        if verification_token:
+            verification_token.is_active = False
+            verification_token.used_at = datetime.now(UTC)
             self.db.commit()
 
     def cleanup_expired_tokens(self):

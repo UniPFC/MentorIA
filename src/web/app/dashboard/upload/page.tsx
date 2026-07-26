@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FileSpreadsheet, X, RefreshCw, ChevronDown } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, RefreshCw, ChevronDown, Info } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button, Input, Badge, EmptyState } from '@/components/ui';
 import { PageSpinner } from '@/components/ui/Spinner';
 import Toast from '@/components/Toast';
 import api from '@/lib/api';
+import { authService } from '@/lib/auth';
 
 interface IngestionJob {
   id: string;
@@ -34,7 +35,13 @@ export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [user, setUser] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const userData = authService.getUser();
+    if (userData) setUser(userData);
+  }, []);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -153,6 +160,23 @@ export default function UploadPage() {
           </p>
         </div>
 
+        {/* Tutorial / Guidelines Card */}
+        <div className="card p-5 bg-gradient-to-r from-brand-50 to-brand-100/50 dark:from-brand-500/10 dark:to-brand-500/5 border border-brand-200 dark:border-brand-500/20 animate-slide-up" style={{ animationDelay: '0.05s', animationFillMode: 'both' }}>
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-brand-500/10 rounded-xl">
+              <Info className="w-6 h-6 text-brand-600 dark:text-brand-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-brand-900 dark:text-brand-100 mb-1">Dicas para estruturar sua planilha</h2>
+              <ul className="text-sm text-brand-700 dark:text-brand-300 list-disc list-inside space-y-1">
+                <li>A planilha deve conter <strong>cabeçalhos</strong> na primeira linha (ex: <code className="bg-white/50 dark:bg-black/20 px-1 py-0.5 rounded">question</code> e <code className="bg-white/50 dark:bg-black/20 px-1 py-0.5 rounded">answer</code>).</li>
+                <li>Remova linhas em branco ou textos extras no topo (a leitura sempre começa da primeira linha).</li>
+                <li>Garanta que as células não tenham textos residuais de PDF (como caracteres <code className="bg-white/50 dark:bg-black/20 px-1 py-0.5 rounded">cid:X</code> ou alternativas soltas no final das respostas).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Upload Form */}
         <div className="card p-6 space-y-5 animate-slide-up" style={{ animationDelay: '0.1s', animationFillMode: 'both' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -236,16 +260,18 @@ export default function UploadPage() {
 
           {/* Drop Zone */}
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(e) => { e.preventDefault(); if (user?.email_verified !== false) setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 ${
-              dragOver
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/5 scale-[1.01] shadow-lg shadow-brand-500/10'
-                : file
-                  ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-500/5'
-                  : 'border-gray-300 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500/50 hover:shadow-sm'
+            onDrop={(e) => { if (user?.email_verified !== false) handleDrop(e); else e.preventDefault(); }}
+            onClick={() => { if (user?.email_verified !== false) fileInputRef.current?.click(); }}
+            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
+              user?.email_verified === false
+                ? 'border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-900/50 cursor-not-allowed opacity-60'
+                : dragOver
+                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/5 scale-[1.01] shadow-lg shadow-brand-500/10 cursor-pointer'
+                  : file
+                    ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-500/5 cursor-pointer'
+                    : 'border-gray-300 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-500/50 hover:shadow-sm cursor-pointer'
             }`}
           >
             <input
@@ -290,7 +316,7 @@ export default function UploadPage() {
             <Button
               onClick={handleUpload}
               loading={uploading}
-              disabled={!file || !chatTypeName.trim()}
+              disabled={!file || !chatTypeName.trim() || user?.email_verified === false}
               icon={<Upload className="w-4 h-4" />}
             >
               {uploading ? 'Enviando...' : 'Enviar Arquivo'}

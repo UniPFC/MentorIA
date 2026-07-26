@@ -89,6 +89,7 @@ def sample_user(db_session: Session):
         email="test@example.com",
         password_hash=password_hash,
         is_active=True,
+        email_verified=True,
         created_at=datetime.now(UTC),
     )
     db_session.add(user)

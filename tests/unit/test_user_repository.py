@@ -447,3 +447,34 @@ class TestUserRepository:
 
         result = repo.set_user_level(uuid4(), UserLevel.LEVEL_02)
         assert result is None
+
+    def test_create_email_verification_token(self, db_session, sample_user):
+        repo = UserRepository(db_session)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+        token = repo.create_email_verification_token(
+            user_id=sample_user.id, token="verify_123", expires_at=expires_at
+        )
+        assert token.id is not None
+        assert token.user_id == sample_user.id
+        assert token.token == "verify_123"
+        assert token.is_active is True
+
+    def test_get_email_verification_token(self, db_session, sample_user):
+        repo = UserRepository(db_session)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+        created_token = repo.create_email_verification_token(
+            user_id=sample_user.id, token="verify_456", expires_at=expires_at
+        )
+        token = repo.get_email_verification_token("verify_456")
+        assert token is not None
+        assert token.id == created_token.id
+
+    def test_invalidate_email_verification_token(self, db_session, sample_user):
+        repo = UserRepository(db_session)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+        created_token = repo.create_email_verification_token(
+            user_id=sample_user.id, token="verify_789", expires_at=expires_at
+        )
+        repo.invalidate_email_verification_token("verify_789")
+        db_session.refresh(created_token)
+        assert created_token.is_active is False

@@ -148,8 +148,10 @@ class UserResponse(BaseModel):
 
     id: UUID
     username: str
-    email: str
-    created_at: datetime
+    email: EmailStr
+    is_active: bool
+    email_verified: bool
+    last_login: datetime | None = None
     level: UserLevel | None = None
     token_budget: int | None = None
     max_token_budget: int | None = None
@@ -219,3 +221,7 @@ class PasswordResetConfirm(BaseModel):
             raise ValueError(mensagem)
 
         return v
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., description="Token de verificação recebido por email")

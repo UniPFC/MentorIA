@@ -715,7 +715,7 @@ export default function ChatPage() {
                     // Send message immediately with transcribed text
                     sendMessageInternal(text);
                   }}
-                  disabled={!sttEnabled || sending || loading}
+                  disabled={user?.email_verified === false || !sttEnabled || sending || loading}
                   onRecordingStateChange={setIsAudioRecording}
                   onTranscribingStateChange={setIsAudioTranscribing}
                 />
@@ -725,10 +725,10 @@ export default function ChatPage() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Digite sua mensagem..."
+                  placeholder={user?.email_verified === false ? "Verifique seu email para enviar mensagens" : "Digite sua mensagem..."}
                   rows={1}
-                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:ring-offset-0 appearance-none resize-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 max-h-32 py-1.5 leading-relaxed"
-                  disabled={sending || loading || isAudioRecording || isAudioTranscribing}
+                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:ring-offset-0 appearance-none resize-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 max-h-32 py-1.5 leading-relaxed disabled:opacity-50"
+                  disabled={user?.email_verified === false || sending || loading || isAudioRecording || isAudioTranscribing}
                   style={{ minHeight: '36px' }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;

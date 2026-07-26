@@ -2,6 +2,7 @@ from .chat import Chat
 from .chat_type import ChatType
 from .chat_type_favorite import ChatTypeFavorite
 from .chat_type_tag import ChatTypeTag
+from .email_verification_token import EmailVerificationToken
 from .ingestion_job import IngestionJob
 from .knowledge_chunk import KnowledgeChunk
 from .message import Message
@@ -18,6 +19,7 @@ __all__ = [
     "IngestionJob",
     "KnowledgeChunk",
     "PasswordResetToken",
+    "EmailVerificationToken",
     "ChatTypeFavorite",
     "ChatTypeTag",
 ]

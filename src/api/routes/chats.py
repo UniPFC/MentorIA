@@ -341,6 +341,12 @@ async def send_message(
     Async endpoint: offloads blocking RAG pipeline to a thread so the event loop
     stays free for other requests.
     """
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você precisa verificar seu email para enviar mensagens.",
+        )
+
     try:
         # Verify ownership and get chat (offload sync DB call)
         chat = await asyncio.to_thread(
@@ -495,6 +501,11 @@ async def send_message_stream(
     Async endpoint: the setup phase (verify, save, history) runs without blocking.
     The streaming generator itself runs in a thread via StreamingResponse.
     """
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você precisa verificar seu email para enviar mensagens.",
+        )
 
     # Verify ownership (offload sync DB call)
     chat = await asyncio.to_thread(

@@ -3,9 +3,14 @@ import smtplib
 from datetime import UTC, datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 from config.logger import logger
 from config.settings import settings
+
+# Caminho para o template base
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+BASE_TEMPLATE_PATH = TEMPLATE_DIR / "email_base.html"
 
 
 class EmailService:
@@ -16,6 +21,27 @@ class EmailService:
         self.smtp_password = getattr(settings, "SMTP_PASSWORD", "")
         self.from_email = getattr(settings, "FROM_EMAIL", self.smtp_username)
         self.frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+
+        self._base_template = None
+
+    def _get_base_template(self) -> str:
+        if self._base_template is None:
+            try:
+                with open(BASE_TEMPLATE_PATH, encoding="utf-8") as f:
+                    self._base_template = f.read()
+            except Exception as e:
+                logger.error(f"Failed to read base email template: {e}")
+                # Fallback muito simples
+                self._base_template = (
+                    "<html><body><h1>{{ title }}</h1>{{ content }}</body></html>"
+                )
+        return self._base_template
+
+    def _render_template(self, title: str, content: str) -> str:
+        template = self._get_base_template()
+        html = template.replace("{{ title }}", title)
+        html = html.replace("{{ content }}", content)
+        return html
 
     def _send_email(self, to_email: str, subject: str, html_body: str) -> bool:
         """Envia email usando SMTP"""
@@ -40,140 +66,100 @@ class EmailService:
             return False
 
     def generate_reset_token(self) -> str:
-        """Gera token seguro para reset de senha"""
+        """Gera token seguro para reset de senha e verificação de email"""
         return secrets.token_urlsafe(32)
 
     def send_password_reset_email(
         self, to_email: str, username: str, reset_token: str
     ) -> bool:
-        """Envia email de reset de senha"""
-        # Para desenvolvimento, usar a API diretamente
-        reset_link = "http://localhost:8000/api/v1/auth/confirm-reset-password"
+        """Envia email de reset de senha apontando para o frontend"""
+        reset_link = f"{self.frontend_url}/reset-password?token={reset_token}"
 
-        html_body = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Reset de Senha</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #4f46e5; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 20px; background: #f9fafb; }}
-                .token-box {{ background: #e5e7eb; padding: 15px; border-radius: 6px; margin: 20px 0; font-family: monospace; word-break: break-all; }}
-                .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Reset de Senha</h1>
-                </div>
-                <div class="content">
-                    <p>Olá <strong>{username}</strong>,</p>
-                    <p>Recebemos uma solicitação para resetar sua senha. Use o token abaixo:</p>
-                    <div class="token-box">{reset_token}</div>
-                    <p><strong>Importante:</strong></p>
-                    <ul>
-                        <li>Este token expira em 1 hora</li>
-                        <li>Use-o na API: <code>POST /api/v1/auth/confirm-reset-password</code></li>
-                        <li>Se você não solicitou este reset, ignore este email</li>
-                    </ul>
-                </div>
-                <div class="footer">
-                    <p>Este é um email automático. Por favor, não responda.</p>
-                </div>
-            </div>
-        </body>
-        </html>
+        content = f"""
+        <h2>Olá, {username}!</h2>
+        <p>Recebemos uma solicitação para redefinir a senha da sua conta no MentorIA.</p>
+        <p>Para criar uma nova senha, clique no botão abaixo:</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{reset_link}" class="button">Redefinir Minha Senha</a>
+        </div>
+        <p><strong>Importante:</strong></p>
+        <ul>
+            <li>Este link expira em 1 hora.</li>
+            <li>Se você não solicitou esta alteração, você pode ignorar este email com segurança.</li>
+        </ul>
         """
 
-        return self._send_email(to_email, "Reset de Senha - MentorIA", html_body)
+        html_body = self._render_template("Recuperação de Senha", content)
+        return self._send_email(to_email, "Recuperação de Senha - MentorIA", html_body)
 
     def send_password_changed_email(self, to_email: str, username: str) -> bool:
         """Envia email confirmando mudança de senha"""
-        html_body = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Senha Alterada</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #10b981; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 20px; background: #f9fafb; }}
-                .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Senha Alterada com Sucesso</h1>
-                </div>
-                <div class="content">
-                    <p>Olá <strong>{username}</strong>,</p>
-                    <p>Sua senha foi alterada com sucesso em nossa plataforma.</p>
-                    <p>Se você não realizou esta alteração, por favor:</p>
-                    <ul>
-                        <li>Entre em contato imediatamente com nosso suporte</li>
-                        <li>Altere sua senha novamente</li>
-                        <li>Verifique se há atividades suspeitas em sua conta</li>
-                    </ul>
-                    <p>Para sua segurança, recomendamos:</p>
-                    <ul>
-                        <li>Usar senhas fortes e únicas</li>
-                        <li>Nunca compartilhar suas credenciais</li>
-                        <li>Ativar autenticação de dois fatores quando disponível</li>
-                    </ul>
-                </div>
-                <div class="footer">
-                    <p>Este é um email automático. Por favor, não responda.</p>
-                </div>
-            </div>
-        </body>
-        </html>
+        content = f"""
+        <h2>Senha Alterada com Sucesso</h2>
+        <p>Olá <strong>{username}</strong>,</p>
+        <p>Sua senha foi alterada com sucesso em nossa plataforma.</p>
+        <p>Se você não realizou esta alteração, por favor:</p>
+        <ul>
+            <li>Entre em contato imediatamente com nosso suporte</li>
+            <li>Altere sua senha novamente se ainda tiver acesso</li>
+            <li>Verifique se há atividades suspeitas em sua conta</li>
+        </ul>
         """
 
+        html_body = self._render_template("Senha Alterada", content)
         return self._send_email(to_email, "Senha Alterada - MentorIA", html_body)
 
     def send_password_reset_notification(self, to_email: str, username: str) -> bool:
-        """Nofifica o usuário sobre o reset de senha.
-        Envia ANTES do link de reset, serve como alerta de segurança.
-        """
+        """Nofifica o usuário sobre o reset de senha."""
         try:
-            subject = "⚠️ Solicitação de redefinição de senha - MentorIA"
-            html_body = f"""
-            <html><body>
-            <h2>Olá, {username}!</h2>
+            content = f"""
+            <h2>Alerta de Segurança</h2>
+            <p>Olá, <strong>{username}</strong>!</p>
             <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>MentorIA</strong>.</p>
-            <p><strong>Data/Hora:</strong> {datetime.now(UTC).strftime("%d/%m/%Y às %H:%M")}
- (UTC)</p>
+            <p><strong>Data/Hora:</strong> {datetime.now(UTC).strftime("%d/%m/%Y às %H:%M")} (UTC)</p>
+            <div class="alert">
+                <p>Se <strong>você fez essa solicitação</strong>, pode ignorar este email — um segundo email com o link de redefinição foi enviado para você.</p>
+            </div>
+            <p>Se <strong>você NÃO fez essa solicitação</strong>, sua senha ainda está segura, mas recomendamos que você:</p>
+            <ul>
+                <li>Altere sua senha assim que possível</li>
+                <li>Revise os acessos recentes à sua conta</li>
+                <li>Entre em contato com o suporte se suspeitar de algo</li>
+            </ul>
+            """
 
-          <p>Se <strong>você fez essa solicitação</strong>, pode ignorar este email —
-          um segundo email com o link de redefinição foi enviado para você.</p>
-
-           <p>Se <strong>você NÃO fez essa solicitação</strong>, sua senha ainda está segura.
-           Recomendamos que você:
-           <ul>
-              <li>Altere sua senha assim que possível</li>
-              <li>Revise os acessos recentes à sua conta</li>
-               <li>Entre em contato com o suporte se suspeitar de algo</li>
-         </ul>
-
-          <p style="color: gray; font-size: 12px;">
-               Este é um email automático de segurança. Não responda a este email.
-           </p>
-           </body></html>
-          """
-            return self._send_email(to_email, subject, html_body)
+            html_body = self._render_template(
+                "Solicitação de redefinição de senha", content
+            )
+            return self._send_email(
+                to_email, "⚠️ Solicitação de redefinição de senha - MentorIA", html_body
+            )
 
         except Exception as e:
             logger.error(
                 f"Failed to send password reset notification to {to_email}: {str(e)}"
             )
             return False
+
+    def send_verification_email(self, to_email: str, username: str, token: str) -> bool:
+        """Envia email de verificação de conta"""
+        verify_link = f"{self.frontend_url}/verify-email?token={token}"
+
+        content = f"""
+        <h2>Bem-vindo(a) ao MentorIA!</h2>
+        <p>Olá, <strong>{username}</strong>! Estamos muito felizes em ter você conosco.</p>
+        <p>Para começar a usar todos os recursos da plataforma, incluindo o chat e o envio de planilhas, precisamos verificar o seu email.</p>
+        <p>Clique no botão abaixo para confirmar seu email:</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{verify_link}" class="button">Verificar Meu Email</a>
+        </div>
+        <p>Se você não se cadastrou no MentorIA, por favor ignore este email.</p>
+        """
+
+        html_body = self._render_template("Verificação de Email", content)
+        return self._send_email(
+            to_email, "Bem-vindo ao MentorIA - Verifique seu Email", html_body
+        )
 
 
 # Instância global do serviço

@@ -27,6 +27,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
@@ -52,6 +53,9 @@ class User(Base):
     )
     password_reset_tokens = relationship(
         "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
+    )
+    email_verification_tokens = relationship(
+        "EmailVerificationToken", back_populates="user", cascade="all, delete-orphan"
     )
     favorite_chat_types = relationship(
         "ChatTypeFavorite", back_populates="user", cascade="all, delete-orphan"

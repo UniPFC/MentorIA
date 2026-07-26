@@ -91,6 +91,12 @@ async def create_chat_type_from_file(
 
     Supported formats: .xlsx, .xls, .csv
     """
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você precisa verificar seu email para enviar planilhas.",
+        )
+
     try:
         # Validate file type
         if not file.filename.endswith((".xlsx", ".xls", ".csv")):
@@ -197,6 +203,12 @@ async def add_chunks_to_chat_type(
     """
     Add more chunks to an existing ChatType.
     """
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você precisa verificar seu email para adicionar arquivos.",
+        )
+
     try:
         # Verify chat type exists
         chat_type = chat_type_repo.get_by_id(chat_type_id)

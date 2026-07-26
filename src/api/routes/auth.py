@@ -19,6 +19,7 @@ from src.api.schemas.auth import (
     UserLogin,
     UserRegister,
     UserResponse,
+    VerifyEmailRequest,
 )
 from src.repositories.user import UserRepository
 from src.services.auth import auth_service
@@ -65,6 +66,17 @@ async def register_user(
     )
 
     user_repo.create(new_user)
+
+    # Gerar e enviar token de verificação
+    verify_token = email_service.generate_reset_token()
+    expires_at = datetime.now(UTC) + timedelta(hours=24)
+    user_repo.create_email_verification_token(new_user.id, verify_token, expires_at)
+
+    email_sent = email_service.send_verification_email(
+        new_user.email, new_user.username, verify_token
+    )
+    if not email_sent:
+        logger.warning(f"Failed to send verification email to {new_user.email}")
 
     logger.info(f"User registered successfully: {new_user.username}")
     return new_user
@@ -457,3 +469,67 @@ async def confirm_reset_password(
 
     logger.info(f"Password reset confirmed for user: {user.username}")
     return {"message": "Senha alterada com sucesso", "success": True}
+
+
+@router.post("/verify-email")
+async def verify_email(
+    request: VerifyEmailRequest, user_repo: UserRepository = Depends(get_user_repo)
+):
+    """
+    Verifica o email do usuário a partir do token
+    """
+    token_data = user_repo.get_email_verification_token(request.token)
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado"
+        )
+
+    user = user_repo.get_by_id(token_data.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado"
+        )
+
+    if user.email_verified:
+        return {"message": "Email já verificado", "success": True}
+
+    user.email_verified = True
+    user_repo.update(user)
+    user_repo.invalidate_email_verification_token(request.token)
+
+    logger.info(f"Email verified for user: {user.username}")
+    return {"message": "Email verificado com sucesso", "success": True}
+
+
+@router.post("/send-verification-email")
+async def send_verification_email(
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repo),
+):
+    """
+    Reenvia o email de verificação para o usuário logado
+    """
+    if current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email já está verificado"
+        )
+
+    verify_token = email_service.generate_reset_token()
+    expires_at = datetime.now(UTC) + timedelta(hours=24)
+    user_repo.create_email_verification_token(current_user.id, verify_token, expires_at)
+
+    email_sent = email_service.send_verification_email(
+        current_user.email, current_user.username, verify_token
+    )
+
+    if email_sent:
+        logger.info(f"Verification email resent to user: {current_user.username}")
+        return {"message": "Email de verificação enviado com sucesso", "success": True}
+    else:
+        logger.error(
+            f"Failed to resend verification email to user: {current_user.username}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao enviar email. Tente novamente mais tarde.",
+        )

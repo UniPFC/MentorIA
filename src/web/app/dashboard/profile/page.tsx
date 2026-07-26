@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
-import { User, Mail, Lock, Eye, EyeOff, Save, Shield, Zap, Crown, TrendingUp } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, Save, Shield, Zap, Crown, TrendingUp, CheckCircle, AlertCircle, Send } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button, Input } from '@/components/ui';
 import Toast from '@/components/Toast';
@@ -19,6 +19,7 @@ export default function ProfilePage() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   // Password form
   const [currentPassword, setCurrentPassword] = useState('');
@@ -69,6 +70,19 @@ export default function ProfilePage() {
       setToast({ message: msg, type: 'error' });
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    try {
+      await api.post('/auth/send-verification-email');
+      setToast({ message: 'Email de verificação enviado! Cheque sua caixa de entrada.', type: 'success' });
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Erro ao enviar email';
+      setToast({ message: msg, type: 'error' });
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -212,6 +226,48 @@ export default function ProfilePage() {
                 </Button>
               </div>
             </form>
+          </div>
+
+          {/* Email Verification */}
+          <div className="card overflow-hidden animate-slide-up" style={{ animationDelay: '0.12s', animationFillMode: 'both' }}>
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+              <Mail className="w-5 h-5 text-brand-500" />
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Verificação de Email</h2>
+            </div>
+            <div className="p-6">
+              {user?.email_verified ? (
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-emerald-800 dark:text-emerald-300">Email Verificado</h3>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">Sua conta está totalmente ativa e você tem acesso a todos os recursos.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col md:flex-row md:items-center gap-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                  <div className="flex flex-1 items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-amber-800 dark:text-amber-300">Email Não Verificado</h3>
+                      <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">Verifique seu email para utilizar recursos como o Chat e o Envio de Planilhas.</p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleResendVerification} 
+                    loading={resendLoading} 
+                    variant="secondary"
+                    className="shrink-0 whitespace-nowrap bg-amber-200 hover:bg-amber-300 text-amber-900 border-amber-300 dark:bg-amber-700/50 dark:hover:bg-amber-600/50 dark:text-amber-100 dark:border-amber-600/50"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Reenviar Email
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Plan & Budget */}

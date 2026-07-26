@@ -460,3 +460,125 @@ class TestAuthRoutes:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "Usuário não encontrado" in response.json()["detail"]
+
+    def test_register_email_failure_fallback(self, client):
+        with patch(
+            "src.api.routes.auth.email_service.send_verification_email",
+            return_value=False,
+        ):
+            response = client.post(
+                "/api/v1/auth/register",
+                json={
+                    "username": "emailfail",
+                    "email": "emailfail@example.com",
+                    "password": "StrongPassword123!",
+                },
+            )
+            assert response.status_code == 201
+
+    def test_verify_email_success(self, client, sample_user, db_session):
+        from datetime import UTC, datetime, timedelta
+
+        from src.repositories.user import UserRepository
+
+        repo = UserRepository(db_session)
+        sample_user.email_verified = False
+        db_session.commit()
+        token = repo.create_email_verification_token(
+            user_id=sample_user.id,
+            token="valid_verify_token",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        response = client.post(
+            "/api/v1/auth/verify-email", json={"token": "valid_verify_token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_verify_email_already_verified(self, client, sample_user, db_session):
+        from datetime import UTC, datetime, timedelta
+
+        from src.repositories.user import UserRepository
+
+        repo = UserRepository(db_session)
+        sample_user.email_verified = True
+        db_session.commit()
+        token = repo.create_email_verification_token(
+            user_id=sample_user.id,
+            token="valid_verify_token2",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        response = client.post(
+            "/api/v1/auth/verify-email", json={"token": "valid_verify_token2"}
+        )
+        assert response.status_code == 200
+        assert "já verificado" in response.json()["message"]
+
+    def test_verify_email_invalid_token(self, client):
+        response = client.post(
+            "/api/v1/auth/verify-email", json={"token": "invalid_token"}
+        )
+        assert response.status_code == 400
+
+    def test_verify_email_user_not_found(self, client, db_session, sample_user):
+        from datetime import UTC, datetime, timedelta
+
+        from shared.database.models.user import User
+        from src.repositories.user import UserRepository
+
+        repo = UserRepository(db_session)
+        token = repo.create_email_verification_token(
+            user_id=sample_user.id,
+            token="valid_verify_token_no_user",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        # Delete user
+        db_session.query(User).filter(User.id == sample_user.id).delete()
+        db_session.commit()
+
+        response = client.post(
+            "/api/v1/auth/verify-email", json={"token": "valid_verify_token_no_user"}
+        )
+        assert response.status_code == 404
+
+    def test_send_verification_email_success(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.email_verified = False
+        db_session.commit()
+        with patch(
+            "src.api.routes.auth.email_service.send_verification_email",
+            return_value=True,
+        ):
+            response = client.post(
+                "/api/v1/auth/send-verification-email",
+                headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            )
+            assert response.status_code == 200
+            assert response.json()["success"] is True
+
+    def test_send_verification_email_failure(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.email_verified = False
+        db_session.commit()
+        with patch(
+            "src.api.routes.auth.email_service.send_verification_email",
+            return_value=False,
+        ):
+            response = client.post(
+                "/api/v1/auth/send-verification-email",
+                headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            )
+            assert response.status_code == 500
+
+    def test_send_verification_email_already_verified(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.email_verified = True
+        db_session.commit()
+        response = client.post(
+            "/api/v1/auth/send-verification-email",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+        )
+        assert response.status_code == 400
