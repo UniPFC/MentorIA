@@ -17,7 +17,7 @@ class UserService:
         self.db = db
         self.user_repo = UserRepository(db)
 
-    def deduct_tokens(self, user_id: UUID, input_tokens: int, output_tokens: int, input_multiplier: float = 1.0, output_multiplier: float = 1.0) -> User:
+    def deduct_tokens(self, user_id: UUID, input_tokens: int, output_tokens: int, input_multiplier: float = 1.0, output_multiplier: float = 1.0) -> User | None:
         """
         Deduct tokens from user budget with separate cost multipliers for input/output.
 
@@ -81,7 +81,7 @@ class UserService:
         }
         return budget_map.get(level, 0) or 0
 
-    def upgrade_user_level(self, user_id: UUID, new_level: UserLevel) -> User:
+    def upgrade_user_level(self, user_id: UUID, new_level: UserLevel) -> User | None:
         """
         Upgrade user to a new level with corresponding budget.
 

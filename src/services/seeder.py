@@ -138,7 +138,7 @@ def seed_default_knowledge():
                     else:
                         loader = ModelLoader()
                         emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
-                        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+                        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)  # type: ignore
 
                     embedding_engine = EmbeddingEngine(emb_provider)
 
@@ -152,7 +152,8 @@ def seed_default_knowledge():
                     with open(file_path, "rb") as f:
                         file_content = f.read()
 
-                    ingestion_service.ingest_from_file(
+                    if ingestion_service:
+                        ingestion_service.ingest_from_file(
                         chat_type_id=chat_type.id,
                         file_content=file_content,
                         filename=filename,

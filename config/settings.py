@@ -195,10 +195,10 @@ class Settings(BaseSettings):
         }
 
         models = [default_model]
-        seen = {(self.LLM_MODEL, self.LLM_PROVIDER)}
+        seen: set[tuple[str, str]] = {(str(self.LLM_MODEL), str(self.LLM_PROVIDER))}
 
         for model in additional_models:
-            key = (model["model"], model["provider"])
+            key = (str(model["model"]), str(model["provider"]))
             if key not in seen:
                 models.append(model)
                 seen.add(key)

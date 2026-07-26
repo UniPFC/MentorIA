@@ -74,7 +74,7 @@ class ColoredFormatter(logging.Formatter):
             s = time.strftime(datefmt, ct)
         else:
             t = time.strftime(self.default_time_format, ct)
-            s = self.default_msec_format % (t, record.msecs)
+            s = str(self.default_msec_format) % (t, record.msecs)
 
         return f"{s} {offset_str}"
 
@@ -121,7 +121,7 @@ class UTCOffsetFormatter(logging.Formatter):
             s = time.strftime(datefmt, ct)
         else:
             t = time.strftime(self.default_time_format, ct)
-            s = self.default_msec_format % (t, record.msecs)
+            s = str(self.default_msec_format) % (t, record.msecs)
 
         return f"{s} {offset_str}"
 

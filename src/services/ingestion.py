@@ -4,6 +4,7 @@ Handles: Excel/CSV upload → parsing → embedding → Qdrant storage.
 """
 
 import json
+from collections.abc import Callable
 from io import BytesIO
 from typing import Any
 from uuid import UUID
@@ -150,7 +151,7 @@ class ChunkIngestionService:
         chunks: list[dict[str, Any]],
         db_session: Any,
         batch_size: int = 32,
-        on_progress: callable = None
+        on_progress: Callable[[int], None] | None = None
     ) -> tuple[list[str], int]:
         """
         Ingest chunks into Qdrant with embeddings.

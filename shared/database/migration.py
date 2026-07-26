@@ -2,7 +2,7 @@ import os
 
 from alembic.config import Config
 
-from alembic import command
+from alembic import command  # type: ignore
 from config.logger import logger
 from config.settings import settings
 

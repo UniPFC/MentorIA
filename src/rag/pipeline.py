@@ -32,6 +32,7 @@ class RAGPipeline:
     """
 
     _instance = None
+    _initialized: bool = False
 
     def __new__(cls):
         """Singleton pattern to ensure models are loaded only once."""
@@ -121,7 +122,7 @@ class RAGPipeline:
             logger.info(f"Using local embedding: model={settings.EMBEDDING_MODEL_ID}")
             self.loader = ModelLoader()
             emb_model, emb_tokenizer = self.loader.load_embedding(settings.EMBEDDING_MODEL_ID)
-            emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+            emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)  # type: ignore
 
         return EmbeddingEngine(emb_provider)
 
@@ -130,9 +131,9 @@ class RAGPipeline:
         chat_type_id: UUID,
         query: str,
         chat_history: list[dict[str, str]] | None = None,
-        k_retrieval: int = None,
-        top_k: int = None,
-        threshold: float = None,
+        k_retrieval: int | None = None,
+        top_k: int | None = None,
+        threshold: float | None = None,
         llm_model: str | None = None,
         llm_provider: str | None = None
     ) -> dict[str, Any]:
@@ -223,9 +224,9 @@ class RAGPipeline:
         chat_type_id: UUID,
         query: str,
         chat_history: list[dict[str, str]] | None = None,
-        k_retrieval: int = None,
-        top_k: int = None,
-        threshold: float = None,
+        k_retrieval: int | None = None,
+        top_k: int | None = None,
+        threshold: float | None = None,
         llm_model: str | None = None,
         llm_provider: str | None = None
     ):

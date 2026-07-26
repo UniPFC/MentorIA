@@ -67,7 +67,7 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/chats/{chat_id}")
-async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str = None):
+async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str | None = None):
     """WebSocket endpoint for real-time chat updates."""
     # Authenticate via token query param or cookie
     if not token:

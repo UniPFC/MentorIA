@@ -63,7 +63,7 @@ class User(Base):
         return self.token_budget >= tokens_needed
 
     @property
-    def max_token_budget(self) -> int:
+    def max_token_budget(self) -> int | None:
         """Get the maximum token budget for the user's level."""
         if self.has_unlimited_budget:
             return None
@@ -77,7 +77,7 @@ class User(Base):
         return budget_map.get(self.level, 0)
 
     @property
-    def remaining_tokens(self) -> int:
+    def remaining_tokens(self) -> int | None:
         """Get the remaining tokens (same as token_budget for non-unlimited users)."""
         if self.has_unlimited_budget:
             return None

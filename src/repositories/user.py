@@ -118,7 +118,7 @@ class UserRepository:
         ).delete()
         self.db.commit()
 
-    def deduct_tokens(self, user_id: UUID, tokens: int) -> User:
+    def deduct_tokens(self, user_id: UUID, tokens: int) -> User | None:
         """Deduct tokens from user budget. Returns updated user."""
         user = self.get_by_id(user_id)
         if user and not user.has_unlimited_budget and user.token_budget is not None:
@@ -126,7 +126,7 @@ class UserRepository:
             self.update(user)
         return user
 
-    def set_token_budget(self, user_id: UUID, budget: int) -> User:
+    def set_token_budget(self, user_id: UUID, budget: int) -> User | None:
         """Set user token budget. Returns updated user."""
         user = self.get_by_id(user_id)
         if user:
@@ -134,7 +134,7 @@ class UserRepository:
             self.update(user)
         return user
 
-    def set_user_level(self, user_id: UUID, level: UserLevel, budget: int | None = None) -> User:
+    def set_user_level(self, user_id: UUID, level: UserLevel, budget: int | None = None) -> User | None:
         """Set user level and optionally budget. Returns updated user."""
         user = self.get_by_id(user_id)
         if user:

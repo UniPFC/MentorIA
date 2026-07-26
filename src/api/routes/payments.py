@@ -174,7 +174,7 @@ async def create_refill(
             )
 
         previous_budget = current_user.token_budget or 0
-        max_budget = current_user.max_token_budget
+        max_budget = current_user.max_token_budget or 0
         amount_to_refill = max_budget - previous_budget
 
         if amount_to_refill <= 0:

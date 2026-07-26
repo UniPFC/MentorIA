@@ -32,7 +32,7 @@ class KnowledgeRetriever:
         chat_type_id: UUID,
         query: str,
         limit: int = 10,
-        score_threshold: float = None
+        score_threshold: float | None = None
     ) -> list[dict[str, Any]]:
         """
         Search for relevant chunks.
@@ -70,7 +70,7 @@ class KnowledgeRetriever:
         chat_type_id: UUID,
         queries: list[str],
         limit_per_query: int = 10,
-        score_threshold: float = None
+        score_threshold: float | None = None
     ) -> list[dict[str, Any]]:
         """
         Search with multiple queries and deduplicate results.

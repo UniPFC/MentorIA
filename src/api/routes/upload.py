@@ -53,7 +53,7 @@ def get_ingestion_service() -> ChunkIngestionService:
     else:
         loader = ModelLoader()
         emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
-        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
+        emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)  # type: ignore
 
     emb_engine = EmbeddingEngine(emb_provider)
     qdrant = QdrantManager()

@@ -195,7 +195,7 @@ def create_chat(
 
 @router.get("/", response_model=list[ChatResponse])
 def list_chats(
-    chat_type_id: UUID = None,
+    chat_type_id: UUID | None = None,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
@@ -424,7 +424,9 @@ async def send_message(
         logger.info(f"Processed RAG message in chat {chat_id} with {len(retrieved_chunks)} chunks")
 
         # Return full chat with all messages - reload to get updated messages (offload sync DB call)
-        chat = await asyncio.to_thread(chat_repo.get_by_id, chat_id)
+        chat = await asyncio.to_thread(chat_repo.get_by_id, chat_id)  # type: ignore
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
 
         return SendMessageResponse(
             chat=ChatWithMessagesResponse.model_validate(chat),

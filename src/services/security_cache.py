@@ -14,7 +14,7 @@ class SecurityCache:
     Sistema de cache em arquivos para tracking de segurança
     """
 
-    def __init__(self, cache_dir: str = None):
+    def __init__(self, cache_dir: str | None = None):
         self.cache_dir = Path(cache_dir or os.path.join(settings.BASE_DIR, "cache", "security"))
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -66,8 +66,8 @@ class SecurityCache:
             logger.error(f"Error saving cache to {file_path}: {str(e)}")
 
     def record_login_attempt(self, email: str, ip_address: str, user_agent: str,
-                           success: bool, failure_reason: str = None,
-                           risk_score: str = "LOW", anomalies: list[str] = None):
+                           success: bool, failure_reason: str | None = None,
+                           risk_score: str = "LOW", anomalies: list[str] | None = None):
         """Registra tentativa de login no cache"""
         timestamp = datetime.now(UTC).isoformat()
 
@@ -260,7 +260,7 @@ class SecurityCache:
         successful_attempts = len([a for a in recent_attempts if a["success"]])
         failed_attempts = total_attempts - successful_attempts
 
-        risk_counts = {}
+        risk_counts: dict[str, int] = {}
         for attempt in recent_attempts:
             risk = attempt.get("risk_score", "LOW")
             risk_counts[risk] = risk_counts.get(risk, 0) + 1

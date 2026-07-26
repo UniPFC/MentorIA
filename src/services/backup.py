@@ -115,7 +115,7 @@ def encrypt_file(file_path: str, passphrase: str) -> str:
         logger.error(f"Failed to encrypt {file_path}: {e}")
         raise
 
-def decrypt_file(file_path: str, passphrase: str, output_path: str = None) -> str:
+def decrypt_file(file_path: str, passphrase: str, output_path: str | None = None) -> str:
     """Decrypt a GPG-encrypted file and return the decrypted file path"""
     gpg = gnupg.GPG()
 
@@ -286,8 +286,8 @@ def wait_for_qdrant_ready():
         raise Exception("Qdrant not ready after 30 attempts")
 
 def restore_backups(
-    date_str: str = None,
-    passphrase: str = None,
+    date_str: str | None = None,
+    passphrase: str | None = None,
     second_pass: bool = False
 ):
     """Restore all backups from a specific date directly into memory/services"""
@@ -408,7 +408,7 @@ def main():
         logger.error(f"Backup failed: {e}")
         raise
 
-def cleanup_old_backups(days: int = 7, base_dir: str = None):
+def cleanup_old_backups(days: int = 7, base_dir: str | None = None):
     """Remove backup date folders older than specified days"""
     import time
 

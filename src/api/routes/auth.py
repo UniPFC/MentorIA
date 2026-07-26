@@ -75,7 +75,7 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
     Autentica usuário e retorna tokens JWT
     """
     # Obter informações da requisição
-    client_ip = _get_client_ip(request)
+    client_ip = _get_client_ip(request) or "unknown"
     user_agent = request.headers.get("User-Agent", "")
 
     # Verificar se IP está bloqueado pelo cache de segurança
@@ -83,7 +83,7 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
     if ip_blocked:
         security_cache.record_login_attempt(
             user_credentials.email, client_ip, user_agent,
-            False, ip_block_reason, "HIGH", [ip_block_reason]
+            False, ip_block_reason, "HIGH", [ip_block_reason or "Unknown reason"]
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -220,7 +220,7 @@ def _get_client_ip(request: Request) -> str:
 async def refresh_token(
     request: Request,
     response: Response,
-    token_data: TokenRefresh = None,
+    token_data: TokenRefresh | None = None,
     user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
@@ -410,22 +410,3 @@ async def confirm_reset_password(
     return {"message": "Senha alterada com sucesso", "success": True}
 
 
-def _get_client_ip(request: Request) -> str:
-    """
-    Obtém o IP real do cliente considerando proxies
-    """
-    # Verificar headers comuns de proxy
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # Pega o primeiro IP da lista
-        return forwarded_for.split(",")[0].strip()
-
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip
-
-    # Fallback para o IP da conexão
-    if hasattr(request, 'client') and request.client:
-        return request.client.host
-
-    return "unknown"

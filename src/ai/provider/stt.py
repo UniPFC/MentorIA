@@ -19,7 +19,7 @@ class FasterWhisperSTTProvider(STTProvider):
         self.model = model
         logger.info("FasterWhisperSTTProvider ready")
 
-    def transcribe(self, audio_path: str, **kwargs) -> dict:
+    def transcribe(self, audio_path: str, **kwargs) -> dict[Any, Any]:  # type: ignore
         """
         Transcribe audio file to text.
 

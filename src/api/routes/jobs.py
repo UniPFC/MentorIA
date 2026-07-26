@@ -57,8 +57,8 @@ def get_job_status(
 
 @router.get("/", response_model=list[IngestionJobResponse])
 def list_jobs(
-    chat_type_id: UUID = None,
-    status_filter: str = None,
+    chat_type_id: UUID | None = None,
+    status_filter: str | None = None,
     skip: int = 0,
     limit: int = 50,
     current_user: User = Depends(get_current_active_user),

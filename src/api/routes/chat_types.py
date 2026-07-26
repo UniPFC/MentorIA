@@ -28,7 +28,7 @@ from src.repositories.chat_type_favorite import ChatTypeFavoriteRepository
 router = APIRouter(prefix="/chat-types", tags=["chat-types"])
 
 
-def enrich_chat_type_with_owner(chat_type: ChatType, favorite_repo: ChatTypeFavoriteRepository = None, user_id: UUID = None) -> dict:
+def enrich_chat_type_with_owner(chat_type: ChatType, favorite_repo: ChatTypeFavoriteRepository | None = None, user_id: UUID | None = None) -> dict:
     """
     Helper function to add owner_name, is_favorited, and tags to ChatType response.
     Returns dict compatible with ChatTypeResponse schema.
@@ -115,8 +115,10 @@ def create_chat_type(
         logger.info(f"Created ChatType: {chat_type.name} (id={chat_type.id})")
 
         # Load owner relationship and tags
-        chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
-        return ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id))
+        fetched_chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
+        if not fetched_chat_type:
+            raise HTTPException(status_code=404, detail="ChatType not found")
+        return ChatTypeResponse(**enrich_chat_type_with_owner(fetched_chat_type, favorite_repo, current_user.id))
 
     except HTTPException:
         raise
@@ -287,8 +289,10 @@ def update_chat_type(
         logger.info(f"Updated ChatType: {chat_type.name} (id={chat_type.id})")
 
         # Reload to get updated tags
-        chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
-        return ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id))
+        fetched_chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
+        if not fetched_chat_type:
+            raise HTTPException(status_code=404, detail="ChatType not found")
+        return ChatTypeResponse(**enrich_chat_type_with_owner(fetched_chat_type, favorite_repo, current_user.id))
 
     except HTTPException:
         raise
