@@ -1,11 +1,13 @@
-import pytest
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta
+
+import pytest
 from sqlalchemy.orm import Session
-from src.repositories.chat import ChatRepository
+
 from shared.database.models.chat import Chat
 from shared.database.models.chat_type import ChatType
 from shared.database.models.user import User
+from src.repositories.chat import ChatRepository
 
 
 class TestChatRepository:
@@ -17,7 +19,7 @@ class TestChatRepository:
 
     def test_get_by_id_found(self, chat_repo: ChatRepository, sample_chat: Chat):
         result = chat_repo.get_by_id(sample_chat.id)
-        
+
         assert result is not None
         assert result.id == sample_chat.id
         assert result.title == sample_chat.title
@@ -25,7 +27,7 @@ class TestChatRepository:
     def test_get_by_id_not_found(self, chat_repo: ChatRepository):
         non_existent_id = uuid4()
         result = chat_repo.get_by_id(non_existent_id)
-        
+
         assert result is None
 
     def test_get_by_user(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
@@ -34,20 +36,20 @@ class TestChatRepository:
             title="Chat 1",
             user_id=sample_user.id,
             chat_type_id=sample_chat_type.id,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         chat2 = Chat(
             id=uuid4(),
             title="Chat 2",
             user_id=sample_user.id,
             chat_type_id=sample_chat_type.id,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         db_session.add_all([chat1, chat2])
         db_session.commit()
-        
+
         result = chat_repo.get_by_user(sample_user.id)
-        
+
         assert len(result) == 2
         assert result[0].user_id == sample_user.id
         assert result[1].user_id == sample_user.id
@@ -59,7 +61,7 @@ class TestChatRepository:
             description="Description 1",
             owner_id=sample_user.id,
             collection_name="type_1",
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         chat_type2 = ChatType(
             id=uuid4(),
@@ -67,30 +69,30 @@ class TestChatRepository:
             description="Description 2",
             owner_id=sample_user.id,
             collection_name="type_2",
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         db_session.add_all([chat_type1, chat_type2])
         db_session.commit()
-        
+
         chat1 = Chat(
             id=uuid4(),
             title="Chat 1",
             user_id=sample_user.id,
             chat_type_id=chat_type1.id,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         chat2 = Chat(
             id=uuid4(),
             title="Chat 2",
             user_id=sample_user.id,
             chat_type_id=chat_type2.id,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         db_session.add_all([chat1, chat2])
         db_session.commit()
-        
+
         result = chat_repo.get_by_user(sample_user.id, chat_type_id=chat_type1.id)
-        
+
         assert len(result) == 1
         assert result[0].chat_type_id == chat_type1.id
 
@@ -101,13 +103,13 @@ class TestChatRepository:
                 title=f"Chat {i}",
                 user_id=sample_user.id,
                 chat_type_id=sample_chat_type.id,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(UTC)
             )
             db_session.add(chat)
         db_session.commit()
-        
+
         result = chat_repo.get_by_user(sample_user.id, skip=2, limit=2)
-        
+
         assert len(result) == 2
 
     def test_count_by_user(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
@@ -117,19 +119,19 @@ class TestChatRepository:
                 title=f"Chat {i}",
                 user_id=sample_user.id,
                 chat_type_id=sample_chat_type.id,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(UTC)
             )
             db_session.add(chat)
         db_session.commit()
-        
+
         count = chat_repo.count_by_user(sample_user.id)
-        
+
         assert count == 3
 
     def test_count_by_user_empty(self, chat_repo: ChatRepository):
         non_existent_user_id = uuid4()
         count = chat_repo.count_by_user(non_existent_user_id)
-        
+
         assert count == 0
 
     def test_create(self, chat_repo: ChatRepository, sample_user: User, sample_chat_type: ChatType):
@@ -138,31 +140,31 @@ class TestChatRepository:
             title="New Chat",
             user_id=sample_user.id,
             chat_type_id=sample_chat_type.id,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
-        
+
         result = chat_repo.create(chat)
-        
+
         assert result.id == chat.id
         assert result.title == "New Chat"
 
     def test_update(self, chat_repo: ChatRepository, sample_chat: Chat):
         sample_chat.title = "Updated Title"
         sample_chat.llm_model = "gpt-4"
-        
+
         result = chat_repo.update(sample_chat)
-        
+
         assert result.title == "Updated Title"
         assert result.llm_model == "gpt-4"
 
     def test_delete(self, chat_repo: ChatRepository, db_session: Session, sample_chat: Chat):
         chat_id = sample_chat.id
-        
+
         chat_repo.delete(sample_chat)
-        
+
         deleted_chat = db_session.query(Chat).filter(Chat.id == chat_id).first()
         assert deleted_chat is None
-    
+
     def test_get_by_user_ordered_by_updated_at(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
         """Test that chats are ordered by updated_at descending"""
         # Create chats with different update times
@@ -171,36 +173,36 @@ class TestChatRepository:
             title="Chat 1",
             user_id=sample_user.id,
             chat_type_id=sample_chat_type.id,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc) - timedelta(hours=2)
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC) - timedelta(hours=2)
         )
         chat2 = Chat(
             id=uuid4(),
             title="Chat 2",
             user_id=sample_user.id,
             chat_type_id=sample_chat_type.id,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc) - timedelta(hours=1)
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC) - timedelta(hours=1)
         )
         chat3 = Chat(
             id=uuid4(),
             title="Chat 3",
             user_id=sample_user.id,
             chat_type_id=sample_chat_type.id,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc)  # Most recent
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC)  # Most recent
         )
         db_session.add_all([chat1, chat2, chat3])
         db_session.commit()
-        
+
         result = chat_repo.get_by_user(sample_user.id)
-        
+
         # Should be ordered by updated_at descending
         assert len(result) == 3
         assert result[0].title == "Chat 3"  # Most recent
         assert result[1].title == "Chat 2"
         assert result[2].title == "Chat 1"  # Oldest
-    
+
     def test_get_by_user_with_zero_skip_and_limit(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
         """Test edge case with skip=0 and limit"""
         for i in range(3):
@@ -209,17 +211,17 @@ class TestChatRepository:
                 title=f"Chat {i}",
                 user_id=sample_user.id,
                 chat_type_id=sample_chat_type.id,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(UTC)
             )
             db_session.add(chat)
         db_session.commit()
-        
+
         result = chat_repo.get_by_user(sample_user.id, skip=0, limit=2)
-        
+
         assert len(result) == 2
         assert result[0].title in ["Chat 0", "Chat 1", "Chat 2"]
         assert result[1].title in ["Chat 0", "Chat 1", "Chat 2"]
-    
+
     def test_get_by_user_with_large_limit(self, chat_repo: ChatRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
         """Test with limit larger than available chats"""
         for i in range(2):
@@ -228,11 +230,11 @@ class TestChatRepository:
                 title=f"Chat {i}",
                 user_id=sample_user.id,
                 chat_type_id=sample_chat_type.id,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(UTC)
             )
             db_session.add(chat)
         db_session.commit()
-        
+
         result = chat_repo.get_by_user(sample_user.id, limit=10)
-        
+
         assert len(result) == 2  # Should return all available chats

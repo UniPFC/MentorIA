@@ -1,9 +1,12 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import uuid
-from datetime import datetime, timezone
+
 from shared.database.session import Base
+
 
 class UserToken(Base):
     __tablename__ = "user_tokens"
@@ -14,6 +17,6 @@ class UserToken(Base):
     token_type = Column(String(20), nullable=False) # 'access' or 'refresh'
     is_active = Column(Boolean, default=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     user = relationship("User", back_populates="tokens")

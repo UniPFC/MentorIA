@@ -1,20 +1,20 @@
 """
 Seeder service to initialize default data and knowledge bases.
 """
-import os
 import logging
-from sqlalchemy.orm import Session
-from shared.database.session import SessionLocal
-from shared.database.models.user import User, UserLevel
+import os
+
+from config.settings import settings
 from shared.database.models.chat_type import ChatType
 from shared.database.models.knowledge_chunk import KnowledgeChunk
-from src.services.ingestion import ChunkIngestionService
+from shared.database.models.user import User, UserLevel
+from shared.database.session import SessionLocal
 from shared.qdrant.client import QdrantManager
+from src.ai.embedding import EmbeddingEngine
 from src.ai.loader import ModelLoader
 from src.ai.provider.embedding import HFEmbeddingProvider, RemoteEmbeddingProvider
-from src.ai.embedding import EmbeddingEngine
-from config.settings import settings
 from src.services.auth import auth_service
+from src.services.ingestion import ChunkIngestionService
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +32,18 @@ def seed_default_knowledge():
     db = SessionLocal()
     try:
         logger.info(f"Scanning {DATA_DIR} for knowledge base initialization...")
-        
+
         # 1. Create/Get System User 'MentorIA' (Owner of default chats)
         system_email = settings.SYSTEM_USER_EMAIL
         system_username = "MentorIA"
-        
+
         # Try to find by email or username using repository
         from src.repositories.user import UserRepository
         user_repo = UserRepository(db)
         system_user = user_repo.get_by_email(system_email)
         if not system_user:
             system_user = db.query(User).filter(User.username == system_username).first()
-        
+
         if not system_user:
             logger.info("Creating MentorIA system user...")
             system_user = User(
@@ -66,23 +66,23 @@ def seed_default_knowledge():
                 system_user.token_budget = None  # Admin has unlimited budget
                 db.commit()
                 db.refresh(system_user)
-            
+
         # Services initialization (lazy loading)
         models_loaded = False
         ingestion_service = None
         qdrant_manager = None
-        
+
         # 2. Iterate through all files in data directory
         for filename in os.listdir(DATA_DIR):
             if not filename.endswith(('.xlsx', '.xls', '.csv')):
                 continue
-                
+
             file_path = os.path.join(DATA_DIR, filename)
-            
+
             # Derive name and description from filename
             # Format: "Title --- Description.xlsx"
             base_name = os.path.splitext(filename)[0]
-            
+
             if "---" in base_name:
                 parts = base_name.split("---")
                 chat_title = parts[0].strip().replace("_", " ")
@@ -91,18 +91,18 @@ def seed_default_knowledge():
                 # Fallback: Convert "my_file_name" to "My File Name"
                 chat_title = base_name.replace("_", " ").replace("-", " ").title()
                 chat_desc = f"Base de conhecimento gerada automaticamente a partir do arquivo {filename}"
-            
+
             # Unique collection name (must be safe for Qdrant/URLs)
             safe_name = base_name.lower().replace(" ", "_").replace("-", "_")
             safe_name = "".join(c for c in safe_name if c.isalnum() or c == "_")
             collection_name = f"chat_type_auto_{safe_name}"
-            
+
             # Check if ChatType already exists by name
             chat_type = db.query(ChatType).filter(ChatType.name == chat_title).first()
-            
+
             if not chat_type:
                 logger.info(f"Creating ChatType: {chat_title}")
-                
+
                 chat_type = ChatType(
                     name=chat_title,
                     description=chat_desc,
@@ -113,23 +113,23 @@ def seed_default_knowledge():
                 db.add(chat_type)
                 db.commit()
                 db.refresh(chat_type)
-                
+
             # Ensure Qdrant collection exists and has correct dimension
                 if not qdrant_manager:
                     qdrant_manager = QdrantManager()
                 qdrant_manager.create_collection(chat_type.id)
-            
+
             # 3. Check data and Ingest if needed
             chunk_count = db.query(KnowledgeChunk).filter(KnowledgeChunk.chat_type_id == chat_type.id).count()
-            
+
             if chunk_count == 0:
                 logger.info(f"Ingesting data for '{chat_title}' from {filename}...")
-                
+
                 # Load models only if we actually need to ingest something
                 if not models_loaded:
                     logger.info("Loading embedding models for seeding...")
                     provider_type = settings.EMBEDDING_PROVIDER.lower()
-                    
+
                     if provider_type == "remote":
                         emb_provider = RemoteEmbeddingProvider(
                             model_name=settings.EMBEDDING_REMOTE_MODEL,
@@ -139,19 +139,19 @@ def seed_default_knowledge():
                         loader = ModelLoader()
                         emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
                         emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)
-                    
+
                     embedding_engine = EmbeddingEngine(emb_provider)
-                    
+
                     if not qdrant_manager:
                         qdrant_manager = QdrantManager()
-                    
+
                     ingestion_service = ChunkIngestionService(embedding_engine, qdrant_manager)
                     models_loaded = True
-                
+
                 try:
                     with open(file_path, "rb") as f:
                         file_content = f.read()
-                        
+
                     ingestion_service.ingest_from_file(
                         chat_type_id=chat_type.id,
                         file_content=file_content,
@@ -163,7 +163,7 @@ def seed_default_knowledge():
                     logger.error(f"Failed to ingest {filename}: {e}")
             else:
                 logger.info(f"ChatType '{chat_title}' already has data ({chunk_count} chunks). Skipping ingestion.")
-                
+
     except Exception as e:
         logger.error(f"Seeding process failed: {e}")
         db.rollback()

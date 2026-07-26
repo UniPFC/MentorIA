@@ -1,22 +1,22 @@
-from fastapi import APIRouter, HTTPException, Depends, Path
-from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import List, Optional
-from config.settings import settings
-from config.logger import logger
-from src.services.backup import (
-    backup_postgres,
-    backup_data,
-    backup_qdrant,
-    encrypt_file,
-    restore_backups,
-    cleanup_old_backups,
-    get_backup_dir
-)
-from src.api.dependencies import get_current_active_user, security
-from shared.database.models.user import User
-import os
 import datetime
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Path
+from pydantic import BaseModel
+
+from config.logger import logger
+from config.settings import settings
+from shared.database.models.user import User
+from src.api.dependencies import get_current_active_user
+from src.services.backup import (
+    backup_data,
+    backup_postgres,
+    backup_qdrant,
+    cleanup_old_backups,
+    encrypt_file,
+    get_backup_dir,
+    restore_backups,
+)
 
 router = APIRouter()
 
@@ -24,17 +24,17 @@ router = APIRouter()
 class BackupResponse(BaseModel):
     success: bool
     message: str
-    files: List[str] = []
+    files: list[str] = []
 
 
 class BackupListResponse(BaseModel):
-    date_folders: List[str]
+    date_folders: list[str]
     current_backups: dict
 
 
 class RestoreRequest(BaseModel):
     date_str: str
-    passphrase: Optional[str] = None
+    passphrase: str | None = None
 
 
 def verify_admin_slug(admin_slug: str = Path(..., description="Admin slug for authentication")):
@@ -112,7 +112,7 @@ async def list_backups(
     """List all available backup date folders and their contents"""
     try:
         backup_base_dir = get_backup_dir(date_folder=False)
-        
+
         if not os.path.exists(backup_base_dir):
             return BackupListResponse(
                 date_folders=[],
@@ -124,14 +124,14 @@ async def list_backups(
 
         for foldername in sorted(os.listdir(backup_base_dir), reverse=True):
             folder_path = os.path.join(backup_base_dir, foldername)
-            
+
             if not os.path.isdir(folder_path):
                 continue
-            
+
             # Check if folder name is in format DDMMYYYY (8 digits)
             if len(foldername) == 8 and foldername.isdigit():
                 date_folders.append(foldername)
-                
+
                 # List files in this date folder
                 files = []
                 for filename in os.listdir(folder_path):
@@ -143,7 +143,7 @@ async def list_backups(
                             "size": stat.st_size,
                             "created": datetime.datetime.fromtimestamp(stat.st_ctime).isoformat()
                         })
-                
+
                 backups_info[foldername] = files
 
         return BackupListResponse(

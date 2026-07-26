@@ -1,27 +1,26 @@
-import pytest
-import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
-from unittest.mock import Mock, MagicMock, patch
-from sqlalchemy import create_engine, event, DateTime
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
+
+import pytest
 from dotenv import load_dotenv
-import os
+from sqlalchemy import DateTime, create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Load test environment variables before importing any modules that depend on settings
 test_env_path = Path(__file__).parent / ".env.test"
 if test_env_path.exists():
     load_dotenv(test_env_path, override=True)
 
-from shared.database.session import Base
-from shared.database.models.user import User
-from shared.database.models.chat_type import ChatType
 from shared.database.models.chat import Chat
+from shared.database.models.chat_type import ChatType
 from shared.database.models.message import Message, MessageRole
-from shared.database.models.user_token import UserToken
 from shared.database.models.password_reset_token import PasswordResetToken
+from shared.database.models.user import User
+from shared.database.models.user_token import UserToken
+from shared.database.session import Base
 
 
 def _ensure_aware_datetimes(target):
@@ -35,7 +34,7 @@ def _ensure_aware_datetimes(target):
         if isinstance(column.type, DateTime) and column.type.timezone:
             value = getattr(target, column.key, None)
             if value is not None and value.tzinfo is None:
-                setattr(target, column.key, value.replace(tzinfo=timezone.utc))
+                setattr(target, column.key, value.replace(tzinfo=UTC))
 
 
 @event.listens_for(Base, "load", propagate=True)
@@ -69,7 +68,7 @@ def db_session(db_engine):
         autocommit=False, autoflush=False, bind=db_engine
     )
     session = TestingSessionLocal()
-    
+
     try:
         yield session
     finally:
@@ -82,14 +81,14 @@ def sample_user(db_session: Session):
     from src.services.auth import AuthService
     auth_service = AuthService()
     password_hash = auth_service.get_password_hash("password123")
-    
+
     user = User(
         id=uuid4(),
         username="testuser",
         email="test@example.com",
         password_hash=password_hash,
         is_active=True,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     db_session.add(user)
     db_session.commit()
@@ -107,7 +106,7 @@ def sample_chat_type(db_session: Session, sample_user: User):
         description="A test chat type",
         owner_id=sample_user.id,
         collection_name=f"chat_type_{chat_type_id}",
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     db_session.add(chat_type)
     db_session.commit()
@@ -124,14 +123,14 @@ def sample_chat(db_session: Session, sample_user: User, sample_chat_type: ChatTy
         title="Test Chat",
         user_id=sample_user.id,
         chat_type_id=sample_chat_type.id,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     db_session.add(chat)
     db_session.commit()
     db_session.refresh(chat)
-    
+
     yield chat
-    
+
     # Clean up: delete all messages for this chat after test
     try:
         db_session.query(Message).filter(Message.chat_id == chat.id).delete()
@@ -148,7 +147,7 @@ def sample_message(db_session: Session, sample_chat: Chat):
         chat_id=sample_chat.id,
         role=MessageRole.USER,
         content="Test message",
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     db_session.add(message)
     db_session.commit()
@@ -164,9 +163,9 @@ def sample_user_token(db_session: Session, sample_user: User):
         user_id=sample_user.id,
         token="test_access_token",
         token_type="access",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         is_active=True,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     db_session.add(token)
     db_session.commit()
@@ -181,9 +180,9 @@ def sample_password_reset_token(db_session: Session, sample_user: User):
         id=uuid4(),
         user_id=sample_user.id,
         token="test_reset_token",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         is_active=True,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC)
     )
     db_session.add(token)
     db_session.commit()
@@ -194,24 +193,24 @@ def sample_password_reset_token(db_session: Session, sample_user: User):
 @pytest.fixture
 def sample_jwt_token(db_session: Session, sample_user: User):
     """Create a valid JWT access token registered in the database for integration tests."""
-    from src.services.auth import AuthService
     from src.repositories.user import UserRepository
-    
+    from src.services.auth import AuthService
+
     auth_service = AuthService()
     jwt_string = auth_service.create_access_token(
         {"sub": str(sample_user.id)},
         expires_delta=timedelta(hours=1)
     )
-    
+
     user_repo = UserRepository(db_session)
     user_repo.create_token(
         user_id=sample_user.id,
         token=jwt_string,
         token_type="access",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1)
+        expires_at=datetime.now(UTC) + timedelta(hours=1)
     )
     db_session.commit()
-    
+
     return jwt_string
 
 
@@ -247,24 +246,25 @@ def mock_llm_provider():
 def client(db_session):
     """Create a test client for FastAPI app."""
     from fastapi.testclient import TestClient
+
     from shared.database.session import get_db
     from src.api.main import app
-    
+
     # Override the database dependency
     def override_get_db():
         try:
             yield db_session
         finally:
             pass
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     # Patch lifespan hooks (run_migrations and seed_default_knowledge) while starting the client
     with patch('src.api.main.run_migrations'), \
          patch('src.api.main.seed_default_knowledge'):
         with TestClient(app) as test_client:
             yield test_client
-    
+
     # Clean up overrides
     app.dependency_overrides.clear()
 

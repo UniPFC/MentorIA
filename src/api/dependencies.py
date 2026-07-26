@@ -1,16 +1,16 @@
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
-from shared.database.session import get_db
+
+from config.logger import logger
 from shared.database.models.user import User
-from src.repositories.user import UserRepository
+from shared.database.session import get_db
+from src.repositories.chat import ChatRepository
 from src.repositories.chat_type import ChatTypeRepository
 from src.repositories.chat_type_favorite import ChatTypeFavoriteRepository
-from src.repositories.chat import ChatRepository
 from src.repositories.ingestion_job import IngestionJobRepository
+from src.repositories.user import UserRepository
 from src.services.auth import auth_service
-from config.logger import logger
-
 
 # Configuração do esquema de segurança
 security = HTTPBearer(auto_error=False)
@@ -48,22 +48,22 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     logger.info(f"Checking auth for {request.url.path}. Cookies: {request.cookies.keys()}")
-    
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Não foi possível validar as credenciais",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     token = None
     if credentials:
         token = credentials.credentials
     if not token:
         token = request.cookies.get("authToken")
-        
+
     if not token:
         raise credentials_exception
-        
+
     try:
         user_repo = UserRepository(db)
         user = auth_service.get_current_user_from_token(token, user_repo)
@@ -97,10 +97,10 @@ def get_optional_current_user(
         token = credentials.credentials
     if not token:
         token = request.cookies.get("authToken")
-        
+
     if not token:
         return None
-    
+
     try:
         user_repo = UserRepository(db)
         user = auth_service.get_current_user_from_token(token, user_repo)

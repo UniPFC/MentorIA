@@ -1,12 +1,12 @@
 """Unit tests for src.services.tokenizer."""
 
 import pytest
+
 from src.services.tokenizer import (
-    count_tokens,
-    count_messages_tokens,
-    mode_from_provider,
     _get_encoding,
-    ENCODINGS,
+    count_messages_tokens,
+    count_tokens,
+    mode_from_provider,
 )
 
 

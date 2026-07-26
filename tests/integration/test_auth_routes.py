@@ -1,5 +1,6 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch
 from fastapi import status
 
 
@@ -27,7 +28,7 @@ class TestAuthRoutes:
             "email": "new@example.com",
             "password": "StrongPassword123!"
         })
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
         assert data["username"] == "newuser"
@@ -40,7 +41,7 @@ class TestAuthRoutes:
             "email": "mentoria@example.com",
             "password": "StrongPassword123!"
         })
-        
+
         # Pydantic validation returns 422, or route returns 400 if past validation
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_CONTENT]
 
@@ -51,7 +52,7 @@ class TestAuthRoutes:
             "email": "different@example.com",
             "password": "StrongPassword123!"
         })
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Nome de usuário já existe" in response.json()["detail"]
 
@@ -62,7 +63,7 @@ class TestAuthRoutes:
             "email": sample_user.email,
             "password": "StrongPassword123!"
         })
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Email já cadastrado" in response.json()["detail"]
 
@@ -72,7 +73,7 @@ class TestAuthRoutes:
             "email": sample_user.email,
             "password": "password123"
         })
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert "access_token" in data
@@ -85,7 +86,7 @@ class TestAuthRoutes:
             "email": sample_user.email,
             "password": "wrongpassword"
         })
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_login_nonexistent_user(self, client):
@@ -94,7 +95,7 @@ class TestAuthRoutes:
             "email": "nonexistent@example.com",
             "password": "anypassword"
         })
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_me_authenticated(self, client, sample_user, sample_jwt_token):
@@ -103,7 +104,7 @@ class TestAuthRoutes:
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["id"] == str(sample_user.id)
@@ -112,7 +113,7 @@ class TestAuthRoutes:
     def test_me_unauthenticated(self, client):
         """Testa obter informações sem autenticação"""
         response = client.get("/api/v1/auth/me")
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_verify_token_valid(self, client, sample_jwt_token):
@@ -121,7 +122,7 @@ class TestAuthRoutes:
             "/api/v1/auth/verify-token",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["valid"] is True
@@ -132,7 +133,7 @@ class TestAuthRoutes:
             "/api/v1/auth/verify-token",
             headers={"Authorization": "Bearer invalid_token"}
         )
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_forgot_password_nonexistent_email(self, client):
@@ -140,7 +141,7 @@ class TestAuthRoutes:
         response = client.post("/api/v1/auth/forgot-password", json={
             "email": "nonexistent@example.com"
         })
-        
+
         # Should return success even for non-existent emails (security)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["success"] is True
@@ -151,7 +152,7 @@ class TestAuthRoutes:
             "/api/v1/auth/logout",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["success"] is True
@@ -161,19 +162,19 @@ class TestAuthRoutes:
         response = client.post("/api/v1/auth/refresh", json={
             "refresh_token": "invalid_refresh_token"
         })
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_login_ip_blocked(self, client, sample_user):
         """Testa login com IP bloqueado"""
         with patch('src.api.routes.auth.security_cache') as mock_cache:
             mock_cache.should_block_ip.return_value = (True, "Test block reason")
-            
+
             response = client.post("/api/v1/auth/login", json={
                 "email": sample_user.email,
                 "password": "password123"
             })
-            
+
             assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
             assert "bloqueado" in response.json()["detail"]
 
@@ -185,12 +186,12 @@ class TestAuthRoutes:
                 'risk_score': 'CRITICAL',
                 'anomalies': ['test_anomaly']
             }
-            
+
             response = client.post("/api/v1/auth/login", json={
                 "email": sample_user.email,
                 "password": "password123"
             })
-            
+
             assert response.status_code == status.HTTP_403_FORBIDDEN
             assert "Acesso bloqueado" in response.json()["detail"]
 
@@ -202,23 +203,22 @@ class TestAuthRoutes:
                 'risk_score': 'HIGH',
                 'anomalies': ['test_anomaly']
             }
-            
+
             response = client.post("/api/v1/auth/login", json={
                 "email": sample_user.email,
                 "password": "password123"
             })
-            
+
             assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
             assert "Muitas tentativas" in response.json()["detail"]
 
     def test_login_password_reset_required(self, client, sample_user, db_session):
         """Testa login quando senha precisa ser resetada"""
-        from src.services.auth import AuthService
-        
+
         # Set password hash to require reset
         sample_user.password_hash = "RESET_REQUIRED_test"
         db_session.commit()
-        
+
         with patch('src.api.routes.auth.security_cache') as mock_cache, \
              patch('src.api.routes.auth.auth_service.authenticate_user', return_value=sample_user):
             mock_cache.should_block_ip.return_value = (False, None)
@@ -226,12 +226,12 @@ class TestAuthRoutes:
                 'risk_score': 'LOW',
                 'anomalies': []
             }
-            
+
             response = client.post("/api/v1/auth/login", json={
                 "email": sample_user.email,
                 "password": "password123"
             })
-            
+
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             assert "senha precisa ser redefinida" in response.json()["detail"]
 
@@ -241,7 +241,7 @@ class TestAuthRoutes:
             response = client.post("/api/v1/auth/forgot-password", json={
                 "email": sample_user.email
             })
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["success"] is True
 
@@ -251,7 +251,7 @@ class TestAuthRoutes:
             response = client.post("/api/v1/auth/forgot-password", json={
                 "email": sample_user.email
             })
-            
+
             assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
 
     def test_confirm_reset_password_success(self, client, sample_user, sample_password_reset_token):
@@ -261,26 +261,26 @@ class TestAuthRoutes:
                 "token": sample_password_reset_token.token,
                 "new_password": "NewStrongPassword123!"
             })
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["success"] is True
 
     def test_refresh_token_success(self, client, sample_user, db_session):
         """Testa refresh de token com sucesso"""
-        from src.services.auth import AuthService
         from src.repositories.user import UserRepository
-        
+        from src.services.auth import AuthService
+
         auth_service = AuthService()
         user_repo = UserRepository(db_session)
-        
+
         # Create refresh token
         tokens = auth_service.create_user_tokens(sample_user, user_repo)
         db_session.commit()
-        
+
         response = client.post("/api/v1/auth/refresh", json={
             "refresh_token": tokens["refresh_token"]
         })
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert "access_token" in response.json()
 
@@ -290,7 +290,7 @@ class TestAuthRoutes:
             "token": "invalid_token",
             "new_password": "NewPassword123!"
         })
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Token inválido" in response.json()["detail"]
 
@@ -301,7 +301,7 @@ class TestAuthRoutes:
             "email": "test@example.com",
             "password": "StrongPassword123!"
         })
-        
+
         # Pydantic validation returns 422 for reserved username
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_CONTENT]
 
@@ -316,12 +316,12 @@ class TestAuthRoutes:
                 {'risk_score': 'LOW', 'anomalies': []},
                 {'risk_score': 'HIGH', 'anomalies': ['too_many_failures']}
             ]
-            
+
             response = client.post("/api/v1/auth/login", json={
                 "email": sample_user.email,
                 "password": "wrongpassword"
             })
-            
+
             assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
             assert "excessivo de tentativas" in response.json()["detail"]
 
@@ -334,12 +334,12 @@ class TestAuthRoutes:
                 {'risk_score': 'LOW', 'anomalies': []},
                 {'risk_score': 'CRITICAL', 'anomalies': ['critical_anomaly']}
             ]
-            
+
             response = client.post("/api/v1/auth/login", json={
                 "email": sample_user.email,
                 "password": "wrongpassword"
             })
-            
+
             assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
     def test_get_client_ip_with_x_forwarded_for(self, client):
@@ -377,7 +377,7 @@ class TestAuthRoutes:
             json={"email": sample_user.email, "password": "password123"},
             headers={"X-Forwarded-For": "192.168.1.100, 10.0.0.1"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert "access_token" in response.json()
 
@@ -388,7 +388,7 @@ class TestAuthRoutes:
             json={"email": sample_user.email, "password": "password123"},
             headers={"X-Real-IP": "192.168.1.200"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert "access_token" in response.json()
 
@@ -396,20 +396,19 @@ class TestAuthRoutes:
         """Testa reset de senha quando usuário não é encontrado"""
         # Create a token but delete the user
         from shared.database.models.user import User
-        from shared.database.models.password_reset_token import PasswordResetToken
-        
+
         # First, create a valid token for a user
         token = sample_password_reset_token.token
         user_id = sample_password_reset_token.user_id
-        
+
         # Delete the user
         db_session.query(User).filter(User.id == user_id).delete()
         db_session.commit()
-        
+
         response = client.post("/api/v1/auth/confirm-reset-password", json={
             "token": token,
             "new_password": "NewPassword123!"
         })
-        
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert "Usuário não encontrado" in response.json()["detail"]

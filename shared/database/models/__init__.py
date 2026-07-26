@@ -1,13 +1,13 @@
-from .user import User
-from .chat_type import ChatType
 from .chat import Chat
-from .message import Message
-from .knowledge_chunk import KnowledgeChunk
-from .ingestion_job import IngestionJob
-from .user_token import UserToken
-from .password_reset_token import PasswordResetToken
+from .chat_type import ChatType
 from .chat_type_favorite import ChatTypeFavorite
 from .chat_type_tag import ChatTypeTag
+from .ingestion_job import IngestionJob
+from .knowledge_chunk import KnowledgeChunk
+from .message import Message
+from .password_reset_token import PasswordResetToken
+from .user import User
+from .user_token import UserToken
 
 __all__ = [
     "User",

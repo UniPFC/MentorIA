@@ -2,16 +2,16 @@
 WebSocket endpoint for real-time chat updates.
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from typing import Dict, Set
-from uuid import UUID
-import logging
 import asyncio
-import threading
+import logging
+from uuid import UUID
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
+
 from shared.database.session import get_db
-from src.repositories.user import UserRepository
 from src.repositories.chat import ChatRepository
+from src.repositories.user import UserRepository
 from src.services.auth import auth_service
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ router = APIRouter()
 # Store active WebSocket connections
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, Set[WebSocket]] = {}
+        self.active_connections: dict[str, set[WebSocket]] = {}
         self._loop = None
 
     def get_event_loop(self):
@@ -55,11 +55,11 @@ class ConnectionManager:
                 except Exception as e:
                     logger.error(f"Error sending WebSocket message: {e}")
                     disconnected.append(connection)
-            
+
             # Remove disconnected connections
             for conn in disconnected:
                 self.active_connections[chat_id].discard(conn)
-            
+
             if not self.active_connections[chat_id]:
                 del self.active_connections[chat_id]
 
@@ -72,11 +72,11 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str = No
     # Authenticate via token query param or cookie
     if not token:
         token = websocket.cookies.get("authToken")
-        
+
     if not token:
         await websocket.close(code=4001, reason="Missing token")
         return
-    
+
     try:
         db: Session = next(get_db())
         user_repo = UserRepository(db)
@@ -84,7 +84,7 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str = No
         if user is None:
             await websocket.close(code=4001, reason="Invalid token")
             return
-        
+
         # Verify chat ownership
         chat_repo = ChatRepository(db)
         chat = chat_repo.get_by_id(UUID(chat_id))
@@ -113,9 +113,9 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str = No
 
 def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
     """Broadcast a chat update to all connected clients.
-    
+
     This function can be called from background threads.
-    
+
     Args:
         chat_id: The ID of the chat
         update_type: Type of update (e.g., 'title', 'message', 'status')
@@ -126,7 +126,7 @@ def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
         "chat_id": chat_id,
         "data": data
     }
-    
+
     # Try to get the running event loop
     try:
         loop = asyncio.get_running_loop()

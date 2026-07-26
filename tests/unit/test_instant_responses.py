@@ -1,5 +1,7 @@
 import pytest
+
 from src.services.instant_responses import InstantResponseService
+
 
 @pytest.mark.unit
 class TestInstantResponseService:
@@ -44,7 +46,7 @@ class TestInstantResponseService:
         # "obrigado" should match exactly
         response = InstantResponseService.get_instant_response("Obrigado")
         assert response == "De nada! Estou aqui para ajudar. Tem mais alguma dúvida?"
-        
+
         # But "Muito obrigado pela ajuda" should NOT match (partial)
         response = InstantResponseService.get_instant_response("Muito obrigado pela ajuda")
         assert response is None

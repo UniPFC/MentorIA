@@ -1,6 +1,7 @@
+from uuid import uuid4
+
 import pytest
 from fastapi import status
-from uuid import uuid4
 
 
 @pytest.mark.integration
@@ -17,7 +18,7 @@ class TestChatsRoutes:
                 "title": "Test Chat"
             }
         )
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
         assert data["title"] == "Test Chat"
@@ -32,7 +33,7 @@ class TestChatsRoutes:
                 "chat_type_id": str(sample_chat_type.id)
             }
         )
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
         assert "Chat #" in data["title"]
@@ -47,7 +48,7 @@ class TestChatsRoutes:
                 "title": "Test Chat"
             }
         )
-        
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_list_chats(self, client, sample_user, sample_chat, sample_jwt_token):
@@ -56,7 +57,7 @@ class TestChatsRoutes:
             "/api/v1/chats/",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert isinstance(data, list)
@@ -67,7 +68,7 @@ class TestChatsRoutes:
             f"/api/v1/chats/{sample_chat.id}",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["id"] == str(sample_chat.id)
@@ -79,7 +80,7 @@ class TestChatsRoutes:
             f"/api/v1/chats/{uuid4()}",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_delete_chat(self, client, sample_user, sample_chat, sample_jwt_token):
@@ -88,13 +89,13 @@ class TestChatsRoutes:
             f"/api/v1/chats/{sample_chat.id}",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_unauthorized_access(self, client):
         """Testa acesso sem autenticação"""
         response = client.get("/api/v1/chats/")
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_update_chat_model(self, client, sample_user, sample_chat, sample_jwt_token):
@@ -107,7 +108,7 @@ class TestChatsRoutes:
                 "llm_provider": "openai"
             }
         )
-        
+
         # May succeed or fail depending on available models config
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
 
@@ -117,7 +118,7 @@ class TestChatsRoutes:
             "/api/v1/chats/models/available",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert "models" in data

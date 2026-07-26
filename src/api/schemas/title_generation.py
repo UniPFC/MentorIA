@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 class ChatTitleResponse(BaseModel):
     """Schema for generated chat title response."""
-    
+
     title: str = Field(
         ...,
         min_length=1,

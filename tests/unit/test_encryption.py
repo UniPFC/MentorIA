@@ -1,11 +1,12 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from src.services.encryption import (
     EncryptionService,
-    encrypt_sensitive_data,
     decrypt_sensitive_data,
+    encrypt_sensitive_data,
     is_encrypted_data,
-    encryption_service
 )
 
 
@@ -47,11 +48,11 @@ class TestEncryptionService:
         """Testa fluxo completo de criptografia e decriptação"""
         service = EncryptionService()
         original_text = "Dados extremamente secretos 123!"
-        
+
         encrypted = service.encrypt(original_text)
         assert encrypted != original_text
         assert service._looks_encrypted(encrypted) is True
-        
+
         decrypted = service.decrypt(encrypted)
         assert decrypted == original_text
 
@@ -89,7 +90,7 @@ class TestEncryptionService:
         service = EncryptionService()
         original_text = "Dados"
         encrypted = service.encrypt(original_text)
-        
+
         # Simular falha corrompendo a chave
         with patch.object(service, "master_key", b"invalid_key_length_32_bytes_xyz"):
             with pytest.raises(ValueError) as exc_info:
@@ -129,6 +130,6 @@ class TestEncryptionService:
         encrypted = encrypt_sensitive_data(original_text)
         assert encrypted != original_text
         assert is_encrypted_data(encrypted) is True
-        
+
         decrypted = decrypt_sensitive_data(encrypted)
         assert decrypted == original_text

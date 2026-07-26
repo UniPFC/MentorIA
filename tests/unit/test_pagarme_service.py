@@ -1,8 +1,10 @@
-import pytest
-import httpx
-import hmac
 import hashlib
-from unittest.mock import Mock, patch, AsyncMock
+import hmac
+from unittest.mock import AsyncMock, Mock, patch
+
+import httpx
+import pytest
+
 from shared.database.models.user import User, UserLevel
 from src.services.pagarme import PagarmeService, pagarme_service
 
@@ -27,7 +29,7 @@ class TestPagarmeService:
             mock_settings.PAGARME_PLAN_LEVEL_02 = "plan_02"
             mock_settings.PAGARME_PLAN_LEVEL_03 = "plan_03"
             mock_settings.PAGARME_PLAN_LEVEL_04 = "plan_04"
-            
+
             assert service._get_plan_id(UserLevel.LEVEL_02) == "plan_02"
             assert service._get_plan_id(UserLevel.LEVEL_03) == "plan_03"
             assert service._get_plan_id(UserLevel.LEVEL_04) == "plan_04"
@@ -39,7 +41,7 @@ class TestPagarmeService:
         service = PagarmeService()
         user = Mock(spec=User)
         user.pagarme_customer_id = "cus_existing"
-        
+
         customer_id = await service.create_customer(user)
         assert customer_id == "cus_existing"
 
@@ -52,14 +54,14 @@ class TestPagarmeService:
         user.username = "testuser"
         user.email = "test@example.com"
         user.id = "user_uuid_123"
-        
+
         mock_response = Mock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"id": "cus_new_123"}
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.return_value = mock_response
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             customer_id = await service.create_customer(user)
             assert customer_id == "cus_new_123"
@@ -72,14 +74,14 @@ class TestPagarmeService:
         user.pagarme_customer_id = None
         user.username = "testuser"
         user.email = "test@example.com"
-        
+
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.text = "Bad Request"
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.return_value = mock_response
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             customer_id = await service.create_customer(user)
             assert customer_id is None
@@ -90,10 +92,10 @@ class TestPagarmeService:
         service = PagarmeService()
         user = Mock(spec=User)
         user.pagarme_customer_id = None
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.side_effect = httpx.ConnectTimeout("Timeout")
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             customer_id = await service.create_customer(user)
             assert customer_id is None
@@ -103,7 +105,7 @@ class TestPagarmeService:
         """Testa criação de checkout de assinatura sem plano configurado"""
         service = PagarmeService()
         user = Mock(spec=User)
-        
+
         with patch.object(service, "_get_plan_id", return_value=None):
             url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
             assert url is None
@@ -115,14 +117,14 @@ class TestPagarmeService:
         user = Mock(spec=User)
         user.id = "user_uuid"
         user.username = "testuser"
-        
+
         mock_response = Mock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"url": "https://checkout.pagar.me/abc"}
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.return_value = mock_response
-        
+
         with patch.object(service, "_get_plan_id", return_value="plan_02"):
             with patch("httpx.AsyncClient", return_value=mock_client):
                 url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
@@ -133,14 +135,14 @@ class TestPagarmeService:
         """Testa falha de status na criação de checkout de assinatura"""
         service = PagarmeService()
         user = Mock(spec=User)
-        
+
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.text = "Invalid Payload"
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.return_value = mock_response
-        
+
         with patch.object(service, "_get_plan_id", return_value="plan_02"):
             with patch("httpx.AsyncClient", return_value=mock_client):
                 url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
@@ -151,10 +153,10 @@ class TestPagarmeService:
         """Testa exceção na criação de checkout de assinatura"""
         service = PagarmeService()
         user = Mock(spec=User)
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.side_effect = Exception("API Error")
-        
+
         with patch.object(service, "_get_plan_id", return_value="plan_02"):
             with patch("httpx.AsyncClient", return_value=mock_client):
                 url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
@@ -167,14 +169,14 @@ class TestPagarmeService:
         user = Mock(spec=User)
         user.id = "user_uuid"
         user.username = "testuser"
-        
+
         mock_response = Mock()
         mock_response.status_code = 201
         mock_response.json.return_value = {"url": "https://checkout.pagar.me/refill"}
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.return_value = mock_response
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             url = await service.create_refill_checkout("cus_123", user, 1000, 5000)
             assert url == "https://checkout.pagar.me/refill"
@@ -184,14 +186,14 @@ class TestPagarmeService:
         """Testa falha de status na criação de checkout de recarga"""
         service = PagarmeService()
         user = Mock(spec=User)
-        
+
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.text = "Bad Request"
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.return_value = mock_response
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             url = await service.create_refill_checkout("cus_123", user, 1000, 5000)
             assert url is None
@@ -201,10 +203,10 @@ class TestPagarmeService:
         """Testa exceção na criação de checkout de recarga"""
         service = PagarmeService()
         user = Mock(spec=User)
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.post.side_effect = Exception("API Error")
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             url = await service.create_refill_checkout("cus_123", user, 1000, 5000)
             assert url is None
@@ -213,13 +215,13 @@ class TestPagarmeService:
     async def test_cancel_subscription_success(self):
         """Testa cancelamento de assinatura com sucesso"""
         service = PagarmeService()
-        
+
         mock_response = Mock()
         mock_response.status_code = 200
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.delete.return_value = mock_response
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             success = await service.cancel_subscription("sub_123")
             assert success is True
@@ -228,14 +230,14 @@ class TestPagarmeService:
     async def test_cancel_subscription_failed_status(self):
         """Testa falha de status no cancelamento de assinatura"""
         service = PagarmeService()
-        
+
         mock_response = Mock()
         mock_response.status_code = 404
         mock_response.text = "Not Found"
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.delete.return_value = mock_response
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             success = await service.cancel_subscription("sub_123")
             assert success is False
@@ -244,10 +246,10 @@ class TestPagarmeService:
     async def test_cancel_subscription_exception(self):
         """Testa exceção no cancelamento de assinatura"""
         service = PagarmeService()
-        
+
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value.delete.side_effect = Exception("API Error")
-        
+
         with patch("httpx.AsyncClient", return_value=mock_client):
             success = await service.cancel_subscription("sub_123")
             assert success is False

@@ -7,13 +7,19 @@ This module provides a high-level interface for:
 - Searching for relevant chunks by collection
 """
 
-from typing import List, Dict, Any, Optional
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-from config.settings import settings
-from config.logger import logger
 import uuid
+from typing import Any
 from uuid import UUID
+
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    PointStruct,
+    VectorParams,
+)
+
+from config.logger import logger
+from config.settings import settings
 
 
 class QdrantManager:
@@ -21,7 +27,7 @@ class QdrantManager:
     Manages Qdrant collections for the RAG chat system.
     Each ChatType has its own collection for isolated knowledge bases.
     """
-    
+
     def __init__(self):
         """Initialize Qdrant client connection."""
         try:
@@ -33,37 +39,37 @@ class QdrantManager:
         except Exception as e:
             logger.error(f"Failed to connect to Qdrant: {e}")
             raise
-    
+
     def get_collection_name(self, chat_type_id: UUID) -> str:
         """Generate collection name for a chat type."""
         return f"chat_type_{chat_type_id}"
-    
+
     def create_collection(
-        self, 
-        chat_type_id: UUID, 
+        self,
+        chat_type_id: UUID,
         vector_size: int = settings.EMBEDDING_DIMENSION,
         distance: Distance = Distance.COSINE
     ) -> bool:
         """
         Create a new collection for a ChatType.
-        
+
         Args:
             chat_type_id: ID of the ChatType
             vector_size: Dimension of embedding vectors (default: from settings)
             distance: Distance metric for similarity search
-            
+
         Returns:
             bool: True if created successfully or already exists
         """
         collection_name = self.get_collection_name(chat_type_id)
-        
+
         try:
             # Check if collection already exists
             collections = self.client.get_collections().collections
             if any(col.name == collection_name for col in collections):
                 logger.info(f"Collection '{collection_name}' already exists.")
                 return True
-            
+
             # Create new collection
             self.client.create_collection(
                 collection_name=collection_name,
@@ -74,23 +80,23 @@ class QdrantManager:
             )
             logger.info(f"Created collection '{collection_name}' with vector_size={vector_size}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to create collection '{collection_name}': {e}")
             raise
-    
+
     def delete_collection(self, chat_type_id: UUID) -> bool:
         """
         Delete a collection for a ChatType.
-        
+
         Args:
             chat_type_id: ID of the ChatType
-            
+
         Returns:
             bool: True if deleted successfully
         """
         collection_name = self.get_collection_name(chat_type_id)
-        
+
         try:
             self.client.delete_collection(collection_name=collection_name)
             logger.info(f"Deleted collection '{collection_name}'")
@@ -98,43 +104,43 @@ class QdrantManager:
         except Exception as e:
             logger.error(f"Failed to delete collection '{collection_name}': {e}")
             return False
-    
+
     def insert_chunks(
         self,
         chat_type_id: UUID,
-        chunks: List[Dict[str, Any]],
-        embeddings: List[List[float]]
-    ) -> List[str]:
+        chunks: list[dict[str, Any]],
+        embeddings: list[list[float]]
+    ) -> list[str]:
         """
         Insert chunks with embeddings into a collection.
-        
+
         Args:
             chat_type_id: ID of the ChatType
             chunks: List of chunk dictionaries with keys: question, answer, metadata
             embeddings: List of embedding vectors (same length as chunks)
-            
+
         Returns:
             List[str]: List of generated point IDs
         """
         collection_name = self.get_collection_name(chat_type_id)
-        
+
         if len(chunks) != len(embeddings):
             raise ValueError(f"Chunks count ({len(chunks)}) must match embeddings count ({len(embeddings)})")
-        
+
         try:
             points = []
             point_ids = []
-            
+
             for chunk, embedding in zip(chunks, embeddings):
                 point_id = str(uuid.uuid4())
                 point_ids.append(point_id)
-                
+
                 payload = {
                     "question": chunk.get("question", ""),
                     "answer": chunk.get("answer", ""),
                     "metadata": chunk.get("metadata", {})
                 }
-                
+
                 points.append(
                     PointStruct(
                         id=point_id,
@@ -142,40 +148,40 @@ class QdrantManager:
                         payload=payload
                     )
                 )
-            
+
             self.client.upsert(
                 collection_name=collection_name,
                 points=points
             )
-            
+
             logger.info(f"Inserted {len(points)} chunks into collection '{collection_name}'")
             return point_ids
-            
+
         except Exception as e:
             logger.error(f"Failed to insert chunks into '{collection_name}': {e}")
             raise
-    
+
     def search(
         self,
         chat_type_id: UUID,
-        query_embedding: List[float],
+        query_embedding: list[float],
         limit: int = 10,
-        score_threshold: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+        score_threshold: float | None = None
+    ) -> list[dict[str, Any]]:
         """
         Search for similar chunks in a collection.
-        
+
         Args:
             chat_type_id: ID of the ChatType
             query_embedding: Query vector
             limit: Maximum number of results
             score_threshold: Minimum similarity score (optional)
-            
+
         Returns:
             List of dicts with keys: id, score, question, answer, metadata
         """
         collection_name = self.get_collection_name(chat_type_id)
-        
+
         try:
             # Use query_points instead of search
             results = self.client.query_points(
@@ -184,7 +190,7 @@ class QdrantManager:
                 limit=limit,
                 score_threshold=score_threshold
             ).points
-            
+
             chunks = []
             for result in results:
                 chunks.append({
@@ -194,26 +200,26 @@ class QdrantManager:
                     "answer": result.payload.get("answer", ""),
                     "metadata": result.payload.get("metadata", {})
                 })
-            
+
             logger.info(f"Found {len(chunks)} chunks in collection '{collection_name}'")
             return chunks
-            
+
         except Exception as e:
             logger.error(f"Failed to search in collection '{collection_name}': {e}")
             raise
-    
-    def get_collection_info(self, chat_type_id: UUID) -> Optional[Dict[str, Any]]:
+
+    def get_collection_info(self, chat_type_id: UUID) -> dict[str, Any] | None:
         """
         Get information about a collection.
-        
+
         Args:
             chat_type_id: ID of the ChatType
-            
+
         Returns:
             Dict with collection info or None if not found
         """
         collection_name = self.get_collection_name(chat_type_id)
-        
+
         try:
             info = self.client.get_collection(collection_name=collection_name)
             return {

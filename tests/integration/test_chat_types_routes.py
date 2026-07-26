@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import patch
-from fastapi import status
 from uuid import uuid4
+
+import pytest
+from fastapi import status
 
 
 @pytest.mark.integration
@@ -20,7 +21,7 @@ class TestChatTypesRoutes:
                     "is_public": False
                 }
             )
-            
+
             assert response.status_code == status.HTTP_201_CREATED
             data = response.json()
             assert data["name"] == "Test Chat Type Integration"
@@ -37,7 +38,7 @@ class TestChatTypesRoutes:
                 "is_public": False
             }
         )
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "already exists" in response.json()["detail"]
 
@@ -47,7 +48,7 @@ class TestChatTypesRoutes:
             "/api/v1/chat-types/",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert "chat_types" in data
@@ -58,7 +59,7 @@ class TestChatTypesRoutes:
             f"/api/v1/chat-types/{sample_chat_type.id}",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["id"] == str(sample_chat_type.id)
@@ -70,7 +71,7 @@ class TestChatTypesRoutes:
             f"/api/v1/chat-types/{uuid4()}",
             headers={"Authorization": f"Bearer {sample_jwt_token}"}
         )
-        
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_update_chat_type(self, client, sample_user, sample_chat_type, sample_jwt_token):
@@ -83,7 +84,7 @@ class TestChatTypesRoutes:
                 "description": "Updated description"
             }
         )
-        
+
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["name"] == "Updated Name"
@@ -101,20 +102,20 @@ class TestChatTypesRoutes:
                     "is_public": False
                 }
             )
-            
+
             assert create_response.status_code == status.HTTP_201_CREATED
             chat_type_id = create_response.json()["id"]
-        
+
         with patch('src.api.routes.chat_types.QdrantManager'):
             response = client.delete(
                 f"/api/v1/chat-types/{chat_type_id}",
                 headers={"Authorization": f"Bearer {sample_jwt_token}"}
             )
-            
+
             assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_unauthorized_access(self, client):
         """Testa acesso sem autenticação"""
         response = client.get("/api/v1/chat-types/")
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

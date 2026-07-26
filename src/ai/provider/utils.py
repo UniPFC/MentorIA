@@ -2,9 +2,8 @@
 Utility functions for providers.
 """
 
-from typing import Optional
-from config.settings import settings
 
+from config.settings import settings
 
 URLS = {
     "ollama": "http://host.docker.internal:11434/v1",
@@ -13,14 +12,14 @@ URLS = {
 }
 
 
-def resolve_api_key(provider_alias: str, explicit_key: Optional[str]) -> str:
+def resolve_api_key(provider_alias: str, explicit_key: str | None) -> str:
     """
     Determines the correct credential for the selected provider.
-    
+
     Args:
         provider_alias: Provider name (ollama, openai, gemini)
         explicit_key: Explicitly provided API key
-        
+
     Returns:
         Resolved API key
     """

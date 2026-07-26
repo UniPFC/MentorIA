@@ -1,10 +1,14 @@
-from sqlalchemy import Column, String, DateTime, Boolean, Uuid, Integer, Enum as SQLEnum
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-import uuid
 import enum
-from shared.database.session import Base
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Uuid
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import relationship
+
 from config.settings import settings
+from shared.database.session import Base
+
 
 class UserLevel(str, enum.Enum):
     """User subscription levels with token budgets."""
@@ -17,39 +21,39 @@ class UserLevel(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     level = Column(SQLEnum(UserLevel), nullable=False, default=UserLevel.LEVEL_01)
     token_budget = Column(Integer, nullable=True)
-    
+
     # Subscription fields (Pagar.me integration)
     pagarme_customer_id = Column(String(255), nullable=True, index=True)
     subscription_id = Column(String(255), nullable=True, index=True)
     subscription_status = Column(String(50), nullable=True)  # active, canceled, past_due, unpaid, ended
     subscription_period_start = Column(DateTime(timezone=True), nullable=True)
     subscription_period_end = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Relationships
     chat_types = relationship("ChatType", back_populates="owner", cascade="all, delete-orphan")
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
     tokens = relationship("UserToken", back_populates="user", cascade="all, delete-orphan")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
     favorite_chat_types = relationship("ChatTypeFavorite", back_populates="user", cascade="all, delete-orphan")
-    
+
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}', active={self.is_active}, level={self.level})>"
-    
+
     @property
     def has_unlimited_budget(self) -> bool:
         """Check if user has unlimited token budget (LEVEL_05)."""
         return self.level == UserLevel.LEVEL_05
-    
+
     def can_afford_tokens(self, tokens_needed: int) -> bool:
         """Check if user has enough budget for the required tokens."""
         if self.has_unlimited_budget:
@@ -57,7 +61,7 @@ class User(Base):
         if self.token_budget is None:
             return False
         return self.token_budget >= tokens_needed
-    
+
     @property
     def max_token_budget(self) -> int:
         """Get the maximum token budget for the user's level."""
@@ -71,7 +75,7 @@ class User(Base):
             UserLevel.LEVEL_05: None,
         }
         return budget_map.get(self.level, 0)
-    
+
     @property
     def remaining_tokens(self) -> int:
         """Get the remaining tokens (same as token_budget for non-unlimited users)."""

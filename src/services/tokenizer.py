@@ -2,14 +2,13 @@
 Token counting service.
 
 Two modes:
-- "openai" (default): Uses tiktoken with o200k_base encoding. 
+- "openai" (default): Uses tiktoken with o200k_base encoding.
   Accurate for OpenAI models and good approximation for local/open-source models.
 - "google": Uses tiktoken with cl100k_base as approximation for Gemini models.
 """
 
-from functools import lru_cache
-from typing import List, Dict, Optional
 import logging
+from functools import lru_cache
 
 import tiktoken
 
@@ -28,7 +27,7 @@ _PROVIDER_MODE_MAP = {
 }
 
 
-def mode_from_provider(provider: Optional[str]) -> str:
+def mode_from_provider(provider: str | None) -> str:
     """
     Map an LLM provider alias to a tokenizer mode.
 
@@ -70,7 +69,7 @@ def count_tokens(text: str, mode: str = "openai") -> int:
     return len(encoding.encode(text))
 
 
-def count_messages_tokens(messages: List[Dict[str, str]], mode: str = "openai") -> int:
+def count_messages_tokens(messages: list[dict[str, str]], mode: str = "openai") -> int:
     """
     Count total tokens across a list of chat messages.
 

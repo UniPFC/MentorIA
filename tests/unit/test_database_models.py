@@ -1,15 +1,17 @@
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
+
+import pytest
 from sqlalchemy.orm import Session
-from shared.database.models.user import User
-from shared.database.models.chat_type import ChatType
+
 from shared.database.models.chat import Chat
-from shared.database.models.message import Message, MessageRole
-from shared.database.models.user_token import UserToken
-from shared.database.models.password_reset_token import PasswordResetToken
-from shared.database.models.knowledge_chunk import KnowledgeChunk
+from shared.database.models.chat_type import ChatType
 from shared.database.models.ingestion_job import IngestionJob, IngestionStatus
+from shared.database.models.knowledge_chunk import KnowledgeChunk
+from shared.database.models.message import Message, MessageRole
+from shared.database.models.password_reset_token import PasswordResetToken
+from shared.database.models.user import User
+from shared.database.models.user_token import UserToken
 
 
 @pytest.mark.unit
@@ -21,16 +23,16 @@ class TestUserModel:
             email="newuser@example.com",
             password_hash="hashed_password",
             is_active=True,
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         db_session.add(user)
         db_session.commit()
-        
+
         assert user.id is not None
         assert user.username == "newuser"
         assert user.email == "newuser@example.com"
         assert user.is_active is True
-        
+
     def test_user_unique_email(self, db_session: Session, sample_user: User):
         duplicate_user = User(
             id=uuid4(),
@@ -40,10 +42,10 @@ class TestUserModel:
             is_active=True
         )
         db_session.add(duplicate_user)
-        
+
         with pytest.raises(Exception):
             db_session.commit()
-            
+
     def test_user_unique_username(self, db_session: Session, sample_user: User):
         duplicate_user = User(
             id=uuid4(),
@@ -53,10 +55,10 @@ class TestUserModel:
             is_active=True
         )
         db_session.add(duplicate_user)
-        
+
         with pytest.raises(Exception):
             db_session.commit()
-            
+
     def test_user_repr(self, sample_user: User):
         repr_str = repr(sample_user)
         assert "User" in repr_str
@@ -74,16 +76,16 @@ class TestChatTypeModel:
             description="Description",
             owner_id=sample_user.id,
             collection_name=f"chat_type_{chat_type_id}",
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC)
         )
         db_session.add(chat_type)
         db_session.commit()
-        
+
         assert chat_type.id is not None
         assert chat_type.name == "New Chat Type"
         assert chat_type.owner_id == sample_user.id
         assert chat_type.collection_name == f"chat_type_{chat_type_id}"
-        
+
     def test_chat_type_cascade_delete(self, db_session: Session, sample_user: User, sample_chat_type: ChatType):
         chat = Chat(
             id=uuid4(),
@@ -93,10 +95,10 @@ class TestChatTypeModel:
         )
         db_session.add(chat)
         db_session.commit()
-        
+
         db_session.delete(sample_chat_type)
         db_session.commit()
-        
+
         deleted_chat = db_session.query(Chat).filter(Chat.id == chat.id).first()
         assert deleted_chat is None
 
@@ -112,7 +114,7 @@ class TestChatModel:
         )
         db_session.add(chat)
         db_session.commit()
-        
+
         assert chat.id is not None
         assert chat.title == "New Chat"
         assert chat.user_id == sample_user.id
@@ -130,12 +132,12 @@ class TestMessageModel:
         )
         db_session.add(message)
         db_session.commit()
-        
+
         assert message.id is not None
         assert message.chat_id == sample_chat.id
         assert message.role == MessageRole.USER
         assert message.content == "Hello, world!"
-        
+
     def test_message_role_enum(self, db_session: Session, sample_chat: Chat):
         user_msg = Message(
             id=uuid4(),
@@ -149,10 +151,10 @@ class TestMessageModel:
             role=MessageRole.ASSISTANT,
             content="Assistant message"
         )
-        
+
         db_session.add_all([user_msg, assistant_msg])
         db_session.commit()
-        
+
         assert user_msg.role == MessageRole.USER
         assert assistant_msg.role == MessageRole.ASSISTANT
 
@@ -165,21 +167,21 @@ class TestUserTokenModel:
             user_id=sample_user.id,
             token="test_token_123",
             token_type="access",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             is_active=True
         )
         db_session.add(token)
         db_session.commit()
-        
+
         assert token.id is not None
         assert token.user_id == sample_user.id
         assert token.token == "test_token_123"
         assert token.is_active is True
-        
+
     def test_token_expiration(self, db_session: Session, sample_user: User):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expired_time = now - timedelta(hours=1)
-        
+
         expired_token = UserToken(
             id=uuid4(),
             user_id=sample_user.id,
@@ -191,9 +193,9 @@ class TestUserTokenModel:
         db_session.add(expired_token)
         db_session.commit()
         db_session.refresh(expired_token)
-        
-        current_time = datetime.now(timezone.utc)
-        
+
+        current_time = datetime.now(UTC)
+
         assert expired_token.expires_at < current_time
 
 
@@ -204,22 +206,22 @@ class TestPasswordResetTokenModel:
             id=uuid4(),
             user_id=sample_user.id,
             token="reset_token_123",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             is_active=True
         )
         db_session.add(reset_token)
         db_session.commit()
-        
+
         assert reset_token.id is not None
         assert reset_token.user_id == sample_user.id
         assert reset_token.is_active is True
         assert reset_token.used_at is None
-        
+
     def test_mark_token_used(self, db_session: Session, sample_password_reset_token: PasswordResetToken):
         sample_password_reset_token.is_active = False
-        sample_password_reset_token.used_at = datetime.now(timezone.utc)
+        sample_password_reset_token.used_at = datetime.now(UTC)
         db_session.commit()
-        
+
         assert sample_password_reset_token.is_active is False
         assert sample_password_reset_token.used_at is not None
 
@@ -237,7 +239,7 @@ class TestKnowledgeChunkModel:
         )
         db_session.add(chunk)
         db_session.commit()
-        
+
         assert chunk.id is not None
         assert chunk.chat_type_id == sample_chat_type.id
         assert chunk.qdrant_point_id == "point_123"
@@ -257,12 +259,12 @@ class TestIngestionJobModel:
         )
         db_session.add(job)
         db_session.commit()
-        
+
         assert job.id is not None
         assert job.chat_type_id == sample_chat_type.id
         assert job.status == IngestionStatus.PENDING
         assert job.total_chunks == 0
-        
+
     def test_job_status_transitions(self, db_session: Session, sample_chat_type: ChatType):
         job = IngestionJob(
             id=uuid4(),
@@ -272,11 +274,11 @@ class TestIngestionJobModel:
         )
         db_session.add(job)
         db_session.commit()
-        
+
         job.status = IngestionStatus.PROCESSING
         db_session.commit()
         assert job.status == IngestionStatus.PROCESSING
-        
+
         job.status = IngestionStatus.COMPLETED
         job.processed_chunks = 100
         job.total_chunks = 100

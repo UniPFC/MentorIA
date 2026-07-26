@@ -1,27 +1,29 @@
-import pytest
 import json
-import time
 import tempfile
+import time
 from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch
+
+import pytest
+
 from src.services.security_cache import SecurityCache
 
 
 @pytest.mark.unit
 class TestSecurityCache:
     """Test suite for SecurityCache"""
-    
+
     @pytest.fixture
     def temp_cache_dir(self):
         """Create temporary directory for cache files"""
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
-    
+
     @pytest.fixture
     def security_cache(self, temp_cache_dir):
         """Create SecurityCache instance with temporary directory"""
         return SecurityCache(cache_dir=str(temp_cache_dir))
-    
+
     def test_init_default_values(self, security_cache):
         """Test SecurityCache initialization with default values"""
         assert security_cache.multiple_ip_threshold == 3
@@ -31,21 +33,21 @@ class TestSecurityCache:
         assert security_cache.ip_block_threshold == 15
         assert security_cache.max_age_hours == 24
         assert security_cache.cache_dir.exists()
-    
+
     def test_init_custom_cache_dir(self, temp_cache_dir):
         """Test SecurityCache initialization with custom cache directory"""
         cache = SecurityCache(cache_dir=str(temp_cache_dir))
-        
+
         assert cache.cache_dir == temp_cache_dir
         assert cache.cache_dir.exists()
-    
+
     def test_init_cache_files(self, security_cache):
         """Test that cache files are created during initialization"""
         assert security_cache.login_attempts_file.exists()
         assert security_cache.ip_tracking_file.exists()
         assert security_cache.user_tracking_file.exists()
         assert security_cache.anomalies_file.exists()
-    
+
     @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
     def test_record_login_attempt_success(self, mock_auto_cleanup, security_cache):
         """Test recording successful login attempt"""
@@ -55,13 +57,13 @@ class TestSecurityCache:
             user_agent="Mozilla/5.0",
             success=True
         )
-        
+
         # Load and verify that saved data
         data = security_cache._load_cache(security_cache.login_attempts_file)
-        
+
         # Should have at least one attempt
         assert len(data) > 0
-    
+
     @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
     def test_record_login_attempt_failure(self, mock_auto_cleanup, security_cache):
         """Test recording failed login attempt"""
@@ -72,18 +74,18 @@ class TestSecurityCache:
             success=False,
             failure_reason="Invalid password"
         )
-        
+
         # Load and verify that saved data
         data = security_cache._load_cache(security_cache.login_attempts_file)
-        
+
         # Should have at least one attempt
         assert len(data) > 0
-    
+
     @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
     def test_get_recent_anomalies(self, mock_auto_cleanup, security_cache):
         """Test getting recent anomalies"""
         current_time = time.time()
-        
+
         # Add recent anomaly
         security_cache.record_login_attempt(
             email="test@example.com",
@@ -92,7 +94,7 @@ class TestSecurityCache:
             success=False,
             anomalies=["suspicious_activity"]
         )
-        
+
         # Manually add old anomaly
         old_data = security_cache._load_cache(security_cache.anomalies_file)
         old_data["old_anomaly"] = {
@@ -103,12 +105,12 @@ class TestSecurityCache:
             "unix_timestamp": current_time - 1000  # Old
         }
         security_cache._save_cache(security_cache.anomalies_file, old_data)
-        
+
         recent_anomalies = security_cache.get_recent_anomalies(hours=1)
-        
+
         # Should return some anomalies (recent ones)
         assert isinstance(recent_anomalies, list)
-    
+
     @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
     def test_should_block_ip_false(self, mock_auto_cleanup, security_cache):
         """Test IP blocking check when IP should not be blocked"""
@@ -120,12 +122,12 @@ class TestSecurityCache:
                 user_agent="Mozilla/5.0",
                 success=False
             )
-        
+
         should_block, reason = security_cache.should_block_ip("192.168.1.1")
-        
+
         assert should_block is False
         assert reason is None
-    
+
     @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
     def test_should_block_ip_true(self, mock_auto_cleanup, security_cache):
         """Test IP blocking check when IP should be blocked"""
@@ -137,13 +139,13 @@ class TestSecurityCache:
                 user_agent="Mozilla/5.0",
                 success=False
             )
-        
+
         should_block, reason = security_cache.should_block_ip("192.168.1.1")
-        
+
         assert should_block is True
         assert reason is not None
         assert "excesso" in reason.lower()
-    
+
     @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
     def test_should_block_ip_not_tracked(self, mock_auto_cleanup, security_cache):
         """Test IP blocking check for IP not in tracking"""
@@ -154,12 +156,12 @@ class TestSecurityCache:
             user_agent="Mozilla/5.0",
             success=False
         )
-        
+
         should_block, reason = security_cache.should_block_ip("192.168.1.1")
-        
+
         assert should_block is False
         assert reason is None
-    
+
     def test_cleanup_old_data(self, security_cache):
         """Test cleanup of old data"""
         # Add some data
@@ -169,13 +171,13 @@ class TestSecurityCache:
             user_agent="Mozilla/5.0",
             success=True
         )
-        
+
         # Run cleanup (should not raise exceptions)
         security_cache.cleanup_old_data()
-        
+
         # If we get here, cleanup completed without exceptions
         assert True
-    
+
     def test_cleanup_cache_directory_small(self, security_cache):
         """Test cache directory cleanup when size is small"""
         # Add some data (but keep it small)
@@ -185,58 +187,58 @@ class TestSecurityCache:
             user_agent="Mozilla/5.0",
             success=True
         )
-        
+
         result = security_cache.cleanup_cache_directory()
-        
+
         assert result is False  # Should not clean small directory
-    
+
     def test_auto_cleanup_check(self, security_cache):
         """Test auto cleanup check"""
         # This should not raise exceptions
         security_cache.auto_cleanup_check()
-        
+
         # Verify that cleanup methods were called (no exceptions)
         assert True  # If we get here, no exceptions were raised
-    
+
     def test_load_cache_file_not_exists(self, security_cache):
         """Test loading cache file that doesn't exist"""
         non_existent_file = security_cache.cache_dir / "non_existent.json"
         result = security_cache._load_cache(non_existent_file)
-        
+
         assert result == {}
-    
+
     def test_load_cache_invalid_json(self, security_cache):
         """Test loading cache file with invalid JSON"""
         # Create file with invalid JSON
         invalid_file = security_cache.cache_dir / "invalid.json"
         with open(invalid_file, 'w') as f:
             f.write('invalid json')
-        
+
         result = security_cache._load_cache(invalid_file)
-        
+
         assert result == {}
-        
+
         # Clean up
         invalid_file.unlink()
-    
+
     def test_save_cache_existing_file(self, security_cache):
         """Test saving cache file to existing directory"""
         file_path = security_cache.cache_dir / "test_file.json"
-        
+
         security_cache._save_cache(file_path, {"test": "data"})
-        
+
         assert file_path.exists()
-        
+
         # Verify data was saved
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             saved_data = json.load(f)
-        
+
         assert saved_data == {"test": "data"}
-    
+
     def test_save_cache_write_error(self, security_cache):
         """Test handling write error when saving cache"""
         file_path = security_cache.cache_dir / "non_existent_subdir" / "test_file.json"
-        
+
         # Saving to non-existent subdir should log an error and handle it gracefully
         security_cache._save_cache(file_path, {"test": "data"})
         assert not file_path.exists()
@@ -252,7 +254,7 @@ class TestSecurityCache:
             }
         }
         security_cache._save_cache(security_cache.user_tracking_file, user_data)
-        
+
         result = security_cache.detect_anomalies(email, "192.168.1.1", "Mozilla/5.0")
         assert result["is_anomaly"] is True
         assert result["risk_score"] == "HIGH"

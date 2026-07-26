@@ -1,10 +1,10 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
-from typing import Optional
 from datetime import datetime
 from uuid import UUID
-from zxcvbn import zxcvbn
-from shared.database.models.user import UserLevel
 
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from zxcvbn import zxcvbn
+
+from shared.database.models.user import UserLevel
 
 # Mapeamento de traduções para dicas e avisos do zxcvbn
 ZXCVBN_TRANSLATIONS = {
@@ -57,7 +57,7 @@ class UserRegister(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, description="Nome de usuário")
     email: EmailStr = Field(..., description="Email válido")
     password: str = Field(..., min_length=8, max_length=100, description="Senha (mínimo 8 caracteres, força média ou superior)")
-    
+
     @field_validator('username')
     @classmethod
     def validate_username(cls, v):
@@ -65,41 +65,41 @@ class UserRegister(BaseModel):
         if v.lower() == 'mentoria':
             raise ValueError('O nome de usuário "MentorIA" é reservado para o sistema e não pode ser usado.')
         return v
-    
+
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v):
         """Valida força da senha usando zxcvbn (score mínimo 2 = força média)"""
         if len(v.encode('utf-8')) > 1000:
             raise ValueError('Senha muito longa. Máximo 1000 bytes.')
-        
+
         # Avaliar força da senha
         resultado = zxcvbn(v)
         score = resultado.get('score', 0)  # 0-4
-        
+
         # Score 2+ = força média ou superior
         if score < 2:
             feedback = resultado.get('feedback', {})
             warning = feedback.get('warning', '')
             sugestoes = feedback.get('suggestions', [])
-            
+
             # Construir mensagem com aviso + sugestões
             mensagem = "Senha fraca."
-            
+
             # Adicionar aviso se existir
             if warning:
                 warning_traduzido = translate_zxcvbn_suggestion(warning)
                 mensagem += f" {warning_traduzido}"
-            
+
             # Adicionar sugestões
             if sugestoes:
                 sugestoes_traduzidas = [translate_zxcvbn_suggestion(s) for s in sugestoes[:2]]
                 mensagem += " Dicas: " + "; ".join(sugestoes_traduzidas)
             else:
                 mensagem += " Use uma combinação de maiúsculas, minúsculas, números e símbolos."
-            
+
             raise ValueError(mensagem)
-        
+
         return v
 
 
@@ -107,7 +107,7 @@ class UserLogin(BaseModel):
     email: EmailStr = Field(..., description="Email do usuário")
     password: str = Field(..., description="Senha")
     remember_me: bool = Field(default=False, description="Manter conectado")
-    
+
     @field_validator('password')
     @classmethod
     def validate_password_length(cls, v):
@@ -125,21 +125,21 @@ class Token(BaseModel):
 
 
 class TokenRefresh(BaseModel):
-    refresh_token: Optional[str] = Field(default=None, description="Token de atualização")
+    refresh_token: str | None = Field(default=None, description="Token de atualização")
 
 
 class UserResponse(BaseModel):
     """Schema for User response."""
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: UUID
     username: str
     email: str
     created_at: datetime
-    level: Optional[UserLevel] = None
-    token_budget: Optional[int] = None
-    max_token_budget: Optional[int] = None
-    remaining_tokens: Optional[int] = None
+    level: UserLevel | None = None
+    token_budget: int | None = None
+    max_token_budget: int | None = None
+    remaining_tokens: int | None = None
 
 
 class LogoutResponse(BaseModel):
@@ -162,39 +162,39 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str = Field(..., description="Token de reset recebido por email")
     new_password: str = Field(..., min_length=8, max_length=100, description="Nova senha (mínimo 8 caracteres, força média ou superior)")
-    
+
     @field_validator('new_password')
     @classmethod
     def validate_password_strength(cls, v):
         """Valida força da senha usando zxcvbn (score mínimo 2 = força média)"""
         if len(v.encode('utf-8')) > 1000:
             raise ValueError('Senha muito longa. Máximo 1000 bytes.')
-        
+
         # Avaliar força da senha
         resultado = zxcvbn(v)
         score = resultado.get('score', 0)  # 0-4
-        
+
         # Score 2+ = força média ou superior
         if score < 2:
             feedback = resultado.get('feedback', {})
             warning = feedback.get('warning', '')
             sugestoes = feedback.get('suggestions', [])
-            
+
             # Construir mensagem com aviso + sugestões
             mensagem = "Senha fraca."
-            
+
             # Adicionar aviso se existir
             if warning:
                 warning_traduzido = translate_zxcvbn_suggestion(warning)
                 mensagem += f" {warning_traduzido}"
-            
+
             # Adicionar sugestões
             if sugestoes:
                 sugestoes_traduzidas = [translate_zxcvbn_suggestion(s) for s in sugestoes[:2]]
                 mensagem += " Dicas: " + "; ".join(sugestoes_traduzidas)
             else:
                 mensagem += " Use uma combinação de maiúsculas, minúsculas, números e símbolos."
-            
+
             raise ValueError(mensagem)
-        
+
         return v

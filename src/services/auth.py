@@ -1,15 +1,15 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-from jose import JWTError, jwt
-import hashlib
 import base64
-import bcrypt
-import uuid
+import hashlib
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
-from sqlalchemy.orm import Session
+
+import bcrypt
+from jose import JWTError, jwt
+
+from config.logger import logger
 from config.settings import settings
 from shared.database.models.user import User
-from config.logger import logger
 
 
 class AuthService:
@@ -27,7 +27,7 @@ class AuthService:
         """
         # Adicionar pepper à senha antes do hash
         password_with_pepper = password + settings.PASSWORD_PEPPER
-        
+
         # SHA-256 produz sempre 32 bytes (256 bits), que está dentro do limite do bcrypt
         sha256_hash = hashlib.sha256(password_with_pepper.encode('utf-8')).digest()
         # Base64 encode para string (44 caracteres, bem abaixo do limite de 72)
@@ -38,9 +38,9 @@ class AuthService:
         # Verificar se precisa de reset (compatibilidade com migração)
         if hashed_password.startswith("RESET_REQUIRED_"):
             return False  # Sempre falha para forçar reset
-        
+
         prepared_password = self._prepare_password_for_bcrypt(plain_password)
-        
+
         try:
             # Usar bcrypt diretamente
             return bcrypt.checkpw(prepared_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -55,7 +55,7 @@ class AuthService:
     def get_password_hash(self, password: str) -> str:
         """Gera hash da senha"""
         prepared_password = self._prepare_password_for_bcrypt(password)
-        
+
         try:
             # Gerar salt e hash usando bcrypt diretamente
             salt = bcrypt.gensalt()
@@ -65,14 +65,14 @@ class AuthService:
             logger.error(f"Error hashing password: {str(e)}")
             raise
 
-    def create_access_token(self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         """Cria token JWT de acesso"""
         to_encode = data.copy()
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
-        
+            expire = datetime.now(UTC) + timedelta(minutes=self.access_token_expire_minutes)
+
         to_encode.update({
             "exp": expire,
             "type": "access"
@@ -80,11 +80,11 @@ class AuthService:
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
-    def create_refresh_token(self, data: Dict[str, Any]) -> str:
+    def create_refresh_token(self, data: dict[str, Any]) -> str:
         """Cria token JWT de atualização"""
         to_encode = data.copy()
-        expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
-        
+        expire = datetime.now(UTC) + timedelta(days=self.refresh_token_expire_days)
+
         to_encode.update({
             "exp": expire,
             "type": "refresh"
@@ -92,67 +92,67 @@ class AuthService:
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
-    def verify_token(self, token: str, token_type: str = "access") -> Optional[Dict[str, Any]]:
+    def verify_token(self, token: str, token_type: str = "access") -> dict[str, Any] | None:
         """Verifica e decodifica token JWT"""
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            
+
             # Verificar tipo do token
             if payload.get("type") != token_type:
                 logger.warning(f"Token type mismatch: expected {token_type}, got {payload.get('type')}")
                 return None
-            
+
             # Verificar expiração
             exp = payload.get("exp")
-            if exp is None or datetime.fromtimestamp(exp, timezone.utc) < datetime.now(timezone.utc):
+            if exp is None or datetime.fromtimestamp(exp, UTC) < datetime.now(UTC):
                 logger.warning("Token expired")
                 return None
-                
+
             return payload
         except JWTError as e:
             logger.warning(f"JWT error: {str(e)}")
             return None
 
-    def authenticate_user(self, user_repo: Any, email: str, password: str) -> Optional[User]:
+    def authenticate_user(self, user_repo: Any, email: str, password: str) -> User | None:
         """Autentica usuário com email e senha"""
         # Buscar por email
         user = user_repo.get_by_email(email)
-        
+
         if not user:
             logger.warning(f"User not found: {email}")
             return None
-        
+
         if not self.verify_password(password, user.password_hash):
             logger.warning(f"Invalid password for user: {email}")
             return None
-            
+
         logger.info(f"User authenticated successfully: {email}")
         return user
 
-    def create_user_tokens(self, user: User, user_repo: Any) -> Dict[str, Any]:
+    def create_user_tokens(self, user: User, user_repo: Any) -> dict[str, Any]:
         """Cria tokens de acesso e refresh para o usuário e os registra no banco"""
         # Invalidar tokens antigos do usuário para evitar duplicatas
         user_repo.invalidate_all_user_tokens(user.id)
-        
+
         access_data = {
             "sub": str(user.id),
             "username": user.username,
             "email": user.email  # Property já retorna email decriptado
         }
-        
+
         refresh_data = {
             "sub": str(user.id),
             "username": user.username
         }
-        
+
         access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
         refresh_token_expires = timedelta(days=self.refresh_token_expire_days)
-        
+
         access_token = self.create_access_token(access_data, expires_delta=access_token_expires)
         refresh_token = self.create_refresh_token(refresh_data)
-        
+
         # Registrar no banco de dados
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         user_repo.create_token(
             user_id=user.id,
             token=access_token,
@@ -165,7 +165,7 @@ class AuthService:
             token_type="refresh",
             expires_at=now + refresh_token_expires
         )
-        
+
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
@@ -173,7 +173,7 @@ class AuthService:
             "expires_in": self.access_token_expire_minutes * 60
         }
 
-    def refresh_access_token(self, refresh_token: str, user_repo: Any) -> Optional[Dict[str, Any]]:
+    def refresh_access_token(self, refresh_token: str, user_repo: Any) -> dict[str, Any] | None:
         """Gera novo access token e refresh token usando refresh token (refresh token rotation)"""
         # Verificar se o refresh token existe e está ativo no banco
         stored_token = user_repo.get_token(refresh_token)
@@ -183,43 +183,43 @@ class AuthService:
         payload = self.verify_token(refresh_token, "refresh")
         if not payload:
             return None
-        
+
         # Criar novo access token
         access_data = {
             "sub": payload["sub"],
             "username": payload["username"],
             "email": payload.get("email", "")
         }
-        
+
         # Criar novo refresh token (rotation)
         refresh_data = {
             "sub": payload["sub"],
             "username": payload["username"]
         }
-        
+
         access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
         refresh_token_expires = timedelta(days=self.refresh_token_expire_days)
-        
+
         new_access_token = self.create_access_token(access_data, expires_delta=access_token_expires)
         new_refresh_token = self.create_refresh_token(refresh_data)
-        
+
         # Invalidar refresh token antigo (security measure)
         user_repo.invalidate_token(refresh_token)
-        
+
         # Registrar novos tokens no banco
         user_repo.create_token(
             user_id=stored_token.user_id,
             token=new_access_token,
             token_type="access",
-            expires_at=datetime.now(timezone.utc) + access_token_expires
+            expires_at=datetime.now(UTC) + access_token_expires
         )
         user_repo.create_token(
             user_id=stored_token.user_id,
             token=new_refresh_token,
             token_type="refresh",
-            expires_at=datetime.now(timezone.utc) + refresh_token_expires
+            expires_at=datetime.now(UTC) + refresh_token_expires
         )
-        
+
         return {
             "access_token": new_access_token,
             "refresh_token": new_refresh_token,  # Novo refresh token
@@ -227,7 +227,7 @@ class AuthService:
             "expires_in": self.access_token_expire_minutes * 60
         }
 
-    def get_current_user_from_token(self, token: str, user_repo: Any) -> Optional[User]:
+    def get_current_user_from_token(self, token: str, user_repo: Any) -> User | None:
         """Obtém usuário atual a partir do token, verificando se está ativo no banco"""
         # Limpar tokens expirados/inativos periodicamente
         try:
@@ -235,7 +235,7 @@ class AuthService:
             user_repo.cleanup_expired_password_reset_tokens()
         except Exception as e:
             logger.warning(f"Failed to cleanup expired tokens: {e}")
-        
+
         # Verificar se o token existe e está ativo no banco
         stored_token = user_repo.get_token(token)
         if not stored_token or not stored_token.is_active:
@@ -245,11 +245,11 @@ class AuthService:
         payload = self.verify_token(token, "access")
         if not payload:
             return None
-        
+
         user_id = payload.get("sub")
         if user_id is None:
             return None
-        
+
         try:
             # Convert string to UUID
             user_uuid = UUID(user_id)

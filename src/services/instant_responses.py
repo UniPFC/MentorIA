@@ -3,19 +3,19 @@ Service for handling instant responses to common questions.
 Handles normalization of text (accents, capitalization, etc).
 """
 
-import unicodedata
 import re
-from typing import Optional, Dict, List
+import unicodedata
+
 from config.logger import logger
 
 
 class InstantResponseService:
     """Service for managing and retrieving instant responses."""
-    
+
     # Dictionary of instant responses
     # Key: normalized question patterns
     # Value: response text
-    INSTANT_RESPONSES: Dict[str, str] = {
+    INSTANT_RESPONSES: dict[str, str] = {
         # Example responses - expand as needed
 
         "oi": "Olá! Como posso ajudá-lo?",
@@ -46,7 +46,7 @@ class InstantResponseService:
         "como funciona": "Eu uso meu conhecimento baseado no conhecimento desta base de dados para responder suas dúvidas. É só perguntar!",
         "crie um teste de estudo": "Com certeza! Posso apresentar perguntas de múltipla escolha ou discursivas sobre o conteúdo desejado! Por onde quer começar? É só me dizer uma matéria, conteúdo ou tema!"
     }
-    
+
     @staticmethod
     def normalize_text(text: str) -> str:
         """
@@ -55,44 +55,44 @@ class InstantResponseService:
         - Convert to lowercase
         - Remove extra spaces
         - Remove punctuation
-        
+
         Args:
             text: Text to normalize
-            
+
         Returns:
             Normalized text
         """
         # Remove accents
         text = unicodedata.normalize('NFKD', text)
         text = ''.join([c for c in text if not unicodedata.combining(c)])
-        
+
         # Convert to lowercase
         text = text.lower()
-        
+
         # Remove punctuation and extra spaces
         text = re.sub(r'[^\w\s]', '', text)
         text = re.sub(r'\s+', ' ', text).strip()
-        
+
         return text
-    
+
     @staticmethod
-    def get_instant_response(question: str) -> Optional[str]:
+    def get_instant_response(question: str) -> str | None:
         """
         Get instant response for a question if it matches a known pattern.
         Only exact matches are returned to avoid false positives with complex queries.
-        
+
         Args:
             question: User's question
-            
+
         Returns:
             Response text if found, None otherwise
         """
         normalized_question = InstantResponseService.normalize_text(question)
-        
+
         # Exact match only
         if normalized_question in InstantResponseService.INSTANT_RESPONSES:
             response = InstantResponseService.INSTANT_RESPONSES[normalized_question]
             logger.info(f"Instant response matched: '{question}' -> '{response[:50]}...'")
             return response
-        
+
         return None

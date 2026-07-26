@@ -1,11 +1,7 @@
 """Integration tests for token budget system."""
 
-import pytest
-from uuid import UUID
-from shared.database.models.user import User, UserLevel
-from src.repositories.user import UserRepository
-from src.services.user import UserService
 from config.settings import settings
+from shared.database.models.user import User, UserLevel
 
 
 class TestUserModel:
@@ -104,7 +100,7 @@ class TestUserModel:
             token_budget=5000
         )
         assert user.remaining_tokens == 5000
-        
+
         user.level = UserLevel.LEVEL_05
         user.token_budget = None
         assert user.remaining_tokens is None
@@ -118,7 +114,7 @@ class TestCostTierCalculation:
         min_mult = settings.COST_TIER_MIN_MULTIPLIER
         avg_mult = min_mult
         max_mult = settings.COST_TIER_MAX_MULTIPLIER
-        
+
         tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
         tier = max(0, min(9, tier))
         assert tier == 0
@@ -128,7 +124,7 @@ class TestCostTierCalculation:
         min_mult = settings.COST_TIER_MIN_MULTIPLIER
         avg_mult = settings.COST_TIER_MAX_MULTIPLIER
         max_mult = settings.COST_TIER_MAX_MULTIPLIER
-        
+
         tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
         tier = max(0, min(9, tier))
         assert tier == 9
@@ -138,7 +134,7 @@ class TestCostTierCalculation:
         min_mult = settings.COST_TIER_MIN_MULTIPLIER
         avg_mult = 1.0
         max_mult = settings.COST_TIER_MAX_MULTIPLIER
-        
+
         tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
         tier = max(0, min(9, tier))
         assert 2 <= tier <= 3
@@ -147,13 +143,13 @@ class TestCostTierCalculation:
         """Test that tier is clamped to 0-9 range."""
         min_mult = settings.COST_TIER_MIN_MULTIPLIER
         max_mult = settings.COST_TIER_MAX_MULTIPLIER
-        
+
         # Test below minimum
         avg_mult = 0.0
         tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
         tier = max(0, min(9, tier))
         assert tier == 0
-        
+
         # Test above maximum
         avg_mult = 10.0
         tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
@@ -170,7 +166,7 @@ class TestTokenDeductionCalculation:
         output_tokens = 200
         input_multiplier = 1.0
         output_multiplier = 1.0
-        
+
         actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
         assert actual_tokens == 300
 
@@ -180,7 +176,7 @@ class TestTokenDeductionCalculation:
         output_tokens = 200
         input_multiplier = 1.5
         output_multiplier = 2.0
-        
+
         actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
         assert actual_tokens == int(150 + 400)  # 550
 
@@ -190,7 +186,7 @@ class TestTokenDeductionCalculation:
         output_tokens = 100
         input_multiplier = 1.1
         output_multiplier = 1.5
-        
+
         actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
         assert actual_tokens == int(110 + 150)  # 260
 
@@ -207,17 +203,17 @@ class TestBudgetCheckCalculation:
             level=UserLevel.LEVEL_01,
             token_budget=1000
         )
-        
+
         input_tokens = 500
         output_tokens = 0
         reserve = 200
         input_multiplier = 1.0
         output_multiplier = 1.0
-        
+
         actual_input = int(input_tokens * input_multiplier)
         actual_output = int(output_tokens * output_multiplier)
         can_afford = user.token_budget >= (actual_input + actual_output + reserve)
-        
+
         assert can_afford is True  # 1000 >= 500 + 0 + 200
 
     def test_budget_check_with_multiplier(self):
@@ -229,17 +225,17 @@ class TestBudgetCheckCalculation:
             level=UserLevel.LEVEL_01,
             token_budget=1000
         )
-        
+
         input_tokens = 500
         output_tokens = 0
         reserve = 200
         input_multiplier = 1.5
         output_multiplier = 1.0
-        
+
         actual_input = int(input_tokens * input_multiplier)
         actual_output = int(output_tokens * output_multiplier)
         can_afford = user.token_budget >= (actual_input + actual_output + reserve)
-        
+
         assert can_afford is True  # 1000 >= 750 + 0 + 200
 
     def test_budget_check_insufficient_with_multiplier(self):
@@ -251,17 +247,17 @@ class TestBudgetCheckCalculation:
             level=UserLevel.LEVEL_01,
             token_budget=1000
         )
-        
+
         input_tokens = 500
         output_tokens = 0
         reserve = 200
         input_multiplier = 2.0
         output_multiplier = 1.0
-        
+
         actual_input = int(input_tokens * input_multiplier)
         actual_output = int(output_tokens * output_multiplier)
         can_afford = user.token_budget >= (actual_input + actual_output + reserve)
-        
+
         assert can_afford is False  # 1000 < 1000 + 0 + 200
 
 
@@ -270,7 +266,7 @@ def print_test_results():
     print("\n" + "="*60)
     print("TOKEN BUDGET SYSTEM TEST RESULTS")
     print("="*60)
-    
+
     # Test User Model
     print("\n[User Model Tests]")
     user = User(username="user", email="user@example.com", password_hash="hashed", level=UserLevel.LEVEL_01, token_budget=5000)
@@ -278,24 +274,24 @@ def print_test_results():
     print(f"  can_afford_tokens(1000): {user.can_afford_tokens(1000)}")
     print(f"  max_token_budget: {user.max_token_budget}")
     print(f"  remaining_tokens: {user.remaining_tokens}")
-    
+
     admin = User(username="admin", email="admin@example.com", password_hash="hashed", level=UserLevel.LEVEL_05)
     print(f"  has_unlimited_budget (LEVEL_05): {admin.has_unlimited_budget}")
     print(f"  max_token_budget (LEVEL_05): {admin.max_token_budget}")
-    
+
     # Test Cost Tier Calculation
     print("\n[Cost Tier Calculation]")
     min_mult = settings.COST_TIER_MIN_MULTIPLIER
     max_mult = settings.COST_TIER_MAX_MULTIPLIER
     print(f"  COST_TIER_MIN_MULTIPLIER: {min_mult}")
     print(f"  COST_TIER_MAX_MULTIPLIER: {max_mult}")
-    
+
     test_multipliers = [0.1, 0.5, 1.0, 1.5, 2.0, 3.0]
     for mult in test_multipliers:
         tier = int(((mult - min_mult) / (max_mult - min_mult)) * 9)
         tier = max(0, min(9, tier))
         print(f"  Multiplier {mult} -> Tier {tier}")
-    
+
     # Test Token Deduction
     print("\n[Token Deduction Calculation]")
     input_tokens = 100
@@ -306,7 +302,7 @@ def print_test_results():
     print(f"  Input: {input_tokens} * {input_mult} = {int(input_tokens * input_mult)}")
     print(f"  Output: {output_tokens} * {output_mult} = {int(output_tokens * output_mult)}")
     print(f"  Total: {actual}")
-    
+
     # Test Budget Check
     print("\n[Budget Check Calculation]")
     user_budget = 1000
@@ -321,7 +317,7 @@ def print_test_results():
     print(f"  Reserve: {reserve}")
     print(f"  Required: {required}")
     print(f"  Can Afford: {can_afford}")
-    
+
     print("\n" + "="*60)
     print("TESTS COMPLETED")
     print("="*60 + "\n")

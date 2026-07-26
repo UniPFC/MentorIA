@@ -1,19 +1,20 @@
 import pytest
 from sqlalchemy.orm import Session
-from src.services.auth import AuthService
-from src.repositories.user import UserRepository
-from src.services.chat import ChatService
-from shared.database.models.user import User
-from shared.database.models.chat_type import ChatType
+
 from shared.database.models.chat import Chat
+from shared.database.models.chat_type import ChatType
 from shared.database.models.knowledge_chunk import KnowledgeChunk
 from shared.database.models.message import MessageRole
+from shared.database.models.user import User
+from src.repositories.user import UserRepository
+from src.services.auth import AuthService
+from src.services.chat import ChatService
 
 
 @pytest.mark.integration
 class TestEndToEnd:
     """Testes end-to-end para fluxos completos do sistema"""
-    
+
     def test_complete_user_journey(self, db_session: Session):
         """
         Testa jornada completa do usuário:
@@ -29,12 +30,12 @@ class TestEndToEnd:
         auth_service = AuthService()
         user_repo = UserRepository(db_session)
         chat_service = ChatService(db_session)
-        
+
         # ========== PASSO 1: Registro de novo usuário ==========
         email = "newuser@example.com"
         username = "newuser"
         password = "SecurePassword123!"
-        
+
         new_user = User(
             email=email,
             username=username,
@@ -42,17 +43,17 @@ class TestEndToEnd:
             is_active=True
         )
         user = user_repo.create(new_user)
-        
+
         assert user.id is not None
         assert user.email == email
         assert user.is_active is True
-        
+
         # ========== PASSO 2: Autenticação ==========
         authenticated_user = auth_service.authenticate_user(user_repo, email, password)
-        
+
         assert authenticated_user is not None
         assert authenticated_user.id == user.id
-        
+
         # ========== PASSO 3: Criação de base de conhecimento ==========
         knowledge_base = ChatType(
             name="AI Knowledge Base",
@@ -64,10 +65,10 @@ class TestEndToEnd:
         db_session.add(knowledge_base)
         db_session.commit()
         db_session.refresh(knowledge_base)
-        
+
         assert knowledge_base.id is not None
         assert knowledge_base.owner_id == user.id
-        
+
         # ========== PASSO 4: Adição de chunks de conhecimento ==========
         import json
         knowledge_chunks = [
@@ -93,17 +94,17 @@ class TestEndToEnd:
                 chunk_metadata=json.dumps({"question": "What is DL?", "answer": "DL uses neural networks", "category": "advanced"})
             ),
         ]
-        
+
         for chunk in knowledge_chunks:
             db_session.add(chunk)
         db_session.commit()
-        
+
         # Verificar chunks foram salvos
         saved_chunks = db_session.query(KnowledgeChunk).filter(
             KnowledgeChunk.chat_type_id == knowledge_base.id
         ).all()
         assert len(saved_chunks) == 3
-        
+
         # ========== PASSO 5: Criação de chat ==========
         chat = Chat(
             user_id=user.id,
@@ -113,11 +114,11 @@ class TestEndToEnd:
         db_session.add(chat)
         db_session.commit()
         db_session.refresh(chat)
-        
+
         assert chat.id is not None
         assert chat.user_id == user.id
         assert chat.chat_type_id == knowledge_base.id
-        
+
         # ========== PASSO 6: Conversa com histórico ==========
         conversation = [
             ("user", "Hello, I want to learn about AI"),
@@ -129,49 +130,49 @@ class TestEndToEnd:
             ("user", "Thank you for the explanation"),
             ("assistant", "You're welcome! Feel free to ask more questions anytime."),
         ]
-        
+
         for role_str, content in conversation:
             role = MessageRole.USER if role_str == "user" else MessageRole.ASSISTANT
             chat_service.save_message(chat.id, role, content)
-        
+
         # Verificar histórico (last message is ASSISTANT, so all 8 are included)
         history = chat_service.get_chat_history(chat.id)
         assert len(history) == 8  # All 8 messages (last is assistant, not excluded)
         assert history[0]["content"] == "Hello, I want to learn about AI"
         assert history[-1]["content"] == "You're welcome! Feel free to ask more questions anytime."
-        
+
         # ========== PASSO 7: Geração de tokens ==========
         tokens = auth_service.create_user_tokens(user, user_repo)
-        
+
         assert "access_token" in tokens
         assert "refresh_token" in tokens
         assert tokens["token_type"] == "bearer"
-        
+
         # Verificar que token funciona
         current_user = auth_service.get_current_user_from_token(tokens["access_token"], user_repo)
         assert current_user is not None
         assert current_user.id == user.id
-        
+
         # ========== PASSO 8: Refresh de token ==========
         new_tokens = auth_service.refresh_access_token(tokens["refresh_token"], user_repo)
-        
+
         assert new_tokens is not None
         assert new_tokens["access_token"] != tokens["access_token"]
-        
+
         # Verificar novo token funciona
         current_user = auth_service.get_current_user_from_token(new_tokens["access_token"], user_repo)
         assert current_user is not None
         assert current_user.id == user.id
-        
+
         # ========== PASSO 9: Logout ==========
         token_record = user_repo.get_token(new_tokens["access_token"])
         token_record.is_active = False
         db_session.commit()
-        
+
         # Verificar que token não funciona mais
         current_user = auth_service.get_current_user_from_token(new_tokens["access_token"], user_repo)
         assert current_user is None
-    
+
     def test_multi_user_knowledge_sharing(self, db_session: Session):
         """
         Testa compartilhamento de base de conhecimento entre múltiplos usuários:
@@ -184,7 +185,7 @@ class TestEndToEnd:
         auth_service = AuthService()
         user_repo = UserRepository(db_session)
         chat_service = ChatService(db_session)
-        
+
         # ========== PASSO 1: Criar dois usuários ==========
         user_a = User(
             email="usera@example.com",
@@ -193,7 +194,7 @@ class TestEndToEnd:
             is_active=True
         )
         user_a = user_repo.create(user_a)
-        
+
         user_b = User(
             email="userb@example.com",
             username="userb",
@@ -201,7 +202,7 @@ class TestEndToEnd:
             is_active=True
         )
         user_b = user_repo.create(user_b)
-        
+
         # ========== PASSO 2: Usuário A cria base pública ==========
         shared_kb = ChatType(
             name="Shared Knowledge Base",
@@ -213,7 +214,7 @@ class TestEndToEnd:
         db_session.add(shared_kb)
         db_session.commit()
         db_session.refresh(shared_kb)
-        
+
         # ========== PASSO 3: Usuário A adiciona chunks ==========
         import json
         chunks = [
@@ -232,11 +233,11 @@ class TestEndToEnd:
                 chunk_metadata=json.dumps({"question": "Question 2", "answer": "Answer 2 from User A", "author": "user_a"})
             ),
         ]
-        
+
         for chunk in chunks:
             db_session.add(chunk)
         db_session.commit()
-        
+
         # ========== PASSO 4: Ambos criam chats ==========
         chat_a = Chat(
             user_id=user_a.id,
@@ -244,7 +245,7 @@ class TestEndToEnd:
             title="User A Chat"
         )
         db_session.add(chat_a)
-        
+
         chat_b = Chat(
             user_id=user_b.id,
             chat_type_id=shared_kb.id,
@@ -254,12 +255,12 @@ class TestEndToEnd:
         db_session.commit()
         db_session.refresh(chat_a)
         db_session.refresh(chat_b)
-        
+
         # ========== PASSO 5: Conversas independentes ==========
         # User A conversation
         chat_service.save_message(chat_a.id, MessageRole.USER, "User A question")
         chat_service.save_message(chat_a.id, MessageRole.ASSISTANT, "User A answer")
-        
+
         # User B conversation
         chat_service.save_message(chat_b.id, MessageRole.USER, "User B question")
         chat_service.save_message(chat_b.id, MessageRole.ASSISTANT, "User B answer")
@@ -273,7 +274,7 @@ class TestEndToEnd:
         assert len(history_b) == 2
         assert history_a[0]["content"] == "User A question"
         assert history_b[0]["content"] == "User B question"
-    
+
     def test_knowledge_base_with_metadata(self, db_session: Session):
         """
         Testa base de conhecimento com metadados:
@@ -283,7 +284,7 @@ class TestEndToEnd:
         """
         auth_service = AuthService()
         user_repo = UserRepository(db_session)
-        
+
         # Criar usuário
         user = User(
             email="metadata@example.com",
@@ -292,7 +293,7 @@ class TestEndToEnd:
             is_active=True
         )
         user = user_repo.create(user)
-        
+
         # Criar base de conhecimento
         kb = ChatType(
             name="Metadata KB",
@@ -304,7 +305,7 @@ class TestEndToEnd:
         db_session.add(kb)
         db_session.commit()
         db_session.refresh(kb)
-        
+
         # Adicionar chunks com diferentes metadados
         import json
         chunks_data = [
@@ -333,7 +334,7 @@ class TestEndToEnd:
                 "metadata": {"question": "Data Science", "answer": "Data Science uses statistics and ML", "language": "python", "level": "advanced", "category": "data_science"}
             },
         ]
-        
+
         for data in chunks_data:
             chunk = KnowledgeChunk(
                 chat_type_id=kb.id,
@@ -344,20 +345,20 @@ class TestEndToEnd:
             )
             db_session.add(chunk)
         db_session.commit()
-        
+
         # Verificar chunks foram salvos
         all_chunks = db_session.query(KnowledgeChunk).filter(
             KnowledgeChunk.chat_type_id == kb.id
         ).all()
-        
+
         assert len(all_chunks) == 4
-        
+
         # Verificar metadados
         python_chunks = [c for c in all_chunks if json.loads(c.chunk_metadata).get("language") == "python"]
         assert len(python_chunks) == 3
-        
+
         beginner_chunks = [c for c in all_chunks if json.loads(c.chunk_metadata).get("level") == "beginner"]
         assert len(beginner_chunks) == 2
-        
+
         advanced_chunks = [c for c in all_chunks if json.loads(c.chunk_metadata).get("level") == "advanced"]
         assert len(advanced_chunks) == 2

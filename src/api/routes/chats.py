@@ -2,44 +2,47 @@
 Chat endpoints for managing chat sessions and messages.
 """
 
+import asyncio
+import json
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List
-from uuid import UUID
-from shared.database.session import get_db, SessionLocal
+
+from config.logger import logger
+from config.settings import settings
 from shared.database.models.chat import Chat
-from shared.database.models.chat_type import ChatType
-from shared.database.models.message import Message, MessageRole
+from shared.database.models.message import MessageRole
 from shared.database.models.user import User
-from src.services.chat import ChatService
-from src.services.background import schedule_title_generation
-from src.services.instant_responses import InstantResponseService
-from src.services.user import UserService
+from shared.database.session import SessionLocal, get_db
+from src.api.dependencies import (
+    get_chat_repo,
+    get_chat_type_repo,
+    get_current_active_user,
+)
 from src.api.schemas.chat import (
+    AvailableModelsResponse,
     ChatCreate,
+    ChatModelUpdate,
     ChatResponse,
     ChatWithMessagesResponse,
+    LLMModelInfo,
+    MessageResponse,
     SendMessageRequest,
     SendMessageResponse,
-    MessageResponse,
-    ChatModelUpdate,
-    AvailableModelsResponse,
-    LLMModelInfo
 )
-from src.api.dependencies import (
-    get_current_active_user,
-    get_chat_repo,
-    get_chat_type_repo
-)
+from src.rag.pipeline import RAGPipeline
 from src.repositories.chat import ChatRepository
 from src.repositories.chat_type import ChatTypeRepository
-from src.rag.pipeline import RAGPipeline
-from config.settings import settings
-import asyncio
-import json
-from config.logger import logger
-from src.services.tokenizer import count_tokens, count_messages_tokens, mode_from_provider
+from src.services.background import schedule_title_generation
+from src.services.chat import ChatService
+from src.services.instant_responses import InstantResponseService
+from src.services.tokenizer import (
+    count_tokens,
+    mode_from_provider,
+)
+from src.services.user import UserService
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -55,19 +58,19 @@ def get_available_models(
     try:
         available_models_data = settings.get_available_models()
         available_models = []
-        
+
         for m in available_models_data:
             input_mult = m.get("input_token_multiplier", 1.0)
             output_mult = m.get("output_token_multiplier", 1.0)
             avg_mult = (input_mult + output_mult) / 2
-            
+
             # Calculate cost tier (0-9)
             # Range: COST_TIER_MIN_MULTIPLIER = 0, COST_TIER_MAX_MULTIPLIER = 9
             min_mult = settings.COST_TIER_MIN_MULTIPLIER
             max_mult = settings.COST_TIER_MAX_MULTIPLIER
             tier = int(((avg_mult - min_mult) / (max_mult - min_mult)) * 9)
             tier = max(0, min(9, tier))
-            
+
             available_models.append(
                 LLMModelInfo(
                     model=m.get("model"),
@@ -76,16 +79,16 @@ def get_available_models(
                     cost_tier=tier
                 )
             )
-        
+
         current_default = f"{settings.LLM_MODEL} ({settings.LLM_PROVIDER})"
-        
+
         logger.info(f"Listed {len(available_models)} available models for user {current_user.id}")
-        
+
         return AvailableModelsResponse(
             models=available_models,
             current_default=current_default
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to list available models: {e}")
         raise HTTPException(
@@ -97,32 +100,32 @@ def get_available_models(
 def verify_chat_ownership(chat_id: UUID, user_id: UUID, chat_repo: ChatRepository) -> Chat:
     """
     Verify that a chat belongs to the specified user.
-    
+
     Args:
         chat_id: ID of the chat
         user_id: ID of the user
         chat_repo: Chat repository instance
-        
+
     Returns:
         Chat object if found and owned by user
-        
+
     Raises:
         HTTPException: If chat not found or doesn't belong to user
     """
     chat = chat_repo.get_by_id(chat_id)
-    
+
     if not chat:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Chat with id {chat_id} not found"
         )
-    
+
     if chat.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to access this chat"
         )
-    
+
     return chat
 
 
@@ -139,7 +142,7 @@ def create_chat(
     Title can be auto-generated after first message/response if placeholder was used.
     """
     try:
-        
+
         # Verify chat type exists
         chat_type = chat_type_repo.get_by_id(chat_data.chat_type_id)
         if not chat_type:
@@ -147,14 +150,14 @@ def create_chat(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"ChatType with id {chat_data.chat_type_id} not found"
             )
-        
+
         # Check access: user must own it or it must be public
         if not chat_type.is_public and chat_type.owner_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create chats with this chat type"
             )
-        
+
         # Determine title and whether it's auto-generated
         title_auto_generated = False
         if chat_data.title:
@@ -164,7 +167,7 @@ def create_chat(
             user_chats_count = chat_repo.count_by_user(current_user.id)
             title = f"Chat #{user_chats_count + 1}"
             title_auto_generated = True
-        
+
         # Create chat with default model
         chat = Chat(
             user_id=current_user.id,
@@ -174,12 +177,12 @@ def create_chat(
             llm_model=settings.LLM_MODEL,
             llm_provider=settings.LLM_PROVIDER
         )
-        
+
         chat = chat_repo.create(chat)
-        
+
         logger.info(f"Created Chat: {chat.title} (id={chat.id}, auto_generated={title_auto_generated}, model={chat.llm_model}, provider={chat.llm_provider})")
         return chat
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -190,7 +193,7 @@ def create_chat(
         )
 
 
-@router.get("/", response_model=List[ChatResponse])
+@router.get("/", response_model=list[ChatResponse])
 def list_chats(
     chat_type_id: UUID = None,
     skip: int = 0,
@@ -209,7 +212,7 @@ def list_chats(
             limit=limit
         )
         return chats
-        
+
     except Exception as e:
         logger.error(f"Failed to list chats: {e}")
         raise HTTPException(
@@ -244,22 +247,22 @@ def update_chat_model(
     Update the LLM model and/or provider for a chat.
     Can be changed at any time during the chat session.
     Model must be one of the available models from settings.
-    
+
     Args:
         chat_id: ID of the chat
         model_update: ChatModelUpdate schema with llm_model and/or llm_provider
     """
     try:
         chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
-        
+
         # Get available models for validation
         available_models = settings.get_available_models()
         available_model_pairs = {(m["model"], m["provider"]) for m in available_models}
-        
+
         # Determine the new model and provider
         new_model = model_update.llm_model if model_update.llm_model is not None else chat.llm_model
         new_provider = model_update.llm_provider if model_update.llm_provider is not None else chat.llm_provider
-        
+
         # Validate that the new model/provider combination is available
         if (new_model, new_provider) not in available_model_pairs:
             available_list = ", ".join([f"{m['model']} ({m['provider']})" for m in available_models])
@@ -267,15 +270,15 @@ def update_chat_model(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Model '{new_model}' with provider '{new_provider}' is not available. Available models: {available_list}"
             )
-        
+
         # Update the chat
         chat.llm_model = new_model
         chat.llm_provider = new_provider
         chat = chat_repo.update(chat)
-        
+
         logger.info(f"Updated Chat model: {chat_id} -> model={chat.llm_model}, provider={chat.llm_provider}")
         return chat
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -298,9 +301,9 @@ def delete_chat(
     try:
         chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
         chat_repo.delete(chat)
-        
+
         logger.info(f"Deleted Chat: {chat.title} (id={chat_id})")
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -323,17 +326,17 @@ async def send_message(
     Send a message and get RAG-powered response.
     Uses the RAG pipeline to retrieve relevant chunks and generate contextual answers.
     Only the chat owner can send messages.
-    
+
     Async endpoint: offloads blocking RAG pipeline to a thread so the event loop
     stays free for other requests.
     """
     try:
         # Verify ownership and get chat (offload sync DB call)
         chat = await asyncio.to_thread(verify_chat_ownership, chat_id, current_user.id, chat_repo)
-        
+
         # Initialize Service
         chat_service = ChatService(db)
-        
+
         # Save User Message (offload sync DB call)
         await asyncio.to_thread(
             chat_service.save_message,
@@ -341,18 +344,18 @@ async def send_message(
             role=MessageRole.USER,
             content=message_data.content
         )
-        
+
         # Get chat history (offload sync DB call)
         chat_history = await asyncio.to_thread(chat_service.get_chat_history, chat_id)
-        
+
         # Count input tokens before calling the AI
         token_mode = mode_from_provider(chat.llm_provider)
         input_tokens = count_tokens(message_data.content, mode=token_mode)
         logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
-        
+
         # Check user token budget before sending message
         user_service = UserService(db)
-        
+
         # Get model cost multipliers
         available_models = settings.get_available_models()
         input_multiplier = 1.0
@@ -362,7 +365,7 @@ async def send_message(
                 input_multiplier = model.get("input_token_multiplier", 1.0)
                 output_multiplier = model.get("output_token_multiplier", 1.0)
                 break
-        
+
         # Check if user can afford input tokens + reserve (only check input, not output)
         actual_input_tokens = int(input_tokens * input_multiplier)
         if not user_service.can_afford_tokens(current_user, input_tokens, 0, settings.TOKEN_BUDGET_MINIMUM_RESERVE, input_multiplier, 1.0):
@@ -370,10 +373,10 @@ async def send_message(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)"
             )
-        
+
         # Run RAG pipeline in a thread to avoid blocking the event loop
         rag_pipeline = RAGPipeline()
-        
+
         result = await asyncio.to_thread(
             rag_pipeline.run,
             chat_type_id=chat.chat_type_id,
@@ -382,10 +385,10 @@ async def send_message(
             llm_model=chat.llm_model,
             llm_provider=chat.llm_provider
         )
-        
+
         assistant_content = result["answer"]
         retrieved_chunks = result["chunks"]
-        
+
         # Token usage logging
         output_tokens = count_tokens(assistant_content, mode=token_mode)
         logger.info(f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}")
@@ -394,10 +397,10 @@ async def send_message(
             f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
             f"total_tokens={input_tokens + output_tokens}"
         )
-        
+
         # Deduct tokens from user budget
         user_service.deduct_tokens(current_user.id, input_tokens, output_tokens, input_multiplier, output_multiplier)
-        
+
         # Format chunks for response (and storage)
         chunks_response = [
             {
@@ -407,7 +410,7 @@ async def send_message(
             }
             for chunk in retrieved_chunks
         ]
-        
+
         # Save Assistant Message with context (offload sync DB call)
         await asyncio.to_thread(
             chat_service.save_message,
@@ -415,19 +418,19 @@ async def send_message(
             role=MessageRole.ASSISTANT,
             content=assistant_content
         )
-        
+
         schedule_title_generation(chat_id)
-        
+
         logger.info(f"Processed RAG message in chat {chat_id} with {len(retrieved_chunks)} chunks")
-        
+
         # Return full chat with all messages - reload to get updated messages (offload sync DB call)
         chat = await asyncio.to_thread(chat_repo.get_by_id, chat_id)
-        
+
         return SendMessageResponse(
             chat=ChatWithMessagesResponse.model_validate(chat),
             sources=chunks_response
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -449,20 +452,20 @@ async def send_message_stream(
     """
     Send a message and get a streaming RAG-powered response.
     Returns a stream of JSON objects (NDJSON) with 'type' (token/sources/error) and 'content'.
-    
+
     The user message is saved immediately before streaming starts.
     The assistant response is generated and saved completely, even if the client disconnects.
-    
+
     Async endpoint: the setup phase (verify, save, history) runs without blocking.
     The streaming generator itself runs in a thread via StreamingResponse.
     """
-    
+
     # Verify ownership (offload sync DB call)
     chat = await asyncio.to_thread(verify_chat_ownership, chat_id, current_user.id, chat_repo)
-    
+
     # Initialize Service
     chat_service = ChatService(db)
-    
+
     # Save User Message immediately (offload sync DB call)
     await asyncio.to_thread(
         chat_service.save_message,
@@ -470,18 +473,18 @@ async def send_message_stream(
         role=MessageRole.USER,
         content=message_data.content
     )
-    
+
     # Get chat history (offload sync DB call)
     chat_history = await asyncio.to_thread(chat_service.get_chat_history, chat_id)
-    
+
     # Count input tokens before calling the AI
     token_mode = mode_from_provider(chat.llm_provider)
     input_tokens = count_tokens(message_data.content, mode=token_mode)
     logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
-    
+
     # Check user token budget before sending message
     user_service = UserService(db)
-    
+
     # Get model cost multipliers
     available_models = settings.get_available_models()
     input_multiplier = 1.0
@@ -491,7 +494,7 @@ async def send_message_stream(
             input_multiplier = model.get("input_token_multiplier", 1.0)
             output_multiplier = model.get("output_token_multiplier", 1.0)
             break
-    
+
     # Check if user can afford input tokens + reserve (only check input, not output)
     actual_input_tokens = int(input_tokens * input_multiplier)
     if not user_service.can_afford_tokens(current_user, input_tokens, 0, settings.TOKEN_BUDGET_MINIMUM_RESERVE, input_multiplier, 1.0):
@@ -499,32 +502,32 @@ async def send_message_stream(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)"
         )
-    
+
     # Initialize pipeline
     rag_pipeline = RAGPipeline()
-    
+
     def generate_response():
         # Create a new session for the stream duration
         session = SessionLocal()
         stream_service = ChatService(session)
-        
+
         full_response = []
         retrieved_chunks = []
         client_connected = True
-        
+
         try:
             # Check for instant response first
             instant_response = InstantResponseService.get_instant_response(message_data.content)
-            
+
             if instant_response:
                 # Use instant response instead of RAG
                 logger.info(f"Using instant response for: '{message_data.content}'")
-                
+
                 # Yield the response as tokens (simulate streaming)
                 for char in instant_response:
                     full_response.append(char)
                     yield json.dumps({"type": "token", "content": char}) + "\n"
-                
+
                 # No sources for instant responses
                 yield json.dumps({"type": "sources", "content": []}) + "\n"
             else:
@@ -541,28 +544,29 @@ async def send_message_stream(
                         full_response.append(chunk["content"])
                     elif chunk["type"] == "sources":
                         retrieved_chunks = chunk["content"]
-                    
+
                     # Try to send chunk to client
-                    try:
-                        yield json.dumps(chunk) + "\n"
-                    except GeneratorExit:
-                        # Client disconnected, but continue generating
-                        client_connected = False
-                        logger.info(f"Client disconnected from stream for chat {chat_id}, continuing generation...")
-            
+                    if client_connected:
+                        try:
+                            yield json.dumps(chunk) + "\n"
+                        except GeneratorExit:
+                            # Client disconnected, but continue generating
+                            client_connected = False
+                            logger.info(f"Client disconnected from stream for chat {chat_id}, continuing generation...")
+
             # Save Assistant Message after streaming completes (even if client disconnected)
             assistant_content = "".join(full_response)
             if not assistant_content:
                 assistant_content = "Erro ao gerar resposta (sem conteúdo)."
-                
+
             saved_message = stream_service.save_message(
                 chat_id=chat_id,
                 role=MessageRole.ASSISTANT,
                 content=assistant_content
             )
-            
+
             schedule_title_generation(chat_id)
-            
+
             # Token usage logging
             output_tokens = count_tokens(assistant_content, mode=token_mode)
             logger.info(f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}")
@@ -571,20 +575,20 @@ async def send_message_stream(
                 f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
                 f"total_tokens={input_tokens + output_tokens}"
             )
-            
+
             # Deduct tokens from user budget
             user_service.deduct_tokens(current_user.id, input_tokens, output_tokens, input_multiplier, output_multiplier)
-            
+
             logger.info(f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}")
-            
+
             # Send final message object only if client is still connected
             if client_connected:
                 message_response = MessageResponse.model_validate(saved_message)
                 yield json.dumps({
-                    "type": "message", 
+                    "type": "message",
                     "content": json.loads(message_response.model_dump_json())
                 }) + "\n"
-            
+
         except GeneratorExit:
             # Client disconnected
             client_connected = False
@@ -599,7 +603,7 @@ async def send_message_stream(
                         content=assistant_content
                     )
                     logger.info(f"Saved complete response to chat {chat_id} after client disconnect")
-                    
+
                 except Exception as save_err:
                     logger.error(f"Failed to save response after disconnect: {save_err}")
 
@@ -618,7 +622,7 @@ async def send_message_stream(
                     logger.info(f"Saved response to chat {chat_id} after error")
                 except Exception as save_err:
                     logger.error(f"Failed to save response after error: {save_err}")
-            
+
             if client_connected:
                 try:
                     yield json.dumps({"type": "error", "content": f"Erro no processamento: {str(e)}"}) + "\n"

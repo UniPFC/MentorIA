@@ -2,11 +2,13 @@
 SQLAlchemy model for tracking ingestion jobs.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Enum as SQLEnum, Uuid
-from sqlalchemy.sql import func
-from datetime import datetime, timezone
-import uuid
 import enum
+import uuid
+
+from sqlalchemy import Column, DateTime, Integer, String, Text, Uuid
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.sql import func
+
 from shared.database.session import Base
 
 

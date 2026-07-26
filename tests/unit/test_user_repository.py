@@ -1,65 +1,66 @@
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
+
+import pytest
 from sqlalchemy.orm import Session
-from src.repositories.user import UserRepository
-from src.services.auth import AuthService
+
+from shared.database.models.password_reset_token import PasswordResetToken
 from shared.database.models.user import User
 from shared.database.models.user_token import UserToken
-from shared.database.models.password_reset_token import PasswordResetToken
+from src.repositories.user import UserRepository
 
 
 @pytest.mark.unit
 class TestUserRepository:
     def test_get_by_id(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         user = repo.get_by_id(sample_user.id)
-        
+
         assert user is not None
         assert user.id == sample_user.id
         assert user.email == sample_user.email
-        
+
     def test_get_by_id_not_found(self, db_session: Session):
         repo = UserRepository(db_session)
-        
+
         user = repo.get_by_id(uuid4())
-        
+
         assert user is None
-        
+
     def test_get_by_email(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         user = repo.get_by_email(sample_user.email)
-        
+
         assert user is not None
         assert user.email == sample_user.email
-        
+
     def test_get_by_email_not_found(self, db_session: Session):
         repo = UserRepository(db_session)
-        
+
         user = repo.get_by_email("nonexistent@example.com")
-        
+
         assert user is None
 
     def test_get_by_username(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         user = repo.get_by_username(sample_user.username)
-        
+
         assert user is not None
         assert user.username == sample_user.username
-        
+
     def test_get_by_username_not_found(self, db_session: Session):
         repo = UserRepository(db_session)
-        
+
         user = repo.get_by_username("nonexistent")
-        
+
         assert user is None
-        
+
     def test_create_user(self, db_session: Session):
         repo = UserRepository(db_session)
-        
+
         new_user = User(
             id=uuid4(),
             username="newuser",
@@ -67,207 +68,207 @@ class TestUserRepository:
             password_hash="hashed_password",
             is_active=True
         )
-        
+
         created_user = repo.create(new_user)
-        
+
         assert created_user.id is not None
         assert created_user.username == "newuser"
         assert created_user.email == "newuser@example.com"
-        
+
     def test_update_user(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         sample_user.username = "updated_username"
         updated_user = repo.update(sample_user)
-        
+
         assert updated_user.username == "updated_username"
-        
+
     def test_create_token(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
         token = repo.create_token(
             user_id=sample_user.id,
             token="test_token_123",
             token_type="access",
             expires_at=expires_at
         )
-        
+
         assert token.id is not None
         assert token.user_id == sample_user.id
         assert token.token == "test_token_123"
         assert token.token_type == "access"
         assert token.is_active is True
-        
+
     def test_get_token(self, db_session: Session, sample_user_token: UserToken):
         repo = UserRepository(db_session)
-        
+
         token = repo.get_token(sample_user_token.token)
-        
+
         assert token is not None
         assert token.id == sample_user_token.id
         assert token.is_active is True
-        
+
     def test_get_token_not_found(self, db_session: Session):
         repo = UserRepository(db_session)
-        
+
         token = repo.get_token("nonexistent_token")
-        
+
         assert token is None
-        
+
     def test_get_token_inactive(self, db_session: Session, sample_user_token: UserToken):
         repo = UserRepository(db_session)
-        
+
         sample_user_token.is_active = False
         db_session.commit()
-        
+
         token = repo.get_token(sample_user_token.token)
-        
+
         assert token is None
-        
+
     def test_invalidate_token(self, db_session: Session, sample_user_token: UserToken):
         repo = UserRepository(db_session)
-        
+
         repo.invalidate_token(sample_user_token.token)
-        
+
         # Verify token was deleted
         token = db_session.query(UserToken).filter(UserToken.token == sample_user_token.token).first()
         assert token is None
-        
+
     def test_invalidate_all_user_tokens(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         token1 = repo.create_token(
             user_id=sample_user.id,
             token="token1",
             token_type="access",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1)
+            expires_at=datetime.now(UTC) + timedelta(hours=1)
         )
         token2 = repo.create_token(
             user_id=sample_user.id,
             token="token2",
             token_type="refresh",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7)
+            expires_at=datetime.now(UTC) + timedelta(days=7)
         )
-        
+
         repo.invalidate_all_user_tokens(sample_user.id)
-        
+
         # Verify tokens were deleted
         tokens = db_session.query(UserToken).filter(UserToken.user_id == sample_user.id).all()
         assert len(tokens) == 0
-        
+
     def test_create_password_reset_token(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
         reset_token = repo.create_password_reset_token(
             user_id=sample_user.id,
             token="reset_token_123",
             expires_at=expires_at
         )
-        
+
         assert reset_token.id is not None
         assert reset_token.user_id == sample_user.id
         assert reset_token.token == "reset_token_123"
         assert reset_token.is_active is True
-        
+
     def test_create_password_reset_token_invalidates_old(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
         old_token = repo.create_password_reset_token(
             user_id=sample_user.id,
             token="old_token",
             expires_at=expires_at
         )
-        
+
         new_token = repo.create_password_reset_token(
             user_id=sample_user.id,
             token="new_token",
             expires_at=expires_at
         )
-        
+
         db_session.refresh(old_token)
         assert old_token.is_active is False
         assert new_token.is_active is True
-        
+
     def test_get_password_reset_token(self, db_session: Session, sample_password_reset_token: PasswordResetToken):
         repo = UserRepository(db_session)
-        
+
         token = repo.get_password_reset_token(sample_password_reset_token.token)
-        
+
         assert token is not None
         assert token.id == sample_password_reset_token.id
-        
+
     def test_get_password_reset_token_expired(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         expired_token = PasswordResetToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="expired_token",
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
             is_active=True
         )
         db_session.add(expired_token)
         db_session.commit()
-        
+
         token = repo.get_password_reset_token("expired_token")
-        
+
         assert token is None
-        
+
     def test_invalidate_password_reset_token(self, db_session: Session, sample_password_reset_token: PasswordResetToken):
         repo = UserRepository(db_session)
-        
+
         repo.invalidate_password_reset_token(sample_password_reset_token.token)
-        
+
         db_session.refresh(sample_password_reset_token)
         assert sample_password_reset_token.is_active is False
         assert sample_password_reset_token.used_at is not None
 
     def test_cleanup_expired_tokens(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         # Create expired token
         expired_token = UserToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="expired_token_123",
             token_type="access",
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
             is_active=True
         )
-        
+
         # Create inactive token
         inactive_token = UserToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="inactive_token_456",
             token_type="access",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             is_active=False
         )
-        
+
         # Create valid token
         valid_token = UserToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="valid_token_789",
             token_type="access",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             is_active=True
         )
-        
+
         db_session.add_all([expired_token, inactive_token, valid_token])
         db_session.commit()
-        
+
         # Verify all 3 tokens exist
         all_tokens = db_session.query(UserToken).filter(UserToken.user_id == sample_user.id).all()
         assert len(all_tokens) == 3
-        
+
         # Cleanup
         repo.cleanup_expired_tokens()
-        
+
         # Verify only valid token remains
         remaining_tokens = db_session.query(UserToken).filter(UserToken.user_id == sample_user.id).all()
         assert len(remaining_tokens) == 1
@@ -275,44 +276,44 @@ class TestUserRepository:
 
     def test_cleanup_expired_password_reset_tokens(self, db_session: Session, sample_user: User):
         repo = UserRepository(db_session)
-        
+
         # Create expired token
         expired_token = PasswordResetToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="expired_reset_123",
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
             is_active=True
         )
-        
+
         # Create inactive token
         inactive_token = PasswordResetToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="inactive_reset_456",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             is_active=False
         )
-        
+
         # Create valid token
         valid_token = PasswordResetToken(
             id=uuid4(),
             user_id=sample_user.id,
             token="valid_reset_789",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             is_active=True
         )
-        
+
         db_session.add_all([expired_token, inactive_token, valid_token])
         db_session.commit()
-        
+
         # Verify all 3 tokens exist
         all_tokens = db_session.query(PasswordResetToken).filter(PasswordResetToken.user_id == sample_user.id).all()
         assert len(all_tokens) == 3
-        
+
         # Cleanup
         repo.cleanup_expired_password_reset_tokens()
-        
+
         # Verify only valid token remains
         remaining_tokens = db_session.query(PasswordResetToken).filter(PasswordResetToken.user_id == sample_user.id).all()
         assert len(remaining_tokens) == 1
@@ -322,15 +323,15 @@ class TestUserRepository:
         """Testa deduct_tokens quando usuário tem budget ilimitado"""
         from shared.database.models.user import UserLevel
         repo = UserRepository(db_session)
-        
+
         # Set user to unlimited budget level
         sample_user.level = UserLevel.LEVEL_05
         sample_user.token_budget = None
         db_session.commit()
-        
+
         initial_budget = sample_user.token_budget
         repo.deduct_tokens(sample_user.id, 100)
-        
+
         db_session.refresh(sample_user)
         # Budget should remain None (unlimited)
         assert sample_user.token_budget is None
@@ -338,47 +339,47 @@ class TestUserRepository:
     def test_deduct_tokens_limited_budget(self, db_session: Session, sample_user: User):
         """Testa deduct_tokens quando usuário tem budget limitado"""
         repo = UserRepository(db_session)
-        
+
         sample_user.token_budget = 1000
         db_session.commit()
-        
+
         repo.deduct_tokens(sample_user.id, 100)
-        
+
         db_session.refresh(sample_user)
         assert sample_user.token_budget == 900
 
     def test_deduct_tokens_not_negative(self, db_session: Session, sample_user: User):
         """Testa deduct_tokens não deixa budget negativo"""
         repo = UserRepository(db_session)
-        
+
         sample_user.token_budget = 50
         db_session.commit()
-        
+
         repo.deduct_tokens(sample_user.id, 100)
-        
+
         db_session.refresh(sample_user)
         assert sample_user.token_budget == 0
 
     def test_deduct_tokens_user_not_found(self, db_session: Session):
         """Testa deduct_tokens quando usuário não existe"""
         repo = UserRepository(db_session)
-        
+
         result = repo.deduct_tokens(uuid4(), 100)
         assert result is None
 
     def test_set_token_budget(self, db_session: Session, sample_user: User):
         """Testa set_token_budget"""
         repo = UserRepository(db_session)
-        
+
         repo.set_token_budget(sample_user.id, 5000)
-        
+
         db_session.refresh(sample_user)
         assert sample_user.token_budget == 5000
 
     def test_set_token_budget_user_not_found(self, db_session: Session):
         """Testa set_token_budget quando usuário não existe"""
         repo = UserRepository(db_session)
-        
+
         result = repo.set_token_budget(uuid4(), 5000)
         assert result is None
 
@@ -386,9 +387,9 @@ class TestUserRepository:
         """Testa set_user_level sem budget"""
         from shared.database.models.user import UserLevel
         repo = UserRepository(db_session)
-        
+
         repo.set_user_level(sample_user.id, UserLevel.LEVEL_03)
-        
+
         db_session.refresh(sample_user)
         assert sample_user.level == UserLevel.LEVEL_03
 
@@ -396,9 +397,9 @@ class TestUserRepository:
         """Testa set_user_level com budget"""
         from shared.database.models.user import UserLevel
         repo = UserRepository(db_session)
-        
+
         repo.set_user_level(sample_user.id, UserLevel.LEVEL_04, 10000)
-        
+
         db_session.refresh(sample_user)
         assert sample_user.level == UserLevel.LEVEL_04
         assert sample_user.token_budget == 10000
@@ -407,6 +408,6 @@ class TestUserRepository:
         """Testa set_user_level quando usuário não existe"""
         from shared.database.models.user import UserLevel
         repo = UserRepository(db_session)
-        
+
         result = repo.set_user_level(uuid4(), UserLevel.LEVEL_02)
         assert result is None

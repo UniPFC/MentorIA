@@ -1,14 +1,17 @@
+import datetime
+import io
 import os
 import subprocess
-import datetime
 import tarfile
-import gnupg
-import io
-from config.settings import settings
-from config.logger import logger
 import time
-import requests
+
+import gnupg
 import psycopg2
+import requests
+
+from config.logger import logger
+from config.settings import settings
+
 
 def get_backup_dir(date_folder: bool = True) -> str:
     """Get or create backup directory with optional date-based folder"""
@@ -143,11 +146,11 @@ def decrypt_file(file_path: str, passphrase: str, output_path: str = None) -> st
 def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
     """Decrypts PostgreSQL backup and restores directly to the database via memory"""
     gpg = gnupg.GPG()
-    
+
     try:
         with open(encrypted_file_path, 'rb') as f:
             decrypted = gpg.decrypt_file(f, passphrase=passphrase)
-            
+
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
 
@@ -160,7 +163,7 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
             "-U", settings.POSTGRES_USER,
             "-d", "postgres"
         ]
-        
+
         env = os.environ.copy()
         env['PGPASSWORD'] = settings.POSTGRES_PASSWORD
 
@@ -169,13 +172,13 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
         DROP DATABASE IF EXISTS {settings.POSTGRES_DB};
         CREATE DATABASE {settings.POSTGRES_DB};
         """
-        
+
         process = subprocess.Popen(drop_recreate_cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate(input=drop_recreate_sql.encode('utf-8'))
-        
+
         if process.returncode != 0:
             raise Exception(f"Failed to drop/recreate database: {stderr.decode('utf-8')}")
-        
+
         logger.info("Database dropped and recreated successfully")
 
         # Restore the backup
@@ -189,10 +192,10 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
 
         process = subprocess.Popen(cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate(input=decrypted.data)
-        
+
         if process.returncode != 0:
             raise Exception(f"psql error: {stderr.decode('utf-8')}")
-            
+
         logger.info(f"PostgreSQL restored successfully from {encrypted_file_path}")
     except Exception as e:
         logger.error(f"Failed to restore PostgreSQL from memory: {e}")
@@ -201,11 +204,11 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
 def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_path: str):
     """Decrypts tar.gz backup and extracts directly to the target path via memory"""
     gpg = gnupg.GPG()
-    
+
     try:
         with open(encrypted_file_path, 'rb') as f:
             decrypted = gpg.decrypt_file(f, passphrase=passphrase)
-            
+
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
 
@@ -239,10 +242,10 @@ def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_pat
                         logger.warning(f"Could not remove {item_path}: {e}")
 
         file_like_object = io.BytesIO(decrypted.data)
-        
+
         with tarfile.open(fileobj=file_like_object, mode="r:gz") as tar:
             tar.extractall(path=extract_path, filter='data')
-            
+
         logger.info(f"Files extracted successfully to {extract_path}")
     except Exception as e:
         logger.error(f"Failed to extract tar from memory: {e}")
@@ -260,7 +263,7 @@ def wait_for_postgres_ready():
             ).close()
             logger.info("PostgreSQL is ready")
             return
-            
+
         except Exception as e:
             logger.warning(f"PostgreSQL not ready: {e}")
             time.sleep(1)
@@ -321,7 +324,7 @@ def restore_backups(
         for filename in os.listdir(backup_date_dir):
             if not filename.endswith('.gpg'):
                 continue
-            
+
             if "postgres_backup" in filename:
                 postgres_files.append(filename)
             elif "data_backup" in filename:
@@ -408,20 +411,20 @@ def main():
 def cleanup_old_backups(days: int = 7, base_dir: str = None):
     """Remove backup date folders older than specified days"""
     import time
-    
+
     if base_dir is None:
         base_dir = os.path.join(settings.BASE_DIR, 'cache', 'backups')
-    
+
     cutoff = time.time() - (days * 86400)
-    
+
     try:
         for foldername in os.listdir(base_dir):
             folder_path = os.path.join(base_dir, foldername)
-            
+
             # Skip non-directory entries and special folders
             if not os.path.isdir(folder_path) or foldername == 'DECRYPTED':
                 continue
-            
+
             # Check if folder name is in format DDMMYYYY (8 digits)
             if len(foldername) == 8 and foldername.isdigit():
                 if os.path.getmtime(folder_path) < cutoff:

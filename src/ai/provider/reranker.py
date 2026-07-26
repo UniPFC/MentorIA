@@ -2,8 +2,9 @@
 Reranking providers for document relevance scoring.
 """
 
+
 import torch
-from typing import List
+
 from config.logger import logger
 from src.ai.provider.base import RerankProvider
 
@@ -14,7 +15,7 @@ class HFRerankProvider(RerankProvider):
     def __init__(self, model, tokenizer):
         """
         Initialize with loaded model and tokenizer.
-        
+
         Args:
             model: Cross-encoder model
             tokenizer: Tokenizer
@@ -35,15 +36,15 @@ class HFRerankProvider(RerankProvider):
 
         logger.info("HFRerankProvider ready")
 
-    def rerank(self, query: str, documents: List[str], **kwargs) -> List[float]:
+    def rerank(self, query: str, documents: list[str], **kwargs) -> list[float]:
         """
         Rerank documents using cross-encoder.
-        
+
         Args:
             query: Search query
             documents: List of documents
             **kwargs: max_length, batch_size
-            
+
         Returns:
             List of relevance scores
         """
@@ -58,7 +59,7 @@ class HFRerankProvider(RerankProvider):
         try:
             for i in range(0, len(pairs), batch_size):
                 batch_pairs = pairs[i : i + batch_size]
-                
+
                 inputs = self.tokenizer(
                     batch_pairs,
                     padding=True,
@@ -69,7 +70,7 @@ class HFRerankProvider(RerankProvider):
 
                 with torch.no_grad():
                     outputs = self.model(**inputs)
-                
+
                 logits = outputs.logits
                 if logits.dim() == 1:
                     scores = logits

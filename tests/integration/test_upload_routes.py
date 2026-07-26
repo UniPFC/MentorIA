@@ -1,8 +1,8 @@
-import pytest
-from unittest.mock import patch
-from fastapi import status
-from uuid import uuid4
 from io import BytesIO
+from unittest.mock import patch
+
+import pytest
+from fastapi import status
 
 
 @pytest.mark.integration
@@ -21,7 +21,7 @@ class TestUploadRoutes:
                 "file": ("test.txt", BytesIO(b"invalid content"), "text/plain")
             }
         )
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_upload_file_missing_name(self, client, sample_user, sample_jwt_token):
@@ -31,7 +31,7 @@ class TestUploadRoutes:
             mock_settings.EMBEDDING_PROVIDER = "remote"
             mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-ada-002"
             mock_settings.EMBEDDING_REMOTE_PROVIDER = "openai"
-            
+
             response = client.post(
                 "/api/v1/upload/chat-type",
                 headers={"Authorization": f"Bearer {sample_jwt_token}"},
@@ -40,7 +40,7 @@ class TestUploadRoutes:
                     "file": ("test.xlsx", BytesIO(b"fake excel"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 }
             )
-            
+
             assert response.status_code in [status.HTTP_422_UNPROCESSABLE_CONTENT, status.HTTP_400_BAD_REQUEST]
 
     def test_upload_file_duplicate_name(self, client, sample_user, sample_chat_type, sample_jwt_token):
@@ -50,7 +50,7 @@ class TestUploadRoutes:
             mock_settings.EMBEDDING_PROVIDER = "remote"
             mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-ada-002"
             mock_settings.EMBEDDING_REMOTE_PROVIDER = "openai"
-            
+
             response = client.post(
                 "/api/v1/upload/chat-type",
                 headers={"Authorization": f"Bearer {sample_jwt_token}"},
@@ -61,12 +61,12 @@ class TestUploadRoutes:
                     "file": ("test.xlsx", BytesIO(b"fake excel"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 }
             )
-            
+
             assert response.status_code == status.HTTP_400_BAD_REQUEST
             assert "already exists" in response.json()["detail"]
 
     def test_unauthorized_access(self, client):
         """Testa acesso sem autenticação"""
         response = client.post("/api/v1/upload/chat-type")
-        
+
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

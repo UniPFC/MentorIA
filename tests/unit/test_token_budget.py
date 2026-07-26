@@ -1,8 +1,6 @@
 """Unit tests for token budget system."""
 
-import pytest
 from shared.database.models.user import User, UserLevel
-from sqlalchemy.orm import Session
 
 
 class TestUserModel:

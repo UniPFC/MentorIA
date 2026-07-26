@@ -2,9 +2,11 @@
 LLM providers for text generation.
 """
 
+from typing import Any
+
 import torch
-from typing import List, Dict, Any, Optional
 from openai import OpenAI
+
 from config.logger import logger
 from src.ai.provider.base import LLMProvider
 from src.ai.provider.utils import URLS, resolve_api_key
@@ -17,15 +19,15 @@ class Provider(LLMProvider):
     """
 
     def __init__(
-        self, 
-        model_name: str, 
-        provider_alias: str = "openai",  
-        api_key: Optional[str] = None, 
-        base_url: Optional[str] = None
+        self,
+        model_name: str,
+        provider_alias: str = "openai",
+        api_key: str | None = None,
+        base_url: str | None = None
     ):
         """
         Initialize remote LLM provider.
-        
+
         Args:
             model_name: Model identifier
             provider_alias: Provider name (ollama, openai, gemini)
@@ -39,19 +41,19 @@ class Provider(LLMProvider):
         self.model_name = model_name
         logger.info(f"Provider configured: model={model_name}, alias={provider_alias}, endpoint={self.target_url}")
 
-    def generate(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def generate(self, messages: list[dict[str, str]], **kwargs) -> str:
         """
         Generate text completion.
-        
+
         Args:
             messages: Chat messages
             **kwargs: max_new_tokens, temperature, top_p, etc.
-            
+
         Returns:
             Generated text
         """
         max_tokens = kwargs.pop("max_new_tokens", 1024)
-        temperature = kwargs.pop("temperature", 0.7) 
+        temperature = kwargs.pop("temperature", 0.7)
         top_p = kwargs.pop("top_p", 1.0)
 
         try:
@@ -70,19 +72,19 @@ class Provider(LLMProvider):
             raise
 
     def generate_structured(
-        self, 
-        messages: List[Dict[str, str]], 
-        response_format: Any, 
+        self,
+        messages: list[dict[str, str]],
+        response_format: Any,
         **kwargs
     ) -> Any:
         """
         Generate structured output following a Pydantic schema.
-        
+
         Args:
             messages: Chat messages
             response_format: Pydantic model class
             **kwargs: Generation parameters
-            
+
         Returns:
             Parsed Pydantic object or raw content
         """
@@ -92,7 +94,7 @@ class Provider(LLMProvider):
 
         try:
             logger.debug(f"Structured generation: model={self.model_name}, format={response_format.__name__}")
-            
+
             completion = self.client.beta.chat.completions.parse(
                 model=self.model_name,
                 messages=messages,
@@ -115,14 +117,14 @@ class Provider(LLMProvider):
             logger.error(f"Structured provider error ({self.target_url}): {e}")
             raise
 
-    def generate_stream(self, messages: List[Dict[str, str]], **kwargs):
+    def generate_stream(self, messages: list[dict[str, str]], **kwargs):
         """
         Generate text with streaming.
-        
+
         Args:
             messages: Chat messages
             **kwargs: Generation parameters
-            
+
         Yields:
             Text chunks as they arrive
         """
@@ -140,11 +142,11 @@ class Provider(LLMProvider):
                 top_p=top_p,
                 stream=True,
             )
-            
+
             for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-                    
+
         except Exception as e:
             logger.error(f"Streaming error ({self.target_url}): {e}")
             raise
@@ -156,7 +158,7 @@ class HFProvider(LLMProvider):
     def __init__(self, model, tokenizer):
         """
         Initialize with loaded model and tokenizer.
-        
+
         Args:
             model: HuggingFace model
             tokenizer: HuggingFace tokenizer
@@ -168,14 +170,14 @@ class HFProvider(LLMProvider):
             self.model.generation_config.temperature = None
         logger.info("HFProvider ready")
 
-    def generate(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def generate(self, messages: list[dict[str, str]], **kwargs) -> str:
         """
         Generate text using local model.
-        
+
         Args:
             messages: Chat messages
             **kwargs: Generation parameters
-            
+
         Returns:
             Generated text
         """
@@ -185,7 +187,7 @@ class HFProvider(LLMProvider):
             "do_sample": False,
             "repetition_penalty": 1.0
         }
-        
+
         ignored_temp = kwargs.pop("temperature", None)
         if ignored_temp is not None:
             logger.debug("Temperature ignored for HFProvider")
@@ -194,12 +196,12 @@ class HFProvider(LLMProvider):
 
         try:
             input_ids = self.tokenizer.apply_chat_template(
-                messages, 
-                tokenize=True, 
-                add_generation_prompt=True, 
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
                 return_tensors="pt"
             ).to(self.model.device)
-            
+
             attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
         except Exception as e:
             logger.error(f"Chat template error: {e}")
@@ -207,7 +209,7 @@ class HFProvider(LLMProvider):
 
         with torch.no_grad():
             outputs = self.model.generate(
-                input_ids, 
+                input_ids,
                 attention_mask=attention_mask,
                 **gen_params,
                 pad_token_id=self.tokenizer.pad_token_id

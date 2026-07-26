@@ -1,15 +1,16 @@
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict, Field
 import os
-import json
-from typing import Optional, List, Dict, Any
+from typing import Any
+
+from pydantic import ConfigDict
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
 
     # Project Configuration
     PROJECT_NAME: str = "MentorIA"
     LOG_LEVEL: str
-    
+
     # Directories
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     LOG_DIR: str = os.path.join(BASE_DIR, "logs", "api")
@@ -27,7 +28,7 @@ class Settings(BaseSettings):
     @property
     def POSTGRES_URL(self):
         # Alterado temporariamente para prefer para testar local sem SSL
-        ssl_mode = "prefer" 
+        ssl_mode = "prefer"
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}?sslmode={ssl_mode}"
 
     # Vector Database
@@ -66,28 +67,28 @@ class Settings(BaseSettings):
     STT_MODEL: str = "small"  # tiny, base, small, medium, large
     STT_COMPUTE_TYPE: str = "int8"  # int8, int16, float16, float32
     STT_TIMEOUT: int = 30  # seconds to wait for memory before failing
-    
+
     # RAG Parameters
     K_RETRIEVAL: int = 10
     TOP_K: int = 5
     THRESHOLD: float = 0.0
     QUERY_EXPANSION_COUNT: int = 3
-    
+
     # Admin Configuration
     SYSTEM_USER_EMAIL: str
     SYSTEM_USER_PASSWORD: str
     ADMIN_SLUG: str
 
     # JWT Configuration
-    SECRET_KEY: str 
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
-    # Password Security Configuration
-    PASSWORD_PEPPER: str 
 
-    
+    # Password Security Configuration
+    PASSWORD_PEPPER: str
+
+
     # Encryption Configuration
     ENCRYPTION_SALT: str
 
@@ -111,7 +112,7 @@ class Settings(BaseSettings):
     TOKEN_BUDGET_LEVEL_03: int = 200000        # Plus
     TOKEN_BUDGET_LEVEL_04: int = 1000000       # Max
     TOKEN_BUDGET_MINIMUM_RESERVE: int = 200
-    
+
     # Cost Tier Configuration
     COST_TIER_MIN_MULTIPLIER: float = 0.1  # Minimum multiplier for cost tier 0
     COST_TIER_MAX_MULTIPLIER: float = 3.0  # Maximum multiplier for cost tier 9
@@ -120,12 +121,12 @@ class Settings(BaseSettings):
     PAGARME_API_KEY: str = ""
     PAGARME_WEBHOOK_SECRET: str = ""
     PAGARME_API_URL: str = "https://api.pagar.me/core/v5"
-    
+
     # Pagar.me Plan IDs (one per level, configure in .env)
     PAGARME_PLAN_LEVEL_02: str = ""  # Plan ID for LEVEL_02 subscription
     PAGARME_PLAN_LEVEL_03: str = ""  # Plan ID for LEVEL_03 subscription
     PAGARME_PLAN_LEVEL_04: str = ""  # Plan ID for LEVEL_04 subscription
-    
+
     # Pagar.me Refill item price ID
     PAGARME_REFILL_ITEM_ID: str = ""  # One-time charge item for token refill
 
@@ -142,7 +143,7 @@ class Settings(BaseSettings):
     FORCE_HTTPS: bool = True
 
     # CORS Configuration
-    CORS_ALLOWED_ORIGINS: List[str] = [
+    CORS_ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
@@ -155,13 +156,13 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
-    
-    def get_available_models(self) -> List[Dict[str, Any]]:
+
+    def get_available_models(self) -> list[dict[str, Any]]:
         """
         Retorna os modelos LLM disponíveis para seleção.
         O modelo padrão (LLM_MODEL + LLM_PROVIDER) é sempre incluído.
         Configure modelos adicionais editando a lista abaixo.
-        
+
         input_token_multiplier: Multiplicador de custo para tokens de entrada
         output_token_multiplier: Multiplicador de custo para tokens de saída
         - 1.0 = custo base
@@ -184,7 +185,7 @@ class Settings(BaseSettings):
                 "output_token_multiplier": 1.5
             },
         ]
-        
+
         default_model = {
             "model": self.LLM_MODEL,
             "provider": self.LLM_PROVIDER,
@@ -192,16 +193,16 @@ class Settings(BaseSettings):
             "input_token_multiplier": 1.0,
             "output_token_multiplier": 1.0
         }
-        
+
         models = [default_model]
         seen = {(self.LLM_MODEL, self.LLM_PROVIDER)}
-        
+
         for model in additional_models:
             key = (model["model"], model["provider"])
             if key not in seen:
                 models.append(model)
                 seen.add(key)
-        
+
         return models
 
 settings = Settings()

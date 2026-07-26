@@ -1,16 +1,18 @@
+from unittest.mock import MagicMock, Mock
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 from fastapi import HTTPException
+
 from src.api.routes import admin
 from src.api.routes.admin import (
+    RestoreRequest,
+    delete_backup,
+    list_backups,
+    restore_backup,
+    trigger_backup,
     verify_admin_slug,
     verify_admin_user,
     verify_slug,
-    trigger_backup,
-    list_backups,
-    restore_backup,
-    delete_backup,
-    RestoreRequest
 )
 
 
@@ -34,7 +36,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             verify_admin_slug("wrong-slug")
-        
+
         assert exc_info.value.status_code == 403
         assert "not authorized" in exc_info.value.detail
 
@@ -60,7 +62,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             verify_admin_user(user)
-        
+
         assert exc_info.value.status_code == 403
         assert "not authorized" in exc_info.value.detail
 
@@ -74,7 +76,7 @@ class TestAdminRoutes:
     async def test_trigger_backup_success(self, monkeypatch):
         """Testa o trigger_backup endpoint com sucesso total (incluindo qdrant)"""
         monkeypatch.setenv("BACKUP_PASSPHRASE", "secret_pass")
-        
+
         backup_postgres_mock = Mock(return_value="db_dump.sql")
         backup_data_mock = Mock(return_value="data_dump.tar.gz")
         backup_qdrant_mock = Mock(return_value="qdrant_dump.tar.gz")
@@ -88,9 +90,9 @@ class TestAdminRoutes:
         monkeypatch.setattr(admin, "cleanup_old_backups", cleanup_mock)
 
         current_user = Mock()
-        
+
         response = await trigger_backup("slug", True, current_user)
-        
+
         assert response.success is True
         assert "completed successfully" in response.message
         assert response.files == ["db_dump.sql.gpg", "data_dump.tar.gz.gpg", "qdrant_dump.tar.gz.gpg"]
@@ -103,7 +105,7 @@ class TestAdminRoutes:
     async def test_trigger_backup_qdrant_error_ignored(self, monkeypatch):
         """Testa o trigger_backup endpoint ignorando erros ao fazer backup do Qdrant"""
         monkeypatch.setenv("BACKUP_PASSPHRASE", "secret_pass")
-        
+
         backup_postgres_mock = Mock(return_value="db_dump.sql")
         backup_data_mock = Mock(return_value="data_dump.tar.gz")
         backup_qdrant_mock = Mock(side_effect=Exception("Qdrant connection failed"))
@@ -117,9 +119,9 @@ class TestAdminRoutes:
         monkeypatch.setattr(admin, "cleanup_old_backups", cleanup_mock)
 
         current_user = Mock()
-        
+
         response = await trigger_backup("slug", True, current_user)
-        
+
         assert response.success is True
         # response files should only contain postgres and data backups since qdrant failed
         assert response.files == ["db_dump.sql.gpg", "data_dump.tar.gz.gpg"]
@@ -135,7 +137,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             await trigger_backup("slug", True, current_user)
-        
+
         assert exc_info.value.status_code == 500
         assert "BACKUP_PASSPHRASE not set" in exc_info.value.detail
 
@@ -143,7 +145,7 @@ class TestAdminRoutes:
     async def test_trigger_backup_failure_exception(self, monkeypatch):
         """Testa trigger_backup lidando com exceções gerais (500)"""
         monkeypatch.setenv("BACKUP_PASSPHRASE", "secret_pass")
-        
+
         backup_postgres_mock = Mock(side_effect=Exception("Database connection timed out"))
         monkeypatch.setattr(admin, "backup_postgres", backup_postgres_mock)
 
@@ -151,7 +153,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             await trigger_backup("slug", True, current_user)
-        
+
         assert exc_info.value.status_code == 500
         assert "Backup failed" in exc_info.value.detail
 
@@ -161,17 +163,17 @@ class TestAdminRoutes:
         # Mock get_backup_dir to return base directory
         base_dir = tmp_path / "cache" / "backups"
         base_dir.mkdir(parents=True)
-        
+
         # Create some fake backup folders
         folder_valid = base_dir / "01012026"
         folder_valid.mkdir()
         # Create a file inside valid folder
         file1 = folder_valid / "postgres_backup.sql.gpg"
         file1.write_text("encrypted content")
-        
+
         folder_invalid_name = base_dir / "not-digits"
         folder_invalid_name.mkdir()
-        
+
         file_at_root = base_dir / "ignored_file.txt"
         file_at_root.write_text("ignored")
 
@@ -180,12 +182,12 @@ class TestAdminRoutes:
 
         current_user = Mock()
         response = await list_backups("slug", True, current_user)
-        
+
         get_backup_dir_mock.assert_called_once_with(date_folder=False)
         assert "01012026" in response.date_folders
         assert "not-digits" not in response.date_folders
         assert "01012026" in response.current_backups
-        
+
         backup_files = response.current_backups["01012026"]
         assert len(backup_files) == 1
         assert backup_files[0]["name"] == "postgres_backup.sql.gpg"
@@ -200,7 +202,7 @@ class TestAdminRoutes:
 
         current_user = Mock()
         response = await list_backups("slug", True, current_user)
-        
+
         assert response.date_folders == []
         assert response.current_backups == {}
 
@@ -213,7 +215,7 @@ class TestAdminRoutes:
         current_user = Mock()
         with pytest.raises(HTTPException) as exc_info:
             await list_backups("slug", True, current_user)
-        
+
         assert exc_info.value.status_code == 500
         assert "Failed to list backups" in exc_info.value.detail
 
@@ -229,9 +231,9 @@ class TestAdminRoutes:
 
         current_user = Mock()
         request = RestoreRequest(date_str="01012026", passphrase="custom-pass")
-        
+
         response = await restore_backup("slug", request, True, current_user)
-        
+
         assert response.success is True
         assert "restored successfully" in response.message
         assert "01/01/2026" in response.message
@@ -247,7 +249,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             await restore_backup("slug", request, True, current_user)
-        
+
         assert exc_info.value.status_code == 500
         assert "BACKUP_PASSPHRASE not set" in exc_info.value.detail
 
@@ -266,7 +268,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             await restore_backup("slug", request, True, current_user)
-        
+
         assert exc_info.value.status_code == 404
         assert "Backup folder not found" in exc_info.value.detail
 
@@ -285,7 +287,7 @@ class TestAdminRoutes:
 
         with pytest.raises(HTTPException) as exc_info:
             await restore_backup("slug", request, True, current_user)
-        
+
         assert exc_info.value.status_code == 500
         assert "Restore failed" in exc_info.value.detail
 
@@ -302,7 +304,7 @@ class TestAdminRoutes:
 
         current_user = Mock()
         response = await delete_backup("slug", "01012026", True, current_user)
-        
+
         assert response.success is True
         assert "deleted successfully" in response.message
         assert not date_folder.exists()
@@ -319,7 +321,7 @@ class TestAdminRoutes:
         current_user = Mock()
         with pytest.raises(HTTPException) as exc_info:
             await delete_backup("slug", "01012026", True, current_user)
-        
+
         assert exc_info.value.status_code == 404
         assert "Backup folder not found" in exc_info.value.detail
 
@@ -332,6 +334,6 @@ class TestAdminRoutes:
         current_user = Mock()
         with pytest.raises(HTTPException) as exc_info:
             await delete_backup("slug", "01012026", True, current_user)
-        
+
         assert exc_info.value.status_code == 500
         assert "Failed to delete backup" in exc_info.value.detail

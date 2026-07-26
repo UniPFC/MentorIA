@@ -2,26 +2,26 @@
 Pydantic schemas for ingestion job endpoints.
 """
 
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 
 class IngestionJobResponse(BaseModel):
     """Schema for ingestion job response."""
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: UUID
     chat_type_id: UUID
     filename: str
     status: str
     total_chunks: int
     processed_chunks: int
-    error_message: Optional[str]
+    error_message: str | None
     created_at: datetime
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 class UploadResponseAsync(BaseModel):

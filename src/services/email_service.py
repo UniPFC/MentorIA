@@ -1,13 +1,11 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timezone
-from typing import Optional
-
-from config.settings import settings
-from config.logger import logger
 import secrets
-import hashlib
+import smtplib
+from datetime import UTC, datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from config.logger import logger
+from config.settings import settings
 
 
 class EmailService:
@@ -34,7 +32,7 @@ class EmailService:
                 server.starttls()
                 server.login(self.smtp_username, self.smtp_password)
                 server.send_message(msg)
-            
+
             logger.info(f"Email sent successfully to {to_email}")
             return True
         except Exception as e:
@@ -48,8 +46,8 @@ class EmailService:
     def send_password_reset_email(self, to_email: str, username: str, reset_token: str) -> bool:
         """Envia email de reset de senha"""
         # Para desenvolvimento, usar a API diretamente
-        reset_link = f"http://localhost:8000/api/v1/auth/confirm-reset-password"
-        
+        reset_link = "http://localhost:8000/api/v1/auth/confirm-reset-password"
+
         html_body = f"""
         <!DOCTYPE html>
         <html>
@@ -88,7 +86,7 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         return self._send_email(to_email, "Reset de Senha - MentorIA", html_body)
 
     def send_password_changed_email(self, to_email: str, username: str) -> bool:
@@ -135,7 +133,7 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         return self._send_email(to_email, "Senha Alterada - MentorIA", html_body)
 
     def send_password_reset_notification(self, to_email: str, username:str) -> bool:
@@ -148,7 +146,7 @@ class EmailService:
             <html><body>
             <h2>Olá, {username}!</h2>
             <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>MentorIA</strong>.</p>
-            <p><strong>Data/Hora:</strong> {datetime.now(timezone.utc).strftime('%d/%m/%Y às %H:%M')}
+            <p><strong>Data/Hora:</strong> {datetime.now(UTC).strftime('%d/%m/%Y às %H:%M')}
  (UTC)</p>
 
           <p>Se <strong>você fez essa solicitação</strong>, pode ignorar este email —
@@ -168,10 +166,10 @@ class EmailService:
            </body></html>
           """
             return self._send_email(to_email, subject, html_body)
-    
+
         except Exception as e:
             logger.error(f"Failed to send password reset notification to {to_email}: {str(e)}")
             return False
-    
+
 # Instância global do serviço
 email_service = EmailService()

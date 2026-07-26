@@ -1,12 +1,12 @@
+import datetime
 import io
 import os
-import sys
-import time
-import tarfile
-import datetime
 import shutil
-from types import SimpleNamespace
+import sys
+import tarfile
+import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -433,7 +433,7 @@ class TestBackupService:
                 process_mock.returncode = 1
                 process_mock.communicate.return_value = (b'', b'some psql stderr')
             return process_mock
-        
+
         monkeypatch.setattr(backup.subprocess, 'Popen', MagicMock(side_effect=popen_side_effect))
 
         encrypted_path = tmp_path / 'backup.sql.gpg'
@@ -566,7 +566,7 @@ class TestBackupService:
             backup.main()
         assert "Postgres failed" in str(exc.value)
 
-    def test_cleanup_old_backups_skips_non_dir_and_DECRYPTED(self, tmp_path, monkeypatch):
+    def test_cleanup_old_backups_skips_non_dir_and_decrypted(self, tmp_path, monkeypatch):
         base_dir = tmp_path / 'cache' / 'backups'
         base_dir.mkdir(parents=True)
 
@@ -620,7 +620,7 @@ class TestBackupService:
         extract_path2.mkdir()
         unremovable_file = extract_path2 / 'unremovable.txt'
         unremovable_file.write_text('stuck')
-        
+
         # Mock os.remove to raise exception when deleting unremovable_file
         orig_remove = os.remove
         def mock_remove(path):
@@ -650,15 +650,18 @@ class TestBackupService:
 
         # Mock os.path.exists to return True for /app and /app/data to trigger lines 225-239
         orig_exists = os.path.exists
-        exists_mock = lambda path: True if str(path).replace('\\', '/') in ['/app', '/app/data'] else orig_exists(path)
+        def exists_mock(path):
+            return True if str(path).replace('\\', '/') in ['/app', '/app/data'] else orig_exists(path)
         monkeypatch.setattr(backup.os.path, 'exists', exists_mock)
 
         orig_listdir = os.listdir
-        listdir_mock = lambda path: ['sub', 'old.txt'] if str(path).replace('\\', '/') == '/app/data' else orig_listdir(path)
+        def listdir_mock(path):
+            return ['sub', 'old.txt'] if str(path).replace('\\', '/') == '/app/data' else orig_listdir(path)
         monkeypatch.setattr(backup.os, 'listdir', listdir_mock)
 
         orig_isdir = os.path.isdir
-        isdir_mock = lambda path: True if str(path).replace('\\', '/') == '/app/data/sub' else orig_isdir(path)
+        def isdir_mock(path):
+            return True if str(path).replace('\\', '/') == '/app/data/sub' else orig_isdir(path)
         monkeypatch.setattr(backup.os.path, 'isdir', isdir_mock)
 
         # Mock shutil.rmtree to raise error for 'sub' to cover lines 238-239 exception handling
@@ -727,10 +730,10 @@ class TestBackupService:
         assert recent_folder.exists()
 
     def test_run_as_main(self, tmp_path, monkeypatch):
-        import runpy
         import builtins
+        import runpy
         monkeypatch.setenv('BACKUP_PASSPHRASE', 'secret')
-        
+
         # Mock settings BASE_DIR to use tmp_path
         mock_settings = MagicMock()
         mock_settings.BASE_DIR = str(tmp_path)
@@ -789,7 +792,7 @@ class TestBackupService:
         # Run using run_path to completely avoid sys.modules package parent/submodule warning
         script_path = os.path.join('src', 'services', 'backup.py')
         runpy.run_path(script_path, run_name='__main__')
-        
+
         # Verify pg_dump subprocess run was indeed called
         assert mock_run.called
 

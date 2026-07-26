@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 from fastapi import HTTPException, status
+
 from src.api.routes.auth import _get_client_ip
 
 
@@ -12,7 +14,7 @@ class TestAuthRoutes:
         """Testa obtenção de IP via X-Forwarded-For header"""
         request = Mock()
         request.headers = {"X-Forwarded-For": "192.168.1.1, 10.0.0.1"}
-        
+
         ip = _get_client_ip(request)
         assert ip == "192.168.1.1"
 
@@ -20,7 +22,7 @@ class TestAuthRoutes:
         """Testa obtenção de IP via X-Real-IP header"""
         request = Mock()
         request.headers = {"X-Real-IP": "192.168.1.2"}
-        
+
         ip = _get_client_ip(request)
         assert ip == "192.168.1.2"
 
@@ -30,7 +32,7 @@ class TestAuthRoutes:
         request.headers = {}
         request.client = Mock()
         request.client.host = "192.168.1.3"
-        
+
         ip = _get_client_ip(request)
         assert ip == "192.168.1.3"
 
@@ -39,7 +41,7 @@ class TestAuthRoutes:
         request = Mock()
         request.headers = {}
         request.client = None
-        
+
         ip = _get_client_ip(request)
         assert ip == "unknown"
 
@@ -50,7 +52,7 @@ class TestAuthRoutes:
             "X-Forwarded-For": "192.168.1.1",
             "X-Real-IP": "192.168.1.2"
         }
-        
+
         ip = _get_client_ip(request)
         assert ip == "192.168.1.1"
 
@@ -58,7 +60,7 @@ class TestAuthRoutes:
         """Testa que pega o primeiro IP quando há múltiplos em X-Forwarded-For"""
         request = Mock()
         request.headers = {"X-Forwarded-For": "192.168.1.1, 10.0.0.1, 172.16.0.1"}
-        
+
         ip = _get_client_ip(request)
         assert ip == "192.168.1.1"
 
@@ -68,7 +70,7 @@ class TestAuthRoutes:
         request.headers = {"X-Real-IP": "192.168.1.2"}
         request.client = Mock()
         request.client.host = "192.168.1.3"
-        
+
         ip = _get_client_ip(request)
         assert ip == "192.168.1.2"
 
@@ -80,7 +82,7 @@ class TestAuthRoutes:
         request.cookies = {"refreshToken": "cookie_refresh_token"}
         response = Mock()
         user_repo = Mock()
-        
+
         with patch("src.api.routes.auth.auth_service") as mock_auth, patch("src.api.routes.auth.settings") as mock_settings:
             mock_settings.SECURE_COOKIES = False
             mock_auth.refresh_access_token.return_value = {
@@ -101,10 +103,10 @@ class TestAuthRoutes:
         request.cookies = {}
         response = Mock()
         user_repo = Mock()
-        
+
         with pytest.raises(HTTPException) as exc:
             await refresh_token(request, response, None, user_repo)
-        
+
         assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.asyncio
@@ -117,9 +119,9 @@ class TestAuthRoutes:
         current_user = Mock()
         current_user.id = "user_123"
         user_repo = Mock()
-        
+
         # Simular que 'credentials' é None, forçando a busca no cookie
         result = await logout(request, response, None, current_user, user_repo)
-        
+
         assert result["success"] is True
         user_repo.invalidate_token.assert_called_once_with("cookie_auth_token")
