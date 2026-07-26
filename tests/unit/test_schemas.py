@@ -24,7 +24,7 @@ class TestAuthSchemas:
         data = {
             "username": "testuser",
             "email": "test@example.com",
-            "password": "SecurePassword123!"
+            "password": "SecurePassword123!",
         }
         user = UserRegister(**data)
 
@@ -33,11 +33,7 @@ class TestAuthSchemas:
         assert user.password == "SecurePassword123!"
 
     def test_user_register_weak_password(self):
-        data = {
-            "username": "testuser",
-            "email": "test@example.com",
-            "password": "123"
-        }
+        data = {"username": "testuser", "email": "test@example.com", "password": "123"}
 
         with pytest.raises(ValidationError) as exc_info:
             UserRegister(**data)
@@ -49,7 +45,7 @@ class TestAuthSchemas:
         data = {
             "username": "mentoria",
             "email": "test@example.com",
-            "password": "SecurePassword123!"
+            "password": "SecurePassword123!",
         }
 
         with pytest.raises(ValidationError) as exc_info:
@@ -61,7 +57,7 @@ class TestAuthSchemas:
         data = {
             "username": "testuser",
             "email": "test@example.com",
-            "password": "a" * 1001
+            "password": "a" * 1001,
         }
 
         with pytest.raises(ValidationError) as exc_info:
@@ -69,13 +65,16 @@ class TestAuthSchemas:
 
         errors = exc_info.value.errors()
         error_msg = str(errors)
-        assert "Senha muito longa" in error_msg or "String should have at most" in error_msg
+        assert (
+            "Senha muito longa" in error_msg
+            or "String should have at most" in error_msg
+        )
 
     def test_user_register_weak_password_with_warning(self):
         data = {
             "username": "testuser",
             "email": "test@example.com",
-            "password": "password"
+            "password": "password",
         }
 
         with pytest.raises(ValidationError) as exc_info:
@@ -89,7 +88,7 @@ class TestAuthSchemas:
         data = {
             "username": "testuser",
             "email": "test@example.com",
-            "password": "12345678"
+            "password": "12345678",
         }
 
         with pytest.raises(ValidationError) as exc_info:
@@ -112,7 +111,7 @@ class TestAuthSchemas:
         data = {
             "username": "ab",
             "email": "test@example.com",
-            "password": "SecurePassword123!"
+            "password": "SecurePassword123!",
         }
 
         with pytest.raises(ValidationError):
@@ -122,27 +121,21 @@ class TestAuthSchemas:
         data = {
             "username": "testuser",
             "email": "invalid-email",
-            "password": "SecurePassword123!"
+            "password": "SecurePassword123!",
         }
 
         with pytest.raises(ValidationError):
             UserRegister(**data)
 
     def test_user_login_valid(self):
-        data = {
-            "email": "test@example.com",
-            "password": "password123"
-        }
+        data = {"email": "test@example.com", "password": "password123"}
         login = UserLogin(**data)
 
         assert login.email == "test@example.com"
         assert login.password == "password123"
 
     def test_user_login_invalid_email(self):
-        data = {
-            "email": "not-an-email",
-            "password": "password123"
-        }
+        data = {"email": "not-an-email", "password": "password123"}
 
         with pytest.raises(ValidationError):
             UserLogin(**data)
@@ -154,33 +147,27 @@ class TestAuthSchemas:
         assert request.email == "test@example.com"
 
     def test_password_reset_confirm_valid(self):
-        data = {
-            "token": "reset_token_123",
-            "new_password": "NewSecurePassword123!"
-        }
+        data = {"token": "reset_token_123", "new_password": "NewSecurePassword123!"}
         confirm = PasswordResetConfirm(**data)
 
         assert confirm.token == "reset_token_123"
         assert confirm.new_password == "NewSecurePassword123!"
 
     def test_password_reset_confirm_password_too_long(self):
-        data = {
-            "token": "reset_token_123",
-            "new_password": "a" * 1001
-        }
+        data = {"token": "reset_token_123", "new_password": "a" * 1001}
 
         with pytest.raises(ValidationError) as exc_info:
             PasswordResetConfirm(**data)
 
         errors = exc_info.value.errors()
         error_msg = str(errors)
-        assert "Senha muito longa" in error_msg or "String should have at most" in error_msg
+        assert (
+            "Senha muito longa" in error_msg
+            or "String should have at most" in error_msg
+        )
 
     def test_password_reset_confirm_weak_password_with_warning(self):
-        data = {
-            "token": "reset_token_123",
-            "new_password": "password"
-        }
+        data = {"token": "reset_token_123", "new_password": "password"}
 
         with pytest.raises(ValidationError) as exc_info:
             PasswordResetConfirm(**data)
@@ -190,10 +177,7 @@ class TestAuthSchemas:
         assert "Senha fraca" in error_msg
 
     def test_password_reset_confirm_weak_password_no_suggestions(self):
-        data = {
-            "token": "reset_token_123",
-            "new_password": "12345678"
-        }
+        data = {"token": "reset_token_123", "new_password": "12345678"}
 
         with pytest.raises(ValidationError) as exc_info:
             PasswordResetConfirm(**data)
@@ -203,10 +187,7 @@ class TestAuthSchemas:
         assert "Senha fraca" in error_msg
 
     def test_password_reset_confirm_weak_password(self):
-        data = {
-            "token": "reset_token_123",
-            "new_password": "weak"
-        }
+        data = {"token": "reset_token_123", "new_password": "weak"}
 
         with pytest.raises(ValidationError):
             PasswordResetConfirm(**data)
@@ -216,7 +197,7 @@ class TestAuthSchemas:
             "access_token": "access_token_123",
             "refresh_token": "refresh_token_123",
             "token_type": "bearer",
-            "expires_in": 1800
+            "expires_in": 1800,
         }
         token = Token(**data)
 
@@ -230,27 +211,20 @@ class TestAuthSchemas:
 class TestChatSchemas:
     def test_chat_create_valid(self):
         chat_type_id = uuid4()
-        data = {
-            "title": "Test Chat",
-            "chat_type_id": str(chat_type_id)
-        }
+        data = {"title": "Test Chat", "chat_type_id": str(chat_type_id)}
         chat = ChatCreate(**data)
 
         assert chat.title == "Test Chat"
         assert chat.chat_type_id == chat_type_id
 
     def test_send_message_request_valid(self):
-        data = {
-            "content": "Hello, world!"
-        }
+        data = {"content": "Hello, world!"}
         message = SendMessageRequest(**data)
 
         assert message.content == "Hello, world!"
 
     def test_send_message_request_empty(self):
-        data = {
-            "content": ""
-        }
+        data = {"content": ""}
 
         with pytest.raises(ValidationError):
             SendMessageRequest(**data)
@@ -259,19 +233,14 @@ class TestChatSchemas:
 @pytest.mark.unit
 class TestChatTypeSchemas:
     def test_chat_type_create_valid(self):
-        data = {
-            "name": "Test Chat Type",
-            "description": "A test chat type"
-        }
+        data = {"name": "Test Chat Type", "description": "A test chat type"}
         chat_type = ChatTypeCreate(**data)
 
         assert chat_type.name == "Test Chat Type"
         assert chat_type.description == "A test chat type"
 
     def test_chat_type_create_no_description(self):
-        data = {
-            "name": "Test Chat Type"
-        }
+        data = {"name": "Test Chat Type"}
         chat_type = ChatTypeCreate(**data)
 
         assert chat_type.name == "Test Chat Type"
@@ -314,4 +283,3 @@ class TestChatTypeSchemas:
         with pytest.raises(ValidationError) as exc:
             ChatTypeUpdate(tags=[f"tag{i}" for i in range(16)])
         assert "Maximum 15 tags allowed" in str(exc.value)
-

@@ -15,7 +15,9 @@ class KnowledgeRetriever:
     Retrieves relevant chunks from Qdrant using semantic search.
     """
 
-    def __init__(self, qdrant_manager: QdrantManager, embedding_engine: EmbeddingEngine):
+    def __init__(
+        self, qdrant_manager: QdrantManager, embedding_engine: EmbeddingEngine
+    ):
         """
         Initialize retriever.
 
@@ -32,7 +34,7 @@ class KnowledgeRetriever:
         chat_type_id: UUID,
         query: str,
         limit: int = 10,
-        score_threshold: float | None = None
+        score_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search for relevant chunks.
@@ -55,10 +57,12 @@ class KnowledgeRetriever:
                 chat_type_id=chat_type_id,
                 query_embedding=query_embedding,
                 limit=limit,
-                score_threshold=score_threshold
+                score_threshold=score_threshold,
             )
 
-            logger.debug(f"Retrieved {len(results)} chunks for chat_type_id={chat_type_id}")
+            logger.debug(
+                f"Retrieved {len(results)} chunks for chat_type_id={chat_type_id}"
+            )
             return results
 
         except Exception as e:
@@ -70,7 +74,7 @@ class KnowledgeRetriever:
         chat_type_id: UUID,
         queries: list[str],
         limit_per_query: int = 10,
-        score_threshold: float | None = None
+        score_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search with multiple queries and deduplicate results.
@@ -93,16 +97,18 @@ class KnowledgeRetriever:
                     chat_type_id=chat_type_id,
                     query=query,
                     limit=limit_per_query,
-                    score_threshold=score_threshold
+                    score_threshold=score_threshold,
                 )
 
                 for chunk in chunks:
-                    if chunk['id'] not in seen_ids:
+                    if chunk["id"] not in seen_ids:
                         all_chunks.append(chunk)
-                        seen_ids.add(chunk['id'])
+                        seen_ids.add(chunk["id"])
             except Exception as e:
                 logger.warning(f"Search failed for query '{query}': {e}")
                 continue
 
-        logger.debug(f"Retrieved {len(all_chunks)} unique chunks from {len(queries)} queries")
+        logger.debug(
+            f"Retrieved {len(all_chunks)} unique chunks from {len(queries)} queries"
+        )
         return all_chunks

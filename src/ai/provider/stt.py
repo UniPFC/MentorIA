@@ -2,6 +2,8 @@
 Speech-to-Text providers for audio transcription.
 """
 
+from typing import Any
+
 from config.logger import logger
 from src.ai.provider.base import STTProvider
 
@@ -36,10 +38,7 @@ class FasterWhisperSTTProvider(STTProvider):
         try:
             logger.debug(f"Transcribing audio: {audio_path}")
             segments, info = self.model.transcribe(
-                audio_path,
-                beam_size=beam_size,
-                language=language,
-                vad_filter=True
+                audio_path, beam_size=beam_size, language=language, vad_filter=True
             )
 
             text_parts = []
@@ -52,7 +51,7 @@ class FasterWhisperSTTProvider(STTProvider):
             return {
                 "text": transcribed_text,
                 "detected_language": info.language,
-                "language_probability": info.language_probability
+                "language_probability": info.language_probability,
             }
 
         except Exception as e:

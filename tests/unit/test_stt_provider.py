@@ -38,19 +38,14 @@ class TestFasterWhisperSTTProvider:
         provider = FasterWhisperSTTProvider(model=mock_model)
 
         result = provider.transcribe(
-            audio_path="/tmp/test.wav",
-            language="pt",
-            beam_size=5
+            audio_path="/tmp/test.wav", language="pt", beam_size=5
         )
 
         assert result["text"] == "Olá, mundo!"
         assert result["detected_language"] == "pt"
         assert result["language_probability"] == 0.95
         mock_model.transcribe.assert_called_once_with(
-            "/tmp/test.wav",
-            beam_size=5,
-            language="pt",
-            vad_filter=True
+            "/tmp/test.wav", beam_size=5, language="pt", vad_filter=True
         )
 
     def test_faster_whisper_stt_transcribe_auto_language(self):
@@ -71,7 +66,7 @@ class TestFasterWhisperSTTProvider:
         result = provider.transcribe(
             audio_path="/tmp/test.wav",
             language=None,  # Auto-detect
-            beam_size=5
+            beam_size=5,
         )
 
         assert result["text"] == "Hello world"
@@ -93,17 +88,12 @@ class TestFasterWhisperSTTProvider:
         provider = FasterWhisperSTTProvider(model=mock_model)
 
         result = provider.transcribe(
-            audio_path="/tmp/test.wav",
-            language="en",
-            beam_size=10
+            audio_path="/tmp/test.wav", language="en", beam_size=10
         )
 
         assert result["text"] == "Test"
         mock_model.transcribe.assert_called_once_with(
-            "/tmp/test.wav",
-            beam_size=10,
-            language="en",
-            vad_filter=True
+            "/tmp/test.wav", beam_size=10, language="en", vad_filter=True
         )
 
     def test_faster_whisper_stt_transcribe_error(self):

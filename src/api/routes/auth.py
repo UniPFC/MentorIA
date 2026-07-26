@@ -27,11 +27,14 @@ from src.services.security_cache import security_cache
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 async def register_user(
     user_data: UserRegister,
     user_repo: UserRepository = Depends(get_user_repo),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Registra um novo usuário
@@ -41,16 +44,14 @@ async def register_user(
     existing_user = user_repo.get_by_username(user_data.username)
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Nome de usuário já existe"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Nome de usuário já existe"
         )
 
     # Verificar se email já existe (usando busca criptografada)
     existing_email = user_repo.get_by_email(user_data.email)
     if existing_email:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email já cadastrado"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email já cadastrado"
         )
 
     # Criar novo usuário com email criptografado
@@ -60,7 +61,7 @@ async def register_user(
         email=user_data.email,
         password_hash=hashed_password,
         level=UserLevel.LEVEL_01,
-        token_budget=settings.TOKEN_BUDGET_LEVEL_01
+        token_budget=settings.TOKEN_BUDGET_LEVEL_01,
     )
 
     user_repo.create(new_user)
@@ -70,7 +71,12 @@ async def register_user(
 
 
 @router.post("/login", response_model=Token)
-async def login(user_credentials: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)):
+async def login(
+    user_credentials: UserLogin,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     """
     Autentica usuário e retorna tokens JWT
     """
@@ -82,59 +88,79 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
     ip_blocked, ip_block_reason = security_cache.should_block_ip(client_ip)
     if ip_blocked:
         security_cache.record_login_attempt(
-            user_credentials.email, client_ip, user_agent,
-            False, ip_block_reason, "HIGH", [ip_block_reason or "Unknown reason"]
+            user_credentials.email,
+            client_ip,
+            user_agent,
+            False,
+            ip_block_reason,
+            "HIGH",
+            [ip_block_reason or "Unknown reason"],
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="IP temporariamente bloqueado por atividades suspeitas.",
-            headers={"Retry-After": "300"}
+            headers={"Retry-After": "300"},
         )
 
     # Detectar anomalias antes da autenticação
-    anomaly_result = security_cache.detect_anomalies(user_credentials.email, client_ip, user_agent)
+    anomaly_result = security_cache.detect_anomalies(
+        user_credentials.email, client_ip, user_agent
+    )
 
     # Se detectar anomalias críticas ou rate limit, bloquear
-    if anomaly_result['risk_score'] in ['CRITICAL', 'HIGH']:
+    if anomaly_result["risk_score"] in ["CRITICAL", "HIGH"]:
         security_cache.record_login_attempt(
-            user_credentials.email, client_ip, user_agent,
-            False, "Security anomaly detected", anomaly_result['risk_score'], anomaly_result['anomalies']
+            user_credentials.email,
+            client_ip,
+            user_agent,
+            False,
+            "Security anomaly detected",
+            anomaly_result["risk_score"],
+            anomaly_result["anomalies"],
         )
 
         # Se for CRITICAL, bloquear imediatamente
-        if anomaly_result['risk_score'] == 'CRITICAL':
+        if anomaly_result["risk_score"] == "CRITICAL":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acesso bloqueado por motivos de segurança.",
-                headers={"X-Security-Block": "anomaly_detection"}
+                headers={"X-Security-Block": "anomaly_detection"},
             )
 
         # Se for HIGH, dar rate limit
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Muitas tentativas suspeitas. Tente novamente mais tarde.",
-            headers={"Retry-After": "300"}
+            headers={"Retry-After": "300"},
         )
 
     user_repo = UserRepository(db)
 
-    user = auth_service.authenticate_user(user_repo, user_credentials.email, user_credentials.password)
+    user = auth_service.authenticate_user(
+        user_repo, user_credentials.email, user_credentials.password
+    )
 
     if not user:
         # Registrar tentativa falha com anomalias
         security_cache.record_login_attempt(
-            user_credentials.email, client_ip, user_agent,
-            False, "Email ou senha incorretos",
-            anomaly_result['risk_score'], anomaly_result['anomalies']
+            user_credentials.email,
+            client_ip,
+            user_agent,
+            False,
+            "Email ou senha incorretos",
+            anomaly_result["risk_score"],
+            anomaly_result["anomalies"],
         )
 
         # Verificar se agora tem anomalia pós-falha
-        post_failure_anomaly = security_cache.detect_anomalies(user_credentials.email, client_ip, user_agent)
-        if post_failure_anomaly['risk_score'] in ['CRITICAL', 'HIGH']:
+        post_failure_anomaly = security_cache.detect_anomalies(
+            user_credentials.email, client_ip, user_agent
+        )
+        if post_failure_anomaly["risk_score"] in ["CRITICAL", "HIGH"]:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Número excessivo de tentativas. Tente novamente mais tarde.",
-                headers={"Retry-After": "300"}
+                headers={"Retry-After": "300"},
             )
 
         raise HTTPException(
@@ -145,8 +171,13 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
 
     # Login bem-sucedido - registrar com anomalias
     security_cache.record_login_attempt(
-        user_credentials.email, client_ip, user_agent,
-        True, None, anomaly_result['risk_score'], anomaly_result['anomalies']
+        user_credentials.email,
+        client_ip,
+        user_agent,
+        True,
+        None,
+        anomaly_result["risk_score"],
+        anomaly_result["anomalies"],
     )
 
     # Verificar se precisa de reset de senha
@@ -159,6 +190,7 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
 
     # Atualizar último login
     from datetime import datetime
+
     user.last_login = datetime.now(UTC)
     user_repo.update(user)
 
@@ -178,7 +210,7 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
         secure=secure_cookie,
         samesite="lax",
         path="/",
-        max_age=max_age_auth
+        max_age=max_age_auth,
     )
     if "refresh_token" in tokens and tokens["refresh_token"]:
         max_age_refresh = 30 * 24 * 60 * 60 if user_credentials.remember_me else None
@@ -189,7 +221,7 @@ async def login(user_credentials: UserLogin, request: Request, response: Respons
             secure=secure_cookie,
             samesite="lax",
             path="/",
-            max_age=max_age_refresh
+            max_age=max_age_refresh,
         )
 
     return tokens
@@ -210,7 +242,7 @@ def _get_client_ip(request: Request) -> str:
         return real_ip
 
     # Fallback para o IP da conexão
-    if hasattr(request, 'client') and request.client:
+    if hasattr(request, "client") and request.client:
         return request.client.host
 
     return "unknown"
@@ -221,7 +253,7 @@ async def refresh_token(
     request: Request,
     response: Response,
     token_data: TokenRefresh | None = None,
-    user_repo: UserRepository = Depends(get_user_repo)
+    user_repo: UserRepository = Depends(get_user_repo),
 ):
     """
     Atualiza o token de acesso usando refresh token
@@ -257,7 +289,7 @@ async def refresh_token(
         secure=secure_cookie,
         samesite="lax",
         path="/",
-        max_age=new_tokens["expires_in"]
+        max_age=new_tokens["expires_in"],
     )
     if "refresh_token" in new_tokens and new_tokens["refresh_token"]:
         response.set_cookie(
@@ -267,14 +299,14 @@ async def refresh_token(
             secure=secure_cookie,
             samesite="lax",
             path="/",
-            max_age=30 * 24 * 60 * 60  # 30 days
+            max_age=30 * 24 * 60 * 60,  # 30 days
         )
 
     return {
         "access_token": new_tokens["access_token"],
         "refresh_token": new_tokens["refresh_token"],  # Novo refresh token (rotation)
         "token_type": new_tokens["token_type"],
-        "expires_in": new_tokens["expires_in"]
+        "expires_in": new_tokens["expires_in"],
     }
 
 
@@ -284,7 +316,7 @@ async def logout(
     response: Response,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_active_user),
-    user_repo: UserRepository = Depends(get_user_repo)
+    user_repo: UserRepository = Depends(get_user_repo),
 ):
     """
     Realiza logout do usuário invalidando o token e refresh tokens no banco de dados
@@ -303,8 +335,15 @@ async def logout(
     user_repo.invalidate_all_user_tokens(current_user.id)
 
     # Limpar cookies
-    response.delete_cookie(key="authToken", httponly=True, samesite="lax", secure=settings.SECURE_COOKIES)
-    response.delete_cookie(key="refreshToken", httponly=True, samesite="lax", secure=settings.SECURE_COOKIES)
+    response.delete_cookie(
+        key="authToken", httponly=True, samesite="lax", secure=settings.SECURE_COOKIES
+    )
+    response.delete_cookie(
+        key="refreshToken",
+        httponly=True,
+        samesite="lax",
+        secure=settings.SECURE_COOKIES,
+    )
 
     logger.info(f"User logged out and all tokens invalidated: {current_user.username}")
     return {"message": "Logout realizado com sucesso", "success": True}
@@ -326,14 +365,13 @@ async def verify_token(current_user: User = Depends(get_current_active_user)):
     return {
         "valid": True,
         "user_id": current_user.id,
-        "username": current_user.username
+        "username": current_user.username,
     }
 
 
 @router.post("/forgot-password")
 async def forgot_password(
-    request: PasswordResetRequest,
-    user_repo: UserRepository = Depends(get_user_repo)
+    request: PasswordResetRequest, user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
     Solicita reset de senha via email
@@ -344,37 +382,50 @@ async def forgot_password(
     if not user:
         # Por segurança, não revelamos se o email existe ou não
         logger.info(f"Password reset requested for non-existent email: {request.email}")
-        return {"message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha", "success": True}
+        return {
+            "message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha",
+            "success": True,
+        }
 
-    notification_sent = email_service.send_password_reset_notification(user.email, user.username)
+    notification_sent = email_service.send_password_reset_notification(
+        user.email, user.username
+    )
     if not notification_sent:
-        logger.warning(f"Failed to send password reset notification to user: {user.username}")
+        logger.warning(
+            f"Failed to send password reset notification to user: {user.username}"
+        )
 
     # Gerar token de reset
     reset_token = email_service.generate_reset_token()
-    expires_at = datetime.now(UTC) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    expires_at = datetime.now(UTC) + timedelta(
+        minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
 
     # Salvar token no banco
     user_repo.create_password_reset_token(user.id, reset_token, expires_at)
 
     # Enviar email
-    email_sent = email_service.send_password_reset_email(user.email, user.username, reset_token)
+    email_sent = email_service.send_password_reset_email(
+        user.email, user.username, reset_token
+    )
 
     if email_sent:
         logger.info(f"Password reset email sent to user: {user.username}")
-        return {"message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha", "success": True}
+        return {
+            "message": "Se o email estiver cadastrado, você receberá instruções para resetar sua senha",
+            "success": True,
+        }
     else:
         logger.error(f"Failed to send password reset email to user: {user.username}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Falha ao enviar email de reset de senha. Tente novamente mais tarde."
+            detail="Falha ao enviar email de reset de senha. Tente novamente mais tarde.",
         )
 
 
 @router.post("/confirm-reset-password")
 async def confirm_reset_password(
-    request: PasswordResetConfirm,
-    user_repo: UserRepository = Depends(get_user_repo)
+    request: PasswordResetConfirm, user_repo: UserRepository = Depends(get_user_repo)
 ):
     """
     Confirma o reset de senha usando o token recebido por email
@@ -384,16 +435,14 @@ async def confirm_reset_password(
     reset_token_data = user_repo.get_password_reset_token(request.token)
     if not reset_token_data:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token inválido ou expirado"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado"
         )
 
     # Buscar usuário
     user = user_repo.get_by_id(reset_token_data.user_id)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuário não encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado"
         )
 
     # Atualizar senha
@@ -408,5 +457,3 @@ async def confirm_reset_password(
 
     logger.info(f"Password reset confirmed for user: {user.username}")
     return {"message": "Senha alterada com sucesso", "success": True}
-
-

@@ -53,7 +53,9 @@ class RAGPipeline:
             Prompt template as string
         """
         # Updated path to point to src/rag/prompts
-        prompt_path = os.path.join(settings.BASE_DIR, "src", "rag", "prompts", f"{prompt_name}.md")
+        prompt_path = os.path.join(
+            settings.BASE_DIR, "src", "rag", "prompts", f"{prompt_name}.md"
+        )
         try:
             with open(prompt_path, encoding="utf-8") as f:
                 return f.read().strip()
@@ -76,10 +78,11 @@ class RAGPipeline:
 
         # Initialize default LLM provider from settings (will be overridden per chat if needed)
         self.llm_provider = Provider(
-            model_name=settings.LLM_MODEL,
-            provider_alias=settings.LLM_PROVIDER
+            model_name=settings.LLM_MODEL, provider_alias=settings.LLM_PROVIDER
         )
-        self._provider_cache[(settings.LLM_MODEL, settings.LLM_PROVIDER)] = self.llm_provider
+        self._provider_cache[(settings.LLM_MODEL, settings.LLM_PROVIDER)] = (
+            self.llm_provider
+        )
 
         # Initialize Query Engine WITHOUT provider (will be set per request)
         self.query_engine = QueryEngine(primary_provider=None)
@@ -93,7 +96,9 @@ class RAGPipeline:
 
         # Load reranker model
         self.loader = ModelLoader()
-        rerank_model, rerank_tokenizer = self.loader.load_reranker(settings.RERANKER_MODEL_ID)
+        rerank_model, rerank_tokenizer = self.loader.load_reranker(
+            settings.RERANKER_MODEL_ID
+        )
         rerank_provider = HFRerankProvider(rerank_model, rerank_tokenizer)
         self.reranker = RerankerEngine(rerank_provider)
 
@@ -113,15 +118,19 @@ class RAGPipeline:
         provider_type = settings.EMBEDDING_PROVIDER.lower()
 
         if provider_type == "remote":
-            logger.info(f"Using remote embedding: model={settings.EMBEDDING_REMOTE_MODEL}, provider={settings.EMBEDDING_REMOTE_PROVIDER}")
+            logger.info(
+                f"Using remote embedding: model={settings.EMBEDDING_REMOTE_MODEL}, provider={settings.EMBEDDING_REMOTE_PROVIDER}"
+            )
             emb_provider = RemoteEmbeddingProvider(
                 model_name=settings.EMBEDDING_REMOTE_MODEL,
-                provider_alias=settings.EMBEDDING_REMOTE_PROVIDER
+                provider_alias=settings.EMBEDDING_REMOTE_PROVIDER,
             )
         else:
             logger.info(f"Using local embedding: model={settings.EMBEDDING_MODEL_ID}")
             self.loader = ModelLoader()
-            emb_model, emb_tokenizer = self.loader.load_embedding(settings.EMBEDDING_MODEL_ID)
+            emb_model, emb_tokenizer = self.loader.load_embedding(
+                settings.EMBEDDING_MODEL_ID
+            )
             emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)  # type: ignore
 
         return EmbeddingEngine(emb_provider)
@@ -135,7 +144,7 @@ class RAGPipeline:
         top_k: int | None = None,
         threshold: float | None = None,
         llm_model: str | None = None,
-        llm_provider: str | None = None
+        llm_provider: str | None = None,
     ) -> dict[str, Any]:
         """
         Execute RAG pipeline for a query.
@@ -157,7 +166,9 @@ class RAGPipeline:
         top_k = top_k or settings.TOP_K
         threshold = threshold or settings.THRESHOLD
 
-        logger.info(f"Processing query for chat_type_id={chat_type_id}: '{query[:50]}...' (model={llm_model}, provider={llm_provider})")
+        logger.info(
+            f"Processing query for chat_type_id={chat_type_id}: '{query[:50]}...' (model={llm_model}, provider={llm_provider})"
+        )
 
         try:
             # Get the LLM provider for this request (custom or default)
@@ -166,13 +177,17 @@ class RAGPipeline:
             # Step 0: Contextualize Query (if history exists and has content)
             effective_query = query
             if chat_history and len(chat_history) > 0:
-                effective_query = self.query_engine.contextualize_query(query, chat_history, provider=request_provider)
+                effective_query = self.query_engine.contextualize_query(
+                    query, chat_history, provider=request_provider
+                )
                 logger.debug(f"Query contextualized: '{query}' -> '{effective_query}'")
             else:
                 logger.debug("Skipping contextualization: no chat history available")
 
             # Step 1: Query Expansion (using custom model)
-            expanded_queries = self.query_engine.expand_query(effective_query, provider=request_provider)
+            expanded_queries = self.query_engine.expand_query(
+                effective_query, provider=request_provider
+            )
             query_texts = [q.text for q in expanded_queries]
             logger.info(f"Generated {len(query_texts)} search queries: {query_texts}")
 
@@ -180,40 +195,36 @@ class RAGPipeline:
             raw_chunks = self.retriever.search_many(
                 chat_type_id=chat_type_id,
                 queries=query_texts,
-                limit_per_query=k_retrieval
+                limit_per_query=k_retrieval,
             )
 
             if not raw_chunks:
                 logger.warning("No chunks retrieved")
                 return {
                     "answer": "Desculpe, não encontrei informações relevantes na base de conhecimento para responder sua pergunta.",
-                    "chunks": []
+                    "chunks": [],
                 }
 
             # Step 3: Rerank chunks
             reranked_chunks = self.reranker.rerank_chunks(
-                query=query,
-                chunks=raw_chunks,
-                top_k=top_k,
-                threshold=threshold
+                query=query, chunks=raw_chunks, top_k=top_k, threshold=threshold
             )
 
             if not reranked_chunks:
                 logger.warning("All chunks filtered out by reranker")
                 return {
                     "answer": "Desculpe, as informações encontradas não eram relevantes o suficiente para responder sua pergunta com confiança.",
-                    "chunks": []
+                    "chunks": [],
                 }
 
             logger.info(f"Selected {len(reranked_chunks)} chunks after reranking")
 
             # Step 4: Generate answer
-            answer = self._generate_answer(query, reranked_chunks, chat_history, llm_model, llm_provider)
+            answer = self._generate_answer(
+                query, reranked_chunks, chat_history, llm_model, llm_provider
+            )
 
-            return {
-                "answer": answer,
-                "chunks": reranked_chunks
-            }
+            return {"answer": answer, "chunks": reranked_chunks}
 
         except Exception as e:
             logger.error(f"RAG pipeline failed: {e}")
@@ -228,7 +239,7 @@ class RAGPipeline:
         top_k: int | None = None,
         threshold: float | None = None,
         llm_model: str | None = None,
-        llm_provider: str | None = None
+        llm_provider: str | None = None,
     ):
         """
         Execute RAG pipeline with streaming response.
@@ -248,7 +259,9 @@ class RAGPipeline:
         top_k = top_k or settings.TOP_K
         threshold = threshold or settings.THRESHOLD
 
-        logger.info(f"Processing streaming query for chat_type_id={chat_type_id} (model={llm_model}, provider={llm_provider})")
+        logger.info(
+            f"Processing streaming query for chat_type_id={chat_type_id} (model={llm_model}, provider={llm_provider})"
+        )
 
         try:
             # Get the LLM provider for this request (custom or default)
@@ -257,36 +270,43 @@ class RAGPipeline:
             # Step 0: Contextualize Query (if history exists and has content)
             effective_query = query
             if chat_history and len(chat_history) > 0:
-                effective_query = self.query_engine.contextualize_query(query, chat_history, provider=request_provider)
+                effective_query = self.query_engine.contextualize_query(
+                    query, chat_history, provider=request_provider
+                )
                 logger.debug(f"Query contextualized: '{query}' -> '{effective_query}'")
             else:
                 logger.debug("Skipping contextualization: no chat history available")
 
             # Step 1: Query Expansion (using custom model)
-            expanded_queries = self.query_engine.expand_query(effective_query, provider=request_provider)
+            expanded_queries = self.query_engine.expand_query(
+                effective_query, provider=request_provider
+            )
             query_texts = [q.text for q in expanded_queries]
 
             # Step 2: Retrieve
             raw_chunks = self.retriever.search_many(
                 chat_type_id=chat_type_id,
                 queries=query_texts,
-                limit_per_query=k_retrieval
+                limit_per_query=k_retrieval,
             )
 
             if not raw_chunks:
-                yield {"type": "error", "content": "Desculpe, não encontrei informações relevantes na base de conhecimento."}
+                yield {
+                    "type": "error",
+                    "content": "Desculpe, não encontrei informações relevantes na base de conhecimento.",
+                }
                 return
 
             # Step 3: Rerank
             reranked_chunks = self.reranker.rerank_chunks(
-                query=query,
-                chunks=raw_chunks,
-                top_k=top_k,
-                threshold=threshold
+                query=query, chunks=raw_chunks, top_k=top_k, threshold=threshold
             )
 
             if not reranked_chunks:
-                yield {"type": "error", "content": "Desculpe, as informações encontradas não eram relevantes o suficiente."}
+                yield {
+                    "type": "error",
+                    "content": "Desculpe, as informações encontradas não eram relevantes o suficiente.",
+                }
                 return
 
             # Yield metadata (sources)
@@ -294,14 +314,16 @@ class RAGPipeline:
                 {
                     "question": chunk["question"],
                     "answer": chunk["answer"],
-                    "score": chunk.get("rerank_score", chunk.get("score", 0))
+                    "score": chunk.get("rerank_score", chunk.get("score", 0)),
                 }
                 for chunk in reranked_chunks
             ]
             yield {"type": "sources", "content": formatted_sources}
 
             # Step 4: Generate Stream
-            yield from self._generate_answer_stream(query, reranked_chunks, chat_history, llm_model, llm_provider)
+            yield from self._generate_answer_stream(
+                query, reranked_chunks, chat_history, llm_model, llm_provider
+            )
 
         except Exception as e:
             logger.error(f"RAG pipeline stream failed: {e}")
@@ -313,7 +335,7 @@ class RAGPipeline:
         chunks: list[dict[str, Any]],
         chat_history: list[dict[str, str]] | None = None,
         llm_model: str | None = None,
-        llm_provider: str | None = None
+        llm_provider: str | None = None,
     ):
         context_parts = []
         for i, chunk in enumerate(chunks, 1):
@@ -336,9 +358,7 @@ class RAGPipeline:
             # Use custom model if provided, otherwise use default
             provider = self._get_provider(llm_model, llm_provider)
             for token in provider.generate_stream(
-                messages,
-                temperature=0.3,
-                max_new_tokens=1024
+                messages, temperature=0.3, max_new_tokens=1024
             ):
                 yield {"type": "token", "content": token}
         except Exception as e:
@@ -351,7 +371,7 @@ class RAGPipeline:
         chunks: list[dict[str, Any]],
         chat_history: list[dict[str, str]] | None = None,
         llm_model: str | None = None,
-        llm_provider: str | None = None
+        llm_provider: str | None = None,
     ) -> str:
         """
         Generate answer using LLM with retrieved context.
@@ -388,19 +408,19 @@ class RAGPipeline:
         messages.append({"role": "user", "content": query})
 
         try:
-            logger.debug(f"Generating answer with {len(chunks)} chunks (model={llm_model}, provider={llm_provider})")
-            provider = self._get_provider(llm_model, llm_provider)
-            answer = provider.generate(
-                messages,
-                temperature=0.3,
-                max_new_tokens=1024
+            logger.debug(
+                f"Generating answer with {len(chunks)} chunks (model={llm_model}, provider={llm_provider})"
             )
+            provider = self._get_provider(llm_model, llm_provider)
+            answer = provider.generate(messages, temperature=0.3, max_new_tokens=1024)
             return answer
         except Exception as e:
             logger.error(f"Answer generation failed: {e}")
             return "Desculpe, ocorreu um erro ao gerar a resposta. Por favor, tente novamente."
 
-    def _get_provider(self, llm_model: str | None = None, llm_provider: str | None = None) -> Provider:
+    def _get_provider(
+        self, llm_model: str | None = None, llm_provider: str | None = None
+    ) -> Provider:
         """
         Get LLM provider instance, using custom model/provider if specified.
         Caches instances by (model, provider_alias) to reuse HTTP connection pools.
@@ -418,12 +438,15 @@ class RAGPipeline:
 
         with self._provider_cache_lock:
             if cache_key not in self._provider_cache:
-                logger.debug(f"Creating new provider: model={model}, provider={provider_alias}")
+                logger.debug(
+                    f"Creating new provider: model={model}, provider={provider_alias}"
+                )
                 self._provider_cache[cache_key] = Provider(
-                    model_name=model,
-                    provider_alias=provider_alias
+                    model_name=model, provider_alias=provider_alias
                 )
             else:
-                logger.debug(f"Reusing cached provider: model={model}, provider={provider_alias}")
+                logger.debug(
+                    f"Reusing cached provider: model={model}, provider={provider_alias}"
+                )
 
         return self._provider_cache[cache_key]

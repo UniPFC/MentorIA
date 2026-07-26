@@ -30,7 +30,9 @@ class STTLoader:
         self._timeout = settings.STT_TIMEOUT
 
         os.makedirs(self._cache_dir, exist_ok=True)
-        logger.info(f"STTLoader initialized. Model: {self._model_size}, Compute: {self._compute_type}")
+        logger.info(
+            f"STTLoader initialized. Model: {self._model_size}, Compute: {self._compute_type}"
+        )
 
     def _load_model(self) -> WhisperModel:
         """
@@ -50,7 +52,9 @@ class STTLoader:
 
         while time.time() - start_time < self._timeout:
             try:
-                logger.info(f"Loading STT model: {self._model_size} (compute_type={self._compute_type})")
+                logger.info(
+                    f"Loading STT model: {self._model_size} (compute_type={self._compute_type})"
+                )
 
                 # Try loading from local cache first (no network requests)
                 try:

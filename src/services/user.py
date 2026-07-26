@@ -17,7 +17,14 @@ class UserService:
         self.db = db
         self.user_repo = UserRepository(db)
 
-    def deduct_tokens(self, user_id: UUID, input_tokens: int, output_tokens: int, input_multiplier: float = 1.0, output_multiplier: float = 1.0) -> User | None:
+    def deduct_tokens(
+        self,
+        user_id: UUID,
+        input_tokens: int,
+        output_tokens: int,
+        input_multiplier: float = 1.0,
+        output_multiplier: float = 1.0,
+    ) -> User | None:
         """
         Deduct tokens from user budget with separate cost multipliers for input/output.
 
@@ -31,13 +38,25 @@ class UserService:
         Returns:
             Updated user object
         """
-        actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
+        actual_tokens = int(
+            (input_tokens * input_multiplier) + (output_tokens * output_multiplier)
+        )
         user = self.user_repo.deduct_tokens(user_id, actual_tokens)
         if user:
-            logger.info(f"Tokens deducted: user_id={user_id} input_tokens={input_tokens} input_mult={input_multiplier} output_tokens={output_tokens} output_mult={output_multiplier} actual_tokens={actual_tokens} remaining={user.token_budget}")
+            logger.info(
+                f"Tokens deducted: user_id={user_id} input_tokens={input_tokens} input_mult={input_multiplier} output_tokens={output_tokens} output_mult={output_multiplier} actual_tokens={actual_tokens} remaining={user.token_budget}"
+            )
         return user
 
-    def can_afford_tokens(self, user: User, input_tokens: int, output_tokens: int, reserve: int = 0, input_multiplier: float = 1.0, output_multiplier: float = 1.0) -> bool:
+    def can_afford_tokens(
+        self,
+        user: User,
+        input_tokens: int,
+        output_tokens: int,
+        reserve: int = 0,
+        input_multiplier: float = 1.0,
+        output_multiplier: float = 1.0,
+    ) -> bool:
         """
         Check if user can afford tokens with optional reserve and separate cost multipliers.
 
@@ -60,7 +79,9 @@ class UserService:
 
         actual_input_tokens = int(input_tokens * input_multiplier)
         actual_output_tokens = int(output_tokens * output_multiplier)
-        return user.token_budget >= (actual_input_tokens + actual_output_tokens + reserve)
+        return user.token_budget >= (
+            actual_input_tokens + actual_output_tokens + reserve
+        )
 
     def get_budget_for_level(self, level: UserLevel) -> int:
         """
@@ -93,7 +114,11 @@ class UserService:
             Updated user object
         """
         budget = self.get_budget_for_level(new_level)
-        user = self.user_repo.set_user_level(user_id, new_level, budget if new_level != UserLevel.LEVEL_05 else None)
+        user = self.user_repo.set_user_level(
+            user_id, new_level, budget if new_level != UserLevel.LEVEL_05 else None
+        )
         if user:
-            logger.info(f"User level upgraded: user_id={user_id} new_level={new_level} budget={budget}")
+            logger.info(
+                f"User level upgraded: user_id={user_id} new_level={new_level} budget={budget}"
+            )
         return user

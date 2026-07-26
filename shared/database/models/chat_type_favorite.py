@@ -11,8 +11,18 @@ class ChatTypeFavorite(Base):
     __tablename__ = "chat_type_favorites"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    chat_type_id = Column(Uuid(as_uuid=True), ForeignKey("chat_types.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    chat_type_id = Column(
+        Uuid(as_uuid=True),
+        ForeignKey("chat_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # Relationships
@@ -21,7 +31,7 @@ class ChatTypeFavorite(Base):
 
     # Ensure a user can only favorite a chat type once
     __table_args__ = (
-        UniqueConstraint('user_id', 'chat_type_id', name='uq_user_chat_type_favorite'),
+        UniqueConstraint("user_id", "chat_type_id", name="uq_user_chat_type_favorite"),
     )
 
     def __repr__(self):

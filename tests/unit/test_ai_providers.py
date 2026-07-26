@@ -1,4 +1,3 @@
-
 import pytest
 
 from src.ai.provider.base import EmbeddingProvider, LLMProvider, RerankProvider

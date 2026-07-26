@@ -94,7 +94,9 @@ class TestPagarmeService:
         user.pagarme_customer_id = None
 
         mock_client = AsyncMock()
-        mock_client.__aenter__.return_value.post.side_effect = httpx.ConnectTimeout("Timeout")
+        mock_client.__aenter__.return_value.post.side_effect = httpx.ConnectTimeout(
+            "Timeout"
+        )
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             customer_id = await service.create_customer(user)
@@ -107,7 +109,9 @@ class TestPagarmeService:
         user = Mock(spec=User)
 
         with patch.object(service, "_get_plan_id", return_value=None):
-            url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
+            url = await service.create_subscription_checkout(
+                "cus_123", user, UserLevel.LEVEL_02
+            )
             assert url is None
 
     @pytest.mark.asyncio
@@ -127,7 +131,9 @@ class TestPagarmeService:
 
         with patch.object(service, "_get_plan_id", return_value="plan_02"):
             with patch("httpx.AsyncClient", return_value=mock_client):
-                url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
+                url = await service.create_subscription_checkout(
+                    "cus_123", user, UserLevel.LEVEL_02
+                )
                 assert url == "https://checkout.pagar.me/abc"
 
     @pytest.mark.asyncio
@@ -145,7 +151,9 @@ class TestPagarmeService:
 
         with patch.object(service, "_get_plan_id", return_value="plan_02"):
             with patch("httpx.AsyncClient", return_value=mock_client):
-                url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
+                url = await service.create_subscription_checkout(
+                    "cus_123", user, UserLevel.LEVEL_02
+                )
                 assert url is None
 
     @pytest.mark.asyncio
@@ -159,7 +167,9 @@ class TestPagarmeService:
 
         with patch.object(service, "_get_plan_id", return_value="plan_02"):
             with patch("httpx.AsyncClient", return_value=mock_client):
-                url = await service.create_subscription_checkout("cus_123", user, UserLevel.LEVEL_02)
+                url = await service.create_subscription_checkout(
+                    "cus_123", user, UserLevel.LEVEL_02
+                )
                 assert url is None
 
     @pytest.mark.asyncio

@@ -12,6 +12,7 @@ from shared.database.session import Base
 
 class UserLevel(str, enum.Enum):
     """User subscription levels with token budgets."""
+
     LEVEL_01 = "LEVEL_01"
     LEVEL_02 = "LEVEL_02"
     LEVEL_03 = "LEVEL_03"
@@ -35,16 +36,26 @@ class User(Base):
     # Subscription fields (Pagar.me integration)
     pagarme_customer_id = Column(String(255), nullable=True, index=True)
     subscription_id = Column(String(255), nullable=True, index=True)
-    subscription_status = Column(String(50), nullable=True)  # active, canceled, past_due, unpaid, ended
+    subscription_status = Column(
+        String(50), nullable=True
+    )  # active, canceled, past_due, unpaid, ended
     subscription_period_start = Column(DateTime(timezone=True), nullable=True)
     subscription_period_end = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    chat_types = relationship("ChatType", back_populates="owner", cascade="all, delete-orphan")
+    chat_types = relationship(
+        "ChatType", back_populates="owner", cascade="all, delete-orphan"
+    )
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
-    tokens = relationship("UserToken", back_populates="user", cascade="all, delete-orphan")
-    password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
-    favorite_chat_types = relationship("ChatTypeFavorite", back_populates="user", cascade="all, delete-orphan")
+    tokens = relationship(
+        "UserToken", back_populates="user", cascade="all, delete-orphan"
+    )
+    password_reset_tokens = relationship(
+        "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
+    )
+    favorite_chat_types = relationship(
+        "ChatTypeFavorite", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}', active={self.is_active}, level={self.level})>"

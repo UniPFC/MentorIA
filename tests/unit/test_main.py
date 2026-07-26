@@ -30,10 +30,15 @@ class TestMain:
 
     @pytest.mark.asyncio
     async def test_lifespan_seeder_exception(self):
-        with patch('src.api.main.run_migrations'):
-            with patch('src.api.main.settings') as mock_settings:                # Mock AUTO_RUN_SEEDER para rodar o seeder
+        with patch("src.api.main.run_migrations"):
+            with patch(
+                "src.api.main.settings"
+            ) as mock_settings:  # Mock AUTO_RUN_SEEDER para rodar o seeder
                 mock_settings.AUTO_RUN_SEEDER = True
-                with patch('src.api.main.seed_default_knowledge', side_effect=Exception("Seeder failed")):
+                with patch(
+                    "src.api.main.seed_default_knowledge",
+                    side_effect=Exception("Seeder failed"),
+                ):
                     async with lifespan(app):
                         pass
 
@@ -41,11 +46,15 @@ class TestMain:
     async def test_validation_exception_handler_password_string_should_have(self):
         """Cobre o elif 'String should have at least' (linhas 73-74)"""
         request = MagicMock()
-        exc = RequestValidationError(errors=[{
-            "loc": ("body", "password"),
-            "msg": "String should have at least 1 uppercase",
-            "type": "value_error"
-        }])
+        exc = RequestValidationError(
+            errors=[
+                {
+                    "loc": ("body", "password"),
+                    "msg": "String should have at least 1 uppercase",
+                    "type": "value_error",
+                }
+            ]
+        )
         handler = app.exception_handlers[RequestValidationError]
         response = await handler(request, exc)
         assert response.status_code == 422
@@ -56,11 +65,15 @@ class TestMain:
     async def test_validation_exception_handler_password_min_chars(self):
         """Cobre o if 'at least 8 characters' (linhas 71-72)"""
         request = MagicMock()
-        exc = RequestValidationError(errors=[{
-            "loc": ("body", "new_password"),
-            "msg": "Value error, at least 8 characters",
-            "type": "value_error"
-        }])
+        exc = RequestValidationError(
+            errors=[
+                {
+                    "loc": ("body", "new_password"),
+                    "msg": "Value error, at least 8 characters",
+                    "type": "value_error",
+                }
+            ]
+        )
         handler = app.exception_handlers[RequestValidationError]
         response = await handler(request, exc)
         assert response.status_code == 422

@@ -64,6 +64,26 @@ graph TD
    - Frontend: `http://localhost:3000` (ou porta configurada).
    - API Docs (Swagger): `http://localhost:8000/docs`.
 
+## Qualidade de Código (Pre-commit)
+
+Este projeto utiliza ferramentas de linting, formatação e checagem de tipos estática para manter o código impecável. É **obrigatório** instalar os hooks de pre-commit antes de contribuir com o código.
+
+### Como configurar:
+No terminal (na raiz do projeto), execute o script de instalação para engatar as validações no seu Git local:
+
+```bash
+# Se você estiver no Windows (PowerShell)
+.\setup_precommit.ps1
+```
+
+*(Esse script instalará o pre-commit usando o `uv` e configurará as verificações de arquivos e mensagens de commit).*
+
+### O que o pre-commit faz?
+Toda vez que você der um `git commit`, ele rodará automaticamente:
+- **Ruff:** O Linter procurará por código sem uso e formatará tudo no padrão.
+- **Mypy:** O Type Checker validará a tipagem forte do Python.
+- **Segurança & Validações Extras:** Verificará sintaxe de `.json` e `.yaml`, impedirá o envio acidental de chaves de API, bloqueará merges mal resolvidos e validará se sua mensagem de commit segue o padrão do [Conventional Commits](https://www.conventionalcommits.org/) (ex: `feat: add login`, `fix: bug on auth`).
+
 ## Configurações de Ambiente (.env)
 
 O arquivo `.env` contém configurações vitais para rodar o sistema localmente ou em produção. Algumas das variáveis de destaque para controle de segurança e testes incluem:

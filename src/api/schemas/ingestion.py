@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 class IngestionJobResponse(BaseModel):
     """Schema for ingestion job response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -26,6 +27,7 @@ class IngestionJobResponse(BaseModel):
 
 class UploadResponseAsync(BaseModel):
     """Schema for async upload response."""
+
     job_id: UUID
     chat_type_id: UUID
     message: str

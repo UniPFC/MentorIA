@@ -23,7 +23,7 @@ class Provider(LLMProvider):
         model_name: str,
         provider_alias: str = "openai",
         api_key: str | None = None,
-        base_url: str | None = None
+        base_url: str | None = None,
     ):
         """
         Initialize remote LLM provider.
@@ -35,11 +35,15 @@ class Provider(LLMProvider):
             base_url: Custom base URL (overrides provider_alias)
         """
         normalized_alias = provider_alias.lower()
-        self.target_url = base_url if base_url else URLS.get(normalized_alias, URLS["openai"])
+        self.target_url = (
+            base_url if base_url else URLS.get(normalized_alias, URLS["openai"])
+        )
         self.api_key = resolve_api_key(normalized_alias, api_key)
         self.client = OpenAI(api_key=self.api_key, base_url=self.target_url)
         self.model_name = model_name
-        logger.info(f"Provider configured: model={model_name}, alias={provider_alias}, endpoint={self.target_url}")
+        logger.info(
+            f"Provider configured: model={model_name}, alias={provider_alias}, endpoint={self.target_url}"
+        )
 
     def generate(self, messages: list[dict[str, str]], **kwargs) -> str:
         """
@@ -57,7 +61,9 @@ class Provider(LLMProvider):
         top_p = kwargs.pop("top_p", 1.0)
 
         try:
-            logger.debug(f"Generating: model={self.model_name}, max_tokens={max_tokens}, temp={temperature}")
+            logger.debug(
+                f"Generating: model={self.model_name}, max_tokens={max_tokens}, temp={temperature}"
+            )
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
@@ -72,10 +78,7 @@ class Provider(LLMProvider):
             raise
 
     def generate_structured(
-        self,
-        messages: list[dict[str, str]],
-        response_format: Any,
-        **kwargs
+        self, messages: list[dict[str, str]], response_format: Any, **kwargs
     ) -> Any:
         """
         Generate structured output following a Pydantic schema.
@@ -93,7 +96,9 @@ class Provider(LLMProvider):
         top_p = kwargs.pop("top_p", 1.0)
 
         try:
-            logger.debug(f"Structured generation: model={self.model_name}, format={response_format.__name__}")
+            logger.debug(
+                f"Structured generation: model={self.model_name}, format={response_format.__name__}"
+            )
 
             completion = self.client.beta.chat.completions.parse(
                 model=self.model_name,
@@ -185,7 +190,7 @@ class HFProvider(LLMProvider):
             "max_new_tokens": 1024,
             "top_p": 1.0,
             "do_sample": False,
-            "repetition_penalty": 1.0
+            "repetition_penalty": 1.0,
         }
 
         ignored_temp = kwargs.pop("temperature", None)
@@ -196,10 +201,7 @@ class HFProvider(LLMProvider):
 
         try:
             input_ids = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_tensors="pt"
+                messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
             ).to(self.model.device)
 
             attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
@@ -212,10 +214,10 @@ class HFProvider(LLMProvider):
                 input_ids,
                 attention_mask=attention_mask,
                 **gen_params,
-                pad_token_id=self.tokenizer.pad_token_id
+                pad_token_id=self.tokenizer.pad_token_id,
             )
 
-        generated_ids = outputs[0][input_ids.shape[1]:]
+        generated_ids = outputs[0][input_ids.shape[1] :]
         response = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
         logger.debug("HFProvider generation completed")
         return response

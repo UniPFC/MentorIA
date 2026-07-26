@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 # Store active WebSocket connections
 class ConnectionManager:
     def __init__(self):
@@ -36,14 +37,18 @@ class ConnectionManager:
         if chat_id not in self.active_connections:
             self.active_connections[chat_id] = set()
         self.active_connections[chat_id].add(websocket)
-        logger.info(f"WebSocket connected for chat {chat_id}. Total connections: {len(self.active_connections[chat_id])}")
+        logger.info(
+            f"WebSocket connected for chat {chat_id}. Total connections: {len(self.active_connections[chat_id])}"
+        )
 
     def disconnect(self, websocket: WebSocket, chat_id: str):
         if chat_id in self.active_connections:
             self.active_connections[chat_id].discard(websocket)
             if not self.active_connections[chat_id]:
                 del self.active_connections[chat_id]
-            logger.info(f"WebSocket disconnected for chat {chat_id}. Remaining: {len(self.active_connections.get(chat_id, set()))}")
+            logger.info(
+                f"WebSocket disconnected for chat {chat_id}. Remaining: {len(self.active_connections.get(chat_id, set()))}"
+            )
 
     async def send_to_chat(self, chat_id: str, message: dict):
         """Send a message to all connected clients for a specific chat."""
@@ -63,11 +68,14 @@ class ConnectionManager:
             if not self.active_connections[chat_id]:
                 del self.active_connections[chat_id]
 
+
 manager = ConnectionManager()
 
 
 @router.websocket("/ws/chats/{chat_id}")
-async def websocket_endpoint(websocket: WebSocket, chat_id: str, token: str | None = None):
+async def websocket_endpoint(
+    websocket: WebSocket, chat_id: str, token: str | None = None
+):
     """WebSocket endpoint for real-time chat updates."""
     # Authenticate via token query param or cookie
     if not token:
@@ -121,11 +129,7 @@ def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
         update_type: Type of update (e.g., 'title', 'message', 'status')
         data: The update data
     """
-    message = {
-        "type": update_type,
-        "chat_id": chat_id,
-        "data": data
-    }
+    message = {"type": update_type, "chat_id": chat_id, "data": data}
 
     # Try to get the running event loop
     try:
@@ -135,8 +139,7 @@ def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
         else:
             # If loop exists but is not running, schedule the coroutine
             asyncio.run_coroutine_threadsafe(
-                manager.send_to_chat(chat_id, message),
-                loop
+                manager.send_to_chat(chat_id, message), loop
             )
     except RuntimeError:
         # No running event loop, create a new one
@@ -144,8 +147,7 @@ def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
             loop = manager.get_event_loop()
             if loop.is_running():
                 asyncio.run_coroutine_threadsafe(
-                    manager.send_to_chat(chat_id, message),
-                    loop
+                    manager.send_to_chat(chat_id, message), loop
                 )
             else:
                 # Run the coroutine in the new loop
@@ -154,4 +156,3 @@ def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
             logger.error(f"Failed to broadcast WebSocket message: {e}")
     except Exception as e:
         logger.error(f"Failed to broadcast WebSocket message: {e}")
-

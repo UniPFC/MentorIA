@@ -8,18 +8,19 @@ import pytest
 class TestUploadRoutes:
     """Testes unitários para rotas de upload"""
 
-    @patch('src.api.routes.upload.settings')
+    @patch("src.api.routes.upload.settings")
     def test_get_ingestion_service_remote_provider(self, mock_settings):
         """Testa obtenção de serviço de ingestão com provider remoto"""
         mock_settings.EMBEDDING_PROVIDER = "remote"
         mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-ada-002"
         mock_settings.EMBEDDING_REMOTE_PROVIDER = "openai"
 
-        with patch('src.api.routes.upload.RemoteEmbeddingProvider') as mock_remote, \
-             patch('src.api.routes.upload.EmbeddingEngine') as mock_engine, \
-             patch('src.api.routes.upload.QdrantManager') as mock_qdrant, \
-             patch('src.api.routes.upload.ChunkIngestionService') as mock_service:
-
+        with (
+            patch("src.api.routes.upload.RemoteEmbeddingProvider") as mock_remote,
+            patch("src.api.routes.upload.EmbeddingEngine") as mock_engine,
+            patch("src.api.routes.upload.QdrantManager") as mock_qdrant,
+            patch("src.api.routes.upload.ChunkIngestionService") as mock_service,
+        ):
             from src.api.routes.upload import get_ingestion_service
 
             mock_remote_instance = Mock()
@@ -37,14 +38,15 @@ class TestUploadRoutes:
             service = get_ingestion_service()
 
             mock_remote.assert_called_once_with(
-                model_name="text-embedding-ada-002",
-                provider_alias="openai"
+                model_name="text-embedding-ada-002", provider_alias="openai"
             )
             mock_engine.assert_called_once_with(mock_remote_instance)
             mock_qdrant.assert_called_once()
-            mock_service.assert_called_once_with(mock_engine_instance, mock_qdrant_instance)
+            mock_service.assert_called_once_with(
+                mock_engine_instance, mock_qdrant_instance
+            )
 
-    @patch('src.api.routes.upload.settings')
+    @patch("src.api.routes.upload.settings")
     def test_get_ingestion_service_hf_provider(self, mock_settings):
         """Testa obtenção de serviço de ingestão com provider HuggingFace"""
         mock_settings.EMBEDDING_PROVIDER = "huggingface"
@@ -52,18 +54,22 @@ class TestUploadRoutes:
 
         from src.api.routes.upload import get_ingestion_service
 
-        with patch('src.api.routes.upload.ModelLoader') as mock_loader, \
-             patch('src.api.routes.upload.HFEmbeddingProvider') as mock_hf, \
-             patch('src.api.routes.upload.EmbeddingEngine') as mock_engine, \
-             patch('src.api.routes.upload.QdrantManager') as mock_qdrant, \
-             patch('src.api.routes.upload.ChunkIngestionService') as mock_service:
-
+        with (
+            patch("src.api.routes.upload.ModelLoader") as mock_loader,
+            patch("src.api.routes.upload.HFEmbeddingProvider") as mock_hf,
+            patch("src.api.routes.upload.EmbeddingEngine") as mock_engine,
+            patch("src.api.routes.upload.QdrantManager") as mock_qdrant,
+            patch("src.api.routes.upload.ChunkIngestionService") as mock_service,
+        ):
             mock_loader_instance = Mock()
             mock_loader.return_value = mock_loader_instance
 
             mock_model = Mock()
             mock_tokenizer = Mock()
-            mock_loader_instance.load_embedding.return_value = (mock_model, mock_tokenizer)
+            mock_loader_instance.load_embedding.return_value = (
+                mock_model,
+                mock_tokenizer,
+            )
 
             mock_hf_instance = Mock()
             mock_hf.return_value = mock_hf_instance
@@ -101,16 +107,19 @@ class TestUploadAddChunks:
 
         with pytest.raises(HTTPException) as exc_info:
             import asyncio
-            asyncio.run(add_chunks_to_chat_type(
-                chat_type_id=uuid4(),
-                file=Mock(),
-                question_column="question",
-                answer_column="answer",
-                db=Mock(),
-                current_user=Mock(),
-                ingestion_service=Mock(),
-                chat_type_repo=chat_type_repo
-            ))
+
+            asyncio.run(
+                add_chunks_to_chat_type(
+                    chat_type_id=uuid4(),
+                    file=Mock(),
+                    question_column="question",
+                    answer_column="answer",
+                    db=Mock(),
+                    current_user=Mock(),
+                    ingestion_service=Mock(),
+                    chat_type_repo=chat_type_repo,
+                )
+            )
 
         assert exc_info.value.status_code == 404
 
@@ -133,16 +142,19 @@ class TestUploadAddChunks:
 
         with pytest.raises(HTTPException) as exc_info:
             import asyncio
-            asyncio.run(add_chunks_to_chat_type(
-                chat_type_id=chat_type.id,
-                file=Mock(),
-                question_column="question",
-                answer_column="answer",
-                db=Mock(),
-                current_user=current_user,
-                ingestion_service=Mock(),
-                chat_type_repo=chat_type_repo
-            ))
+
+            asyncio.run(
+                add_chunks_to_chat_type(
+                    chat_type_id=chat_type.id,
+                    file=Mock(),
+                    question_column="question",
+                    answer_column="answer",
+                    db=Mock(),
+                    current_user=current_user,
+                    ingestion_service=Mock(),
+                    chat_type_repo=chat_type_repo,
+                )
+            )
 
         assert exc_info.value.status_code == 403
 
@@ -167,16 +179,19 @@ class TestUploadAddChunks:
 
         with pytest.raises(HTTPException) as exc_info:
             import asyncio
-            asyncio.run(add_chunks_to_chat_type(
-                chat_type_id=chat_type.id,
-                file=mock_file,
-                question_column="question",
-                answer_column="answer",
-                db=Mock(),
-                current_user=current_user,
-                ingestion_service=Mock(),
-                chat_type_repo=chat_type_repo
-            ))
+
+            asyncio.run(
+                add_chunks_to_chat_type(
+                    chat_type_id=chat_type.id,
+                    file=mock_file,
+                    question_column="question",
+                    answer_column="answer",
+                    db=Mock(),
+                    current_user=current_user,
+                    ingestion_service=Mock(),
+                    chat_type_repo=chat_type_repo,
+                )
+            )
 
         assert exc_info.value.status_code == 400
 
@@ -204,16 +219,18 @@ class TestUploadAddChunks:
         ingestion_service = Mock()
         ingestion_service.ingest_from_file.return_value = (["id1", "id2"], 10)
 
-        result = asyncio.run(add_chunks_to_chat_type(
-            chat_type_id=chat_type.id,
-            file=mock_file,
-            question_column="question",
-            answer_column="answer",
-            db=Mock(),
-            current_user=current_user,
-            ingestion_service=ingestion_service,
-            chat_type_repo=chat_type_repo
-        ))
+        result = asyncio.run(
+            add_chunks_to_chat_type(
+                chat_type_id=chat_type.id,
+                file=mock_file,
+                question_column="question",
+                answer_column="answer",
+                db=Mock(),
+                current_user=current_user,
+                ingestion_service=ingestion_service,
+                chat_type_repo=chat_type_repo,
+            )
+        )
 
         assert result.chunks_ingested == 10
         ingestion_service.ingest_from_file.assert_called_once()
@@ -244,16 +261,18 @@ class TestUploadAddChunks:
         ingestion_service.ingest_from_file.side_effect = Exception("Ingest error")
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(add_chunks_to_chat_type(
-                chat_type_id=chat_type.id,
-                file=mock_file,
-                question_column="question",
-                answer_column="answer",
-                db=Mock(),
-                current_user=current_user,
-                ingestion_service=ingestion_service,
-                chat_type_repo=chat_type_repo
-            ))
+            asyncio.run(
+                add_chunks_to_chat_type(
+                    chat_type_id=chat_type.id,
+                    file=mock_file,
+                    question_column="question",
+                    answer_column="answer",
+                    db=Mock(),
+                    current_user=current_user,
+                    ingestion_service=ingestion_service,
+                    chat_type_repo=chat_type_repo,
+                )
+            )
 
         assert exc_info.value.status_code == 500
 
@@ -276,23 +295,25 @@ class TestUploadAddChunks:
         chat_type_repo.get_by_name.return_value = None
         chat_type_repo.create.side_effect = Exception("DB error")
 
-        with patch('src.api.routes.upload.settings') as mock_settings:
+        with patch("src.api.routes.upload.settings") as mock_settings:
             mock_settings.ALLOWED_EXTENSIONS = [".xlsx"]
             mock_settings.EMBEDDING_PROVIDER = "remote"
             mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-ada-002"
             mock_settings.EMBEDDING_REMOTE_PROVIDER = "openai"
 
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.run(create_chat_type_from_file(
-                    name="Test",
-                    file=mock_file,
-                    db=Mock(),
-                    current_user=current_user,
-                    ingestion_service=Mock(),
-                    chat_type_repo=chat_type_repo,
-                    job_repo=job_repo,
-                    background_tasks=Mock()
-                ))
+                asyncio.run(
+                    create_chat_type_from_file(
+                        name="Test",
+                        file=mock_file,
+                        db=Mock(),
+                        current_user=current_user,
+                        ingestion_service=Mock(),
+                        chat_type_repo=chat_type_repo,
+                        job_repo=job_repo,
+                        background_tasks=Mock(),
+                    )
+                )
 
             assert exc_info.value.status_code == 500
 
@@ -314,23 +335,25 @@ class TestUploadAddChunks:
 
         chat_type_repo.get_by_name.side_effect = Exception("Unexpected error")
 
-        with patch('src.api.routes.upload.settings') as mock_settings:
+        with patch("src.api.routes.upload.settings") as mock_settings:
             mock_settings.ALLOWED_EXTENSIONS = [".xlsx"]
             mock_settings.EMBEDDING_PROVIDER = "remote"
             mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-ada-002"
             mock_settings.EMBEDDING_REMOTE_PROVIDER = "openai"
 
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.run(create_chat_type_from_file(
-                    name="Test",
-                    file=mock_file,
-                    db=Mock(),
-                    current_user=current_user,
-                    ingestion_service=Mock(),
-                    chat_type_repo=chat_type_repo,
-                    job_repo=job_repo,
-                    background_tasks=Mock()
-                ))
+                asyncio.run(
+                    create_chat_type_from_file(
+                        name="Test",
+                        file=mock_file,
+                        db=Mock(),
+                        current_user=current_user,
+                        ingestion_service=Mock(),
+                        chat_type_repo=chat_type_repo,
+                        job_repo=job_repo,
+                        background_tasks=Mock(),
+                    )
+                )
 
             assert exc_info.value.status_code == 500
 
@@ -357,21 +380,23 @@ class TestUploadAddChunks:
             description="Desc",
             is_public=False,
             owner_id=current_user.id,
-            collection_name="test_collection"
+            collection_name="test_collection",
         )
         new_job = IngestionJob(
             id=uuid4(),
             chat_type_id=new_chat_type.id,
             filename="test.xlsx",
-            status="pending"
+            status="pending",
         )
 
         chat_type_repo.get_by_name.return_value = None
         chat_type_repo.create.return_value = new_chat_type
         job_repo.create.return_value = new_job
 
-        with patch('src.api.routes.upload.settings') as mock_settings, \
-             patch('src.api.routes.upload.QdrantManager') as mock_qdrant:
+        with (
+            patch("src.api.routes.upload.settings") as mock_settings,
+            patch("src.api.routes.upload.QdrantManager") as mock_qdrant,
+        ):
             mock_settings.ALLOWED_EXTENSIONS = [".xlsx"]
             mock_settings.EMBEDDING_PROVIDER = "remote"
             mock_settings.EMBEDDING_REMOTE_MODEL = "text-embedding-ada-002"
@@ -379,16 +404,18 @@ class TestUploadAddChunks:
 
             background_tasks = Mock()
 
-            result = asyncio.run(create_chat_type_from_file(
-                name="Test",
-                file=mock_file,
-                db=Mock(),
-                current_user=current_user,
-                ingestion_service=Mock(),
-                chat_type_repo=chat_type_repo,
-                job_repo=job_repo,
-                background_tasks=background_tasks
-            ))
+            result = asyncio.run(
+                create_chat_type_from_file(
+                    name="Test",
+                    file=mock_file,
+                    db=Mock(),
+                    current_user=current_user,
+                    ingestion_service=Mock(),
+                    chat_type_repo=chat_type_repo,
+                    job_repo=job_repo,
+                    background_tasks=background_tasks,
+                )
+            )
 
             assert result.job_id == new_job.id
             assert result.chat_type_id == new_chat_type.id
@@ -410,19 +437,21 @@ class TestUploadAddChunks:
         mock_file = Mock()
         mock_file.filename = "test.txt"
 
-        with patch('src.api.routes.upload.settings') as mock_settings:
+        with patch("src.api.routes.upload.settings") as mock_settings:
             mock_settings.ALLOWED_EXTENSIONS = [".xlsx", ".csv"]
 
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.run(create_chat_type_from_file(
-                    name="Test",
-                    file=mock_file,
-                    db=Mock(),
-                    current_user=current_user,
-                    ingestion_service=Mock(),
-                    chat_type_repo=chat_type_repo,
-                    job_repo=job_repo,
-                    background_tasks=Mock()
-                ))
+                asyncio.run(
+                    create_chat_type_from_file(
+                        name="Test",
+                        file=mock_file,
+                        db=Mock(),
+                        current_user=current_user,
+                        ingestion_service=Mock(),
+                        chat_type_repo=chat_type_repo,
+                        job_repo=job_repo,
+                        background_tasks=Mock(),
+                    )
+                )
 
             assert exc_info.value.status_code == 400

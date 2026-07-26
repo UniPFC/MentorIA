@@ -29,7 +29,7 @@ def process_ingestion_job(
     question_col: str,
     answer_col: str,
     ingestion_service: ChunkIngestionService,
-    db: Session
+    db: Session,
 ):
     """
     Background task to process chunk ingestion.
@@ -78,7 +78,7 @@ def process_ingestion_job(
             chat_type_id=chat_type_id,
             chunks=chunks,
             db_session=db,
-            on_progress=on_progress
+            on_progress=on_progress,
         )
 
         # Update job status
@@ -99,6 +99,7 @@ def process_ingestion_job(
         # Cleanup: Delete ChatType and Qdrant collection if ingestion failed
         try:
             from src.repositories.chat_type import ChatTypeRepository
+
             chat_type_repo = ChatTypeRepository(db)
             chat_type = chat_type_repo.get_by_id(chat_type_id)
 
@@ -108,13 +109,19 @@ def process_ingestion_job(
                     qdrant = QdrantManager()
                     qdrant.delete_collection(chat_type_id)
                 except Exception as qdrant_err:
-                    logger.warning(f"Failed to delete Qdrant collection for ChatType {chat_type_id}: {qdrant_err}")
+                    logger.warning(
+                        f"Failed to delete Qdrant collection for ChatType {chat_type_id}: {qdrant_err}"
+                    )
 
                 # Delete ChatType from database
                 chat_type_repo.delete(chat_type)
-                logger.info(f"Cleaned up ChatType {chat_type_id} due to ingestion failure")
+                logger.info(
+                    f"Cleaned up ChatType {chat_type_id} due to ingestion failure"
+                )
         except Exception as cleanup_err:
-            logger.error(f"Failed to cleanup ChatType {chat_type_id} after ingestion failure: {cleanup_err}")
+            logger.error(
+                f"Failed to cleanup ChatType {chat_type_id} after ingestion failure: {cleanup_err}"
+            )
 
 
 def _load_title_generation_prompt(system: bool = True) -> str:
@@ -127,7 +134,11 @@ def _load_title_generation_prompt(system: bool = True) -> str:
     Returns:
         Prompt template string
     """
-    filename = "title_generation_system_prompt.md" if system else "title_generation_user_prompt.md"
+    filename = (
+        "title_generation_system_prompt.md"
+        if system
+        else "title_generation_user_prompt.md"
+    )
     prompt_path = Path(settings.PROMPTS_DIR) / "chat" / filename
     with open(prompt_path, encoding="utf-8") as f:
         return f.read()
@@ -152,22 +163,28 @@ def _generate_chat_title_internal(chat_id: UUID, db: Session) -> bool:
             return False
 
         # Get first user message and assistant response
-        first_user_msg = db.query(Message).filter(
-            Message.chat_id == chat_id,
-            Message.role == MessageRole.USER
-        ).order_by(Message.created_at.asc()).first()
+        first_user_msg = (
+            db.query(Message)
+            .filter(Message.chat_id == chat_id, Message.role == MessageRole.USER)
+            .order_by(Message.created_at.asc())
+            .first()
+        )
 
         if not first_user_msg:
             return False
 
-        first_assistant_msg = db.query(Message).filter(
-            Message.chat_id == chat_id,
-            Message.role == MessageRole.ASSISTANT
-        ).order_by(Message.created_at.asc()).first()
+        first_assistant_msg = (
+            db.query(Message)
+            .filter(Message.chat_id == chat_id, Message.role == MessageRole.ASSISTANT)
+            .order_by(Message.created_at.asc())
+            .first()
+        )
 
         # Build context for title generation
         user_question = first_user_msg.content[:500]
-        assistant_response = first_assistant_msg.content[:500] if first_assistant_msg else ""
+        assistant_response = (
+            first_assistant_msg.content[:500] if first_assistant_msg else ""
+        )
 
         # Load prompt templates
         system_prompt_template = _load_title_generation_prompt(system=True)
@@ -175,25 +192,23 @@ def _generate_chat_title_internal(chat_id: UUID, db: Session) -> bool:
 
         # Format user prompt with context
         user_prompt = user_prompt_template.format(
-            user_question=user_question,
-            assistant_response=assistant_response
+            user_question=user_question, assistant_response=assistant_response
         )
 
         llm_provider = Provider(
-            model_name=settings.LLM_MODEL,
-            provider_alias=settings.LLM_PROVIDER
+            model_name=settings.LLM_MODEL, provider_alias=settings.LLM_PROVIDER
         )
 
         messages = [
             {"role": "system", "content": system_prompt_template},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
 
         response = llm_provider.generate_structured(
             messages=messages,
             response_format=ChatTitleResponse,
             max_new_tokens=100,
-            temperature=0.3
+            temperature=0.3,
         )
 
         # Extract title from structured response
@@ -213,6 +228,7 @@ def _generate_chat_title_internal(chat_id: UUID, db: Session) -> bool:
 
         # Broadcast title update via WebSocket
         from src.api.routes.websocket import broadcast_chat_update
+
         broadcast_chat_update(str(chat_id), "title", {"title": title})
 
         logger.info(f"Generated chat title: {chat_id} -> '{title}'")
@@ -232,13 +248,16 @@ def generate_chat_title_background(chat_id: UUID) -> None:
     Args:
         chat_id: ID of the chat to generate title for
     """
+
     def _generate():
         session = None
         try:
             session = SessionLocal()
             _generate_chat_title_internal(chat_id, session)
         except Exception as e:
-            logger.error(f"Background task failed to generate title for chat {chat_id}: {e}")
+            logger.error(
+                f"Background task failed to generate title for chat {chat_id}: {e}"
+            )
         finally:
             if session:
                 session.close()

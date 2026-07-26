@@ -30,7 +30,7 @@ class PagarmeService:
         return {
             "Authorization": f"Basic {auth}",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json",
         }
 
     def _get_plan_id(self, level: UserLevel) -> str | None:
@@ -51,9 +51,7 @@ class PagarmeService:
             "name": user.username,
             "email": user.email,
             "type": "individual",
-            "metadata": {
-                "user_id": str(user.id)
-            }
+            "metadata": {"user_id": str(user.id)},
         }
 
         try:
@@ -62,26 +60,27 @@ class PagarmeService:
                     f"{self.api_url}/customers",
                     headers=self._get_headers(),
                     json=payload,
-                    timeout=30.0
+                    timeout=30.0,
                 )
 
                 if response.status_code in (200, 201):
                     data = response.json()
                     customer_id = data.get("id")
-                    logger.info(f"Pagar.me customer created: {customer_id} for user {user.username}")
+                    logger.info(
+                        f"Pagar.me customer created: {customer_id} for user {user.username}"
+                    )
                     return customer_id
                 else:
-                    logger.error(f"Failed to create Pagar.me customer: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Failed to create Pagar.me customer: {response.status_code} - {response.text}"
+                    )
                     return None
         except Exception as e:
             logger.error(f"Error creating Pagar.me customer: {e}")
             return None
 
     async def create_subscription_checkout(
-        self,
-        customer_id: str,
-        user: User,
-        target_level: UserLevel
+        self, customer_id: str, user: User, target_level: UserLevel
     ) -> str | None:
         """
         Create a Pagar.me checkout for subscription.
@@ -100,8 +99,8 @@ class PagarmeService:
             "metadata": {
                 "user_id": str(user.id),
                 "target_level": target_level.value,
-                "type": "subscription"
-            }
+                "type": "subscription",
+            },
         }
 
         try:
@@ -110,7 +109,7 @@ class PagarmeService:
                     f"{self.api_url}/checkouts",
                     headers=self._get_headers(),
                     json=payload,
-                    timeout=30.0
+                    timeout=30.0,
                 )
 
                 if response.status_code in (200, 201):
@@ -122,18 +121,16 @@ class PagarmeService:
                     )
                     return checkout_url
                 else:
-                    logger.error(f"Failed to create checkout: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Failed to create checkout: {response.status_code} - {response.text}"
+                    )
                     return None
         except Exception as e:
             logger.error(f"Error creating Pagar.me checkout: {e}")
             return None
 
     async def create_refill_checkout(
-        self,
-        customer_id: str,
-        user: User,
-        amount_to_refill: int,
-        max_budget: int
+        self, customer_id: str, user: User, amount_to_refill: int, max_budget: int
     ) -> str | None:
         """
         Create a Pagar.me checkout for one-time token refill.
@@ -148,15 +145,15 @@ class PagarmeService:
                 {
                     "amount": 990,  # R$ 9,90 - TODO: adjust per level/business rules
                     "description": f"Token refill - {amount_to_refill} tokens",
-                    "quantity": 1
+                    "quantity": 1,
                 }
             ],
             "metadata": {
                 "user_id": str(user.id),
                 "type": "refill",
                 "amount_to_refill": str(amount_to_refill),
-                "max_budget": str(max_budget)
-            }
+                "max_budget": str(max_budget),
+            },
         }
 
         try:
@@ -165,7 +162,7 @@ class PagarmeService:
                     f"{self.api_url}/checkouts",
                     headers=self._get_headers(),
                     json=payload,
-                    timeout=30.0
+                    timeout=30.0,
                 )
 
                 if response.status_code in (200, 201):
@@ -177,7 +174,9 @@ class PagarmeService:
                     )
                     return checkout_url
                 else:
-                    logger.error(f"Failed to create refill checkout: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Failed to create refill checkout: {response.status_code} - {response.text}"
+                    )
                     return None
         except Exception as e:
             logger.error(f"Error creating Pagar.me refill checkout: {e}")
@@ -190,14 +189,16 @@ class PagarmeService:
                 response = await client.delete(
                     f"{self.api_url}/subscriptions/{subscription_id}",
                     headers=self._get_headers(),
-                    timeout=30.0
+                    timeout=30.0,
                 )
 
                 if response.status_code in (200, 204):
                     logger.info(f"Pagar.me subscription canceled: {subscription_id}")
                     return True
                 else:
-                    logger.error(f"Failed to cancel subscription: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Failed to cancel subscription: {response.status_code} - {response.text}"
+                    )
                     return False
         except Exception as e:
             logger.error(f"Error canceling Pagar.me subscription: {e}")
@@ -206,13 +207,13 @@ class PagarmeService:
     def verify_webhook_signature(self, payload_body: bytes, signature: str) -> bool:
         """Verify Pagar.me webhook signature (HMAC SHA256)."""
         if not self.webhook_secret:
-            logger.warning("PAGARME_WEBHOOK_SECRET not configured, skipping signature verification")
+            logger.warning(
+                "PAGARME_WEBHOOK_SECRET not configured, skipping signature verification"
+            )
             return True
 
         expected_signature = hmac.new(
-            self.webhook_secret.encode(),
-            payload_body,
-            hashlib.sha256
+            self.webhook_secret.encode(), payload_body, hashlib.sha256
         ).hexdigest()
 
         return hmac.compare_digest(expected_signature, signature)

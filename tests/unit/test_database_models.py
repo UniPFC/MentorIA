@@ -23,7 +23,7 @@ class TestUserModel:
             email="newuser@example.com",
             password_hash="hashed_password",
             is_active=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(user)
         db_session.commit()
@@ -39,7 +39,7 @@ class TestUserModel:
             username="anotheruser",
             email=sample_user.email,
             password_hash="hashed_password",
-            is_active=True
+            is_active=True,
         )
         db_session.add(duplicate_user)
 
@@ -52,7 +52,7 @@ class TestUserModel:
             username=sample_user.username,
             email="different@example.com",
             password_hash="hashed_password",
-            is_active=True
+            is_active=True,
         )
         db_session.add(duplicate_user)
 
@@ -76,7 +76,7 @@ class TestChatTypeModel:
             description="Description",
             owner_id=sample_user.id,
             collection_name=f"chat_type_{chat_type_id}",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -86,12 +86,14 @@ class TestChatTypeModel:
         assert chat_type.owner_id == sample_user.id
         assert chat_type.collection_name == f"chat_type_{chat_type_id}"
 
-    def test_chat_type_cascade_delete(self, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+    def test_chat_type_cascade_delete(
+        self, db_session: Session, sample_user: User, sample_chat_type: ChatType
+    ):
         chat = Chat(
             id=uuid4(),
             title="Test Chat",
             user_id=sample_user.id,
-            chat_type_id=sample_chat_type.id
+            chat_type_id=sample_chat_type.id,
         )
         db_session.add(chat)
         db_session.commit()
@@ -105,12 +107,14 @@ class TestChatTypeModel:
 
 @pytest.mark.unit
 class TestChatModel:
-    def test_create_chat(self, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+    def test_create_chat(
+        self, db_session: Session, sample_user: User, sample_chat_type: ChatType
+    ):
         chat = Chat(
             id=uuid4(),
             title="New Chat",
             user_id=sample_user.id,
-            chat_type_id=sample_chat_type.id
+            chat_type_id=sample_chat_type.id,
         )
         db_session.add(chat)
         db_session.commit()
@@ -128,7 +132,7 @@ class TestMessageModel:
             id=uuid4(),
             chat_id=sample_chat.id,
             role=MessageRole.USER,
-            content="Hello, world!"
+            content="Hello, world!",
         )
         db_session.add(message)
         db_session.commit()
@@ -143,13 +147,13 @@ class TestMessageModel:
             id=uuid4(),
             chat_id=sample_chat.id,
             role=MessageRole.USER,
-            content="User message"
+            content="User message",
         )
         assistant_msg = Message(
             id=uuid4(),
             chat_id=sample_chat.id,
             role=MessageRole.ASSISTANT,
-            content="Assistant message"
+            content="Assistant message",
         )
 
         db_session.add_all([user_msg, assistant_msg])
@@ -168,7 +172,7 @@ class TestUserTokenModel:
             token="test_token_123",
             token_type="access",
             expires_at=datetime.now(UTC) + timedelta(hours=1),
-            is_active=True
+            is_active=True,
         )
         db_session.add(token)
         db_session.commit()
@@ -188,7 +192,7 @@ class TestUserTokenModel:
             token="expired_token",
             token_type="access",
             expires_at=expired_time,
-            is_active=True
+            is_active=True,
         )
         db_session.add(expired_token)
         db_session.commit()
@@ -207,7 +211,7 @@ class TestPasswordResetTokenModel:
             user_id=sample_user.id,
             token="reset_token_123",
             expires_at=datetime.now(UTC) + timedelta(hours=1),
-            is_active=True
+            is_active=True,
         )
         db_session.add(reset_token)
         db_session.commit()
@@ -217,7 +221,9 @@ class TestPasswordResetTokenModel:
         assert reset_token.is_active is True
         assert reset_token.used_at is None
 
-    def test_mark_token_used(self, db_session: Session, sample_password_reset_token: PasswordResetToken):
+    def test_mark_token_used(
+        self, db_session: Session, sample_password_reset_token: PasswordResetToken
+    ):
         sample_password_reset_token.is_active = False
         sample_password_reset_token.used_at = datetime.now(UTC)
         db_session.commit()
@@ -228,14 +234,16 @@ class TestPasswordResetTokenModel:
 
 @pytest.mark.unit
 class TestKnowledgeChunkModel:
-    def test_create_knowledge_chunk(self, db_session: Session, sample_chat_type: ChatType):
+    def test_create_knowledge_chunk(
+        self, db_session: Session, sample_chat_type: ChatType
+    ):
         chunk = KnowledgeChunk(
             id=uuid4(),
             chat_type_id=sample_chat_type.id,
             qdrant_point_id="point_123",
             source_file="test.txt",
             row_number=1,
-            chunk_metadata='{"question": "What is AI?", "answer": "Artificial Intelligence is..."}'
+            chunk_metadata='{"question": "What is AI?", "answer": "Artificial Intelligence is..."}',
         )
         db_session.add(chunk)
         db_session.commit()
@@ -249,13 +257,15 @@ class TestKnowledgeChunkModel:
 
 @pytest.mark.unit
 class TestIngestionJobModel:
-    def test_create_ingestion_job(self, db_session: Session, sample_chat_type: ChatType):
+    def test_create_ingestion_job(
+        self, db_session: Session, sample_chat_type: ChatType
+    ):
         job = IngestionJob(
             id=uuid4(),
             chat_type_id=sample_chat_type.id,
             filename="test.xlsx",
             status=IngestionStatus.PENDING,
-            total_chunks=0
+            total_chunks=0,
         )
         db_session.add(job)
         db_session.commit()
@@ -265,12 +275,14 @@ class TestIngestionJobModel:
         assert job.status == IngestionStatus.PENDING
         assert job.total_chunks == 0
 
-    def test_job_status_transitions(self, db_session: Session, sample_chat_type: ChatType):
+    def test_job_status_transitions(
+        self, db_session: Session, sample_chat_type: ChatType
+    ):
         job = IngestionJob(
             id=uuid4(),
             chat_type_id=sample_chat_type.id,
             filename="test.xlsx",
-            status=IngestionStatus.PENDING
+            status=IngestionStatus.PENDING,
         )
         db_session.add(job)
         db_session.commit()

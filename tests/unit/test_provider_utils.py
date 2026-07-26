@@ -22,27 +22,29 @@ class TestProviderUtils:
         result = resolve_api_key("openai", "explicit-key")
         assert result == "explicit-key"
 
-    @patch('src.ai.provider.utils.settings')
+    @patch("src.ai.provider.utils.settings")
     def test_resolve_api_key_openai(self, mock_settings):
         mock_settings.OPENAI_API_KEY = "test-openai-key"
         result = resolve_api_key("openai", None)
         assert result == "test-openai-key"
 
-    @patch('src.ai.provider.utils.settings')
+    @patch("src.ai.provider.utils.settings")
     def test_resolve_api_key_gemini(self, mock_settings):
         mock_settings.GEMINI_API_KEY = "test-gemini-key"
         result = resolve_api_key("gemini", None)
         assert result == "test-gemini-key"
 
-    @patch('src.ai.provider.utils.settings')
+    @patch("src.ai.provider.utils.settings")
     def test_resolve_api_key_ollama(self, mock_settings):
         mock_settings.OLLAMA_API_KEY = "test-ollama-key"
         result = resolve_api_key("ollama", None)
         assert result == "test-ollama-key"
 
-    @patch('src.ai.provider.utils.settings')
+    @patch("src.ai.provider.utils.settings")
     def test_resolve_api_key_ollama_default(self, mock_settings):
-        delattr(mock_settings, 'OLLAMA_API_KEY') if hasattr(mock_settings, 'OLLAMA_API_KEY') else None
+        delattr(mock_settings, "OLLAMA_API_KEY") if hasattr(
+            mock_settings, "OLLAMA_API_KEY"
+        ) else None
         result = resolve_api_key("ollama", None)
         assert result == "ollama"
 
@@ -54,7 +56,7 @@ class TestProviderUtils:
         result = resolve_api_key("OPENAI", "test-key")
         assert result == "test-key"
 
-    @patch('src.ai.provider.utils.settings')
+    @patch("src.ai.provider.utils.settings")
     def test_resolve_api_key_case_insensitive_provider(self, mock_settings):
         mock_settings.OPENAI_API_KEY = "test-key"
         result = resolve_api_key("OpenAI", None)

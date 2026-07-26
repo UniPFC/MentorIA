@@ -129,7 +129,9 @@ class TestChatTypesRoutes:
         chat_type.owner = None
         chat_type.tags = []
 
-        result = enrich_chat_type_with_owner(chat_type, favorite_repo=None, user_id=None)
+        result = enrich_chat_type_with_owner(
+            chat_type, favorite_repo=None, user_id=None
+        )
 
         assert result["is_favorited"] is False
 
@@ -169,8 +171,13 @@ class TestChatTypesEndpoints:
         current_user = Mock()
         current_user.id = uuid4()
 
-        owner = User(id=current_user.id, username="testuser", email="test@example.com",
-                     password_hash="hash", is_active=True)
+        owner = User(
+            id=current_user.id,
+            username="testuser",
+            email="test@example.com",
+            password_hash="hash",
+            is_active=True,
+        )
         chat_type = ChatType(
             id=uuid4(),
             name="Test Chat Type",
@@ -178,7 +185,7 @@ class TestChatTypesEndpoints:
             is_public=True,
             owner_id=current_user.id,
             collection_name="test_collection",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         chat_type.owner = owner
         chat_type.tags = []
@@ -194,7 +201,7 @@ class TestChatTypesEndpoints:
             limit=100,
             current_user=current_user,
             chat_type_repo=chat_type_repo,
-            favorite_repo=favorite_repo
+            favorite_repo=favorite_repo,
         )
 
         chat_type_repo.search.assert_called_once_with(
@@ -203,7 +210,7 @@ class TestChatTypesEndpoints:
             owner_id=None,
             user_id=current_user.id,
             skip=0,
-            limit=100
+            limit=100,
         )
         assert result.total == 1
         assert len(result.chat_types) == 1
@@ -236,7 +243,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 403
@@ -266,7 +273,7 @@ class TestChatTypesEndpoints:
                 chat_type_data=chat_type_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 404
@@ -304,7 +311,7 @@ class TestChatTypesEndpoints:
                 chat_type_data=chat_type_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 403
@@ -325,7 +332,7 @@ class TestChatTypesEndpoints:
             delete_chat_type(
                 chat_type_id=uuid4(),
                 current_user=current_user,
-                chat_type_repo=chat_type_repo
+                chat_type_repo=chat_type_repo,
             )
 
         assert exc_info.value.status_code == 404
@@ -352,7 +359,7 @@ class TestChatTypesEndpoints:
             delete_chat_type(
                 chat_type_id=chat_type.id,
                 current_user=current_user,
-                chat_type_repo=chat_type_repo
+                chat_type_repo=chat_type_repo,
             )
 
         assert exc_info.value.status_code == 403
@@ -375,9 +382,15 @@ class TestChatTypesEndpoints:
 
         chat_type_repo.get_by_id.return_value = chat_type
 
-        with patch('src.api.routes.chat_types.QdrantManager') as mock_qdrant, \
-             patch('src.api.routes.chat_types.enrich_chat_type_with_owner') as mock_enrich:
-            mock_qdrant.return_value.get_collection_info.return_value = {"points_count": 10}
+        with (
+            patch("src.api.routes.chat_types.QdrantManager") as mock_qdrant,
+            patch(
+                "src.api.routes.chat_types.enrich_chat_type_with_owner"
+            ) as mock_enrich,
+        ):
+            mock_qdrant.return_value.get_collection_info.return_value = {
+                "points_count": 10
+            }
             mock_enrich.return_value = {
                 "id": str(chat_type.id),
                 "name": "Test Chat Type",
@@ -388,14 +401,14 @@ class TestChatTypesEndpoints:
                 "collection_name": "test_collection",
                 "created_at": datetime.now(UTC).isoformat(),
                 "tags": [],
-                "is_favorited": False
+                "is_favorited": False,
             }
 
             result = get_chat_type_info(
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
             assert "chat_type" in result
@@ -425,13 +438,15 @@ class TestChatTypesEndpoints:
         favorite.chat_type_id = chat_type.id
         favorite_repo.create.return_value = favorite
 
-        with patch('src.api.routes.chat_types.ChatTypeFavoriteResponse') as mock_response:
+        with patch(
+            "src.api.routes.chat_types.ChatTypeFavoriteResponse"
+        ) as mock_response:
             mock_response.model_validate.return_value = {"id": str(favorite.id)}
             result = favorite_chat_type(
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
             favorite_repo.create.assert_called_once_with(current_user.id, chat_type.id)
@@ -460,7 +475,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 400
@@ -476,9 +491,7 @@ class TestChatTypesEndpoints:
         favorite_repo.delete_by_user_and_chat_type.return_value = True
 
         result = unfavorite_chat_type(
-            chat_type_id=uuid4(),
-            current_user=current_user,
-            favorite_repo=favorite_repo
+            chat_type_id=uuid4(), current_user=current_user, favorite_repo=favorite_repo
         )
 
         favorite_repo.delete_by_user_and_chat_type.assert_called_once()
@@ -499,7 +512,7 @@ class TestChatTypesEndpoints:
             unfavorite_chat_type(
                 chat_type_id=uuid4(),
                 current_user=current_user,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 404
@@ -531,17 +544,19 @@ class TestChatTypesEndpoints:
         chat_type_repo.create.return_value = new_chat_type
         chat_type_repo.get_by_id.return_value = new_chat_type
 
-        with patch('src.api.routes.chat_types.QdrantManager'):
-            with patch('src.api.routes.chat_types.ChatTypeResponse') as mock_response:
+        with patch("src.api.routes.chat_types.QdrantManager"):
+            with patch("src.api.routes.chat_types.ChatTypeResponse") as mock_response:
                 mock_response.return_value = {"id": str(new_chat_type.id)}
                 result = create_chat_type(
                     chat_type_data=chat_type_data,
                     current_user=current_user,
                     chat_type_repo=chat_type_repo,
-                    favorite_repo=favorite_repo
+                    favorite_repo=favorite_repo,
                 )
 
-                chat_type_repo.add_tags.assert_called_once_with(new_chat_type.id, ["python", "test"])
+                chat_type_repo.add_tags.assert_called_once_with(
+                    new_chat_type.id, ["python", "test"]
+                )
 
     def test_create_chat_type_qdrant_error(self):
         """Testa criação quando Qdrant falha"""
@@ -567,15 +582,17 @@ class TestChatTypesEndpoints:
         chat_type_repo.get_by_name.return_value = None
         chat_type_repo.create.return_value = new_chat_type
 
-        with patch('src.api.routes.chat_types.QdrantManager') as mock_qdrant:
-            mock_qdrant.return_value.create_collection.side_effect = Exception("Qdrant error")
+        with patch("src.api.routes.chat_types.QdrantManager") as mock_qdrant:
+            mock_qdrant.return_value.create_collection.side_effect = Exception(
+                "Qdrant error"
+            )
 
             with pytest.raises(HTTPException) as exc_info:
                 create_chat_type(
                     chat_type_data=chat_type_data,
                     current_user=current_user,
                     chat_type_repo=chat_type_repo,
-                    favorite_repo=favorite_repo
+                    favorite_repo=favorite_repo,
                 )
 
             assert exc_info.value.status_code == 500
@@ -605,7 +622,7 @@ class TestChatTypesEndpoints:
                 chat_type_data=chat_type_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -632,7 +649,7 @@ class TestChatTypesEndpoints:
                 limit=100,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -658,7 +675,7 @@ class TestChatTypesEndpoints:
                 limit=100,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -691,14 +708,14 @@ class TestChatTypesEndpoints:
         chat_type_data.is_public = True
         chat_type_data.tags = None
 
-        with patch('src.api.routes.chat_types.ChatTypeResponse') as mock_response:
+        with patch("src.api.routes.chat_types.ChatTypeResponse") as mock_response:
             mock_response.return_value = {"id": str(chat_type.id)}
             result = update_chat_type(
                 chat_type_id=chat_type.id,
                 chat_type_data=chat_type_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
             assert chat_type.is_public is True
@@ -731,17 +748,19 @@ class TestChatTypesEndpoints:
         chat_type_data.is_public = None
         chat_type_data.tags = ["new", "tags"]
 
-        with patch('src.api.routes.chat_types.ChatTypeResponse') as mock_response:
+        with patch("src.api.routes.chat_types.ChatTypeResponse") as mock_response:
             mock_response.return_value = {"id": str(chat_type.id)}
             result = update_chat_type(
                 chat_type_id=chat_type.id,
                 chat_type_data=chat_type_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
-            chat_type_repo.add_tags.assert_called_once_with(chat_type.id, ["new", "tags"])
+            chat_type_repo.add_tags.assert_called_once_with(
+                chat_type.id, ["new", "tags"]
+            )
 
     def test_update_chat_type_exception(self):
         """Testa update com exceção"""
@@ -779,7 +798,7 @@ class TestChatTypesEndpoints:
                 chat_type_data=chat_type_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -801,14 +820,16 @@ class TestChatTypesEndpoints:
 
         chat_type_repo.get_by_id.return_value = chat_type
 
-        with patch('src.api.routes.chat_types.QdrantManager') as mock_qdrant:
-            mock_qdrant.return_value.delete_collection.side_effect = Exception("Qdrant error")
+        with patch("src.api.routes.chat_types.QdrantManager") as mock_qdrant:
+            mock_qdrant.return_value.delete_collection.side_effect = Exception(
+                "Qdrant error"
+            )
 
             with pytest.raises(HTTPException) as exc_info:
                 delete_chat_type(
                     chat_type_id=chat_type.id,
                     current_user=current_user,
-                    chat_type_repo=chat_type_repo
+                    chat_type_repo=chat_type_repo,
                 )
 
             assert exc_info.value.status_code == 500
@@ -831,7 +852,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=uuid4(),
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 404
@@ -862,7 +883,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 403
@@ -887,15 +908,17 @@ class TestChatTypesEndpoints:
 
         chat_type_repo.get_by_id.return_value = chat_type
 
-        with patch('src.api.routes.chat_types.QdrantManager') as mock_qdrant:
-            mock_qdrant.return_value.get_collection_info.side_effect = Exception("Qdrant error")
+        with patch("src.api.routes.chat_types.QdrantManager") as mock_qdrant:
+            mock_qdrant.return_value.get_collection_info.side_effect = Exception(
+                "Qdrant error"
+            )
 
             with pytest.raises(HTTPException) as exc_info:
                 get_chat_type_info(
                     chat_type_id=chat_type.id,
                     current_user=current_user,
                     chat_type_repo=chat_type_repo,
-                    favorite_repo=favorite_repo
+                    favorite_repo=favorite_repo,
                 )
 
             assert exc_info.value.status_code == 500
@@ -918,7 +941,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=uuid4(),
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 404
@@ -947,7 +970,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 403
@@ -976,7 +999,7 @@ class TestChatTypesEndpoints:
                 chat_type_id=chat_type.id,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -997,7 +1020,7 @@ class TestChatTypesEndpoints:
             unfavorite_chat_type(
                 chat_type_id=uuid4(),
                 current_user=current_user,
-                favorite_repo=favorite_repo
+                favorite_repo=favorite_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -1039,7 +1062,9 @@ class TestChatTypeBaseSchema:
         """Testa validator com tags válidas"""
         from src.api.schemas.chat_type import ChatTypeBase
 
-        result = ChatTypeBase(name="Test", description="Desc", tags=["python", "testing"])
+        result = ChatTypeBase(
+            name="Test", description="Desc", tags=["python", "testing"]
+        )
         assert result.tags == ["python", "testing"]
 
 

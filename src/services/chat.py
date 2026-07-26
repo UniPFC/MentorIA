@@ -31,9 +31,13 @@ class ChatService:
         """
         try:
             message_created_at = datetime.now(UTC)
-            latest_created_at = self.db.query(Message.created_at).filter(
-                Message.chat_id == chat_id
-            ).order_by(Message.created_at.desc()).limit(1).scalar()
+            latest_created_at = (
+                self.db.query(Message.created_at)
+                .filter(Message.chat_id == chat_id)
+                .order_by(Message.created_at.desc())
+                .limit(1)
+                .scalar()
+            )
 
             if latest_created_at is not None:
                 if latest_created_at.tzinfo is None:
@@ -69,9 +73,13 @@ class ChatService:
             List of message dicts [{"role": "...", "content": "..."}] excluding current user message
         """
         # Get limit + 1 messages to check if we need to exclude the last one
-        all_messages = self.db.query(Message).filter(
-            Message.chat_id == chat_id
-        ).order_by(Message.created_at.desc()).limit(limit + 1).all()
+        all_messages = (
+            self.db.query(Message)
+            .filter(Message.chat_id == chat_id)
+            .order_by(Message.created_at.desc())
+            .limit(limit + 1)
+            .all()
+        )
 
         if not all_messages:
             return []

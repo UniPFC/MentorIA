@@ -14,12 +14,17 @@ from shared.database.models.user import UserLevel
 
 class CreateSubscriptionRequest(BaseModel):
     """Request to create a subscription checkout for level upgrade."""
+
     target_level: UserLevel = Field(..., description="Target level to subscribe to")
-    skip_payment: bool = Field(False, description="Skip payment and apply immediately (requires SKIP_PAYMENT=True in env)")
+    skip_payment: bool = Field(
+        False,
+        description="Skip payment and apply immediately (requires SKIP_PAYMENT=True in env)",
+    )
 
 
 class CreateSubscriptionResponse(BaseModel):
     """Response with Pagar.me checkout URL for subscription."""
+
     success: bool
     message: str
     checkout_url: str | None = None
@@ -30,11 +35,16 @@ class CreateSubscriptionResponse(BaseModel):
 
 class CreateRefillRequest(BaseModel):
     """Request to create a refill checkout or apply refill directly."""
-    skip_payment: bool = Field(False, description="Skip payment and apply immediately (requires SKIP_PAYMENT=True in env)")
+
+    skip_payment: bool = Field(
+        False,
+        description="Skip payment and apply immediately (requires SKIP_PAYMENT=True in env)",
+    )
 
 
 class CreateRefillResponse(BaseModel):
     """Response for token refill."""
+
     success: bool
     message: str
     checkout_url: str | None = None
@@ -45,6 +55,7 @@ class CreateRefillResponse(BaseModel):
 
 class CancelSubscriptionResponse(BaseModel):
     """Response after canceling a subscription."""
+
     success: bool
     message: str
     effective_until: datetime | None = None
@@ -52,6 +63,7 @@ class CancelSubscriptionResponse(BaseModel):
 
 class SubscriptionStatusResponse(BaseModel):
     """Response with current subscription status."""
+
     has_subscription: bool
     status: str | None = None
     current_level: UserLevel

@@ -27,7 +27,9 @@ def get_chat_type_repo(db: Session = Depends(get_db)) -> ChatTypeRepository:
     return ChatTypeRepository(db)
 
 
-def get_chat_type_favorite_repo(db: Session = Depends(get_db)) -> ChatTypeFavoriteRepository:
+def get_chat_type_favorite_repo(
+    db: Session = Depends(get_db),
+) -> ChatTypeFavoriteRepository:
     """Dependency to get ChatTypeFavorite repository."""
     return ChatTypeFavoriteRepository(db)
 
@@ -45,9 +47,11 @@ def get_ingestion_job_repo(db: Session = Depends(get_db)) -> IngestionJobReposit
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> User:
-    logger.info(f"Checking auth for {request.url.path}. Cookies: {request.cookies.keys()}")
+    logger.info(
+        f"Checking auth for {request.url.path}. Cookies: {request.cookies.keys()}"
+    )
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +90,7 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
 def get_optional_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> User | None:
     """
     Obtém o usuário atual se houver token, mas não falha se não houver

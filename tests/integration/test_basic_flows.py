@@ -1,4 +1,3 @@
-
 import pytest
 from sqlalchemy.orm import Session
 
@@ -28,7 +27,7 @@ class TestBasicFlows:
             email=email,
             username="testuser",
             password_hash=auth_service.get_password_hash(password),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -49,7 +48,7 @@ class TestBasicFlows:
             email="tokens@test.com",
             username="tokenuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -71,7 +70,7 @@ class TestBasicFlows:
             email="chat@test.com",
             username="chatuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -81,7 +80,7 @@ class TestBasicFlows:
             description="Test KB",
             is_public=True,
             owner_id=user.id,
-            collection_name="test_collection"
+            collection_name="test_collection",
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -91,11 +90,7 @@ class TestBasicFlows:
         assert chat_type.owner_id == user.id
 
         # Criar Chat
-        chat = Chat(
-            user_id=user.id,
-            chat_type_id=chat_type.id,
-            title="Test Chat"
-        )
+        chat = Chat(user_id=user.id, chat_type_id=chat_type.id, title="Test Chat")
         db_session.add(chat)
         db_session.commit()
         db_session.refresh(chat)
@@ -115,7 +110,7 @@ class TestBasicFlows:
             email="messages@test.com",
             username="msguser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -124,32 +119,24 @@ class TestBasicFlows:
             description="Test",
             is_public=True,
             owner_id=user.id,
-            collection_name="msg_collection"
+            collection_name="msg_collection",
         )
         db_session.add(chat_type)
         db_session.commit()
         db_session.refresh(chat_type)
 
-        chat = Chat(
-            user_id=user.id,
-            chat_type_id=chat_type.id,
-            title="Message Chat"
-        )
+        chat = Chat(user_id=user.id, chat_type_id=chat_type.id, title="Message Chat")
         db_session.add(chat)
         db_session.commit()
         db_session.refresh(chat)
 
         # Adicionar mensagens
         msg1 = chat_service.save_message(
-            chat_id=chat.id,
-            role=MessageRole.USER,
-            content="Hello"
+            chat_id=chat.id, role=MessageRole.USER, content="Hello"
         )
 
         msg2 = chat_service.save_message(
-            chat_id=chat.id,
-            role=MessageRole.ASSISTANT,
-            content="Hi there!"
+            chat_id=chat.id, role=MessageRole.ASSISTANT, content="Hi there!"
         )
 
         assert msg1.id is not None
@@ -171,7 +158,7 @@ class TestBasicFlows:
             email="user1@test.com",
             username="user1",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user1 = user_repo.create(user1)
 
@@ -179,7 +166,7 @@ class TestBasicFlows:
             email="user2@test.com",
             username="user2",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user2 = user_repo.create(user2)
 
@@ -189,25 +176,17 @@ class TestBasicFlows:
             description="Public",
             is_public=True,
             owner_id=user1.id,
-            collection_name="public_collection"
+            collection_name="public_collection",
         )
         db_session.add(chat_type)
         db_session.commit()
         db_session.refresh(chat_type)
 
         # Ambos os usuários criam chats no mesmo ChatType
-        chat1 = Chat(
-            user_id=user1.id,
-            chat_type_id=chat_type.id,
-            title="User1 Chat"
-        )
+        chat1 = Chat(user_id=user1.id, chat_type_id=chat_type.id, title="User1 Chat")
         db_session.add(chat1)
 
-        chat2 = Chat(
-            user_id=user2.id,
-            chat_type_id=chat_type.id,
-            title="User2 Chat"
-        )
+        chat2 = Chat(user_id=user2.id, chat_type_id=chat_type.id, title="User2 Chat")
         db_session.add(chat2)
         db_session.commit()
 
@@ -226,7 +205,7 @@ class TestBasicFlows:
             email="verify@test.com",
             username="verifyuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -235,8 +214,7 @@ class TestBasicFlows:
 
         # Verificar token
         current_user = auth_service.get_current_user_from_token(
-            tokens["access_token"],
-            user_repo
+            tokens["access_token"], user_repo
         )
 
         assert current_user is not None
@@ -266,7 +244,7 @@ class TestBasicFlows:
             email="owner@test.com",
             username="owner",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         owner = user_repo.create(owner)
 
@@ -274,7 +252,7 @@ class TestBasicFlows:
             email="other@test.com",
             username="other",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         other_user = user_repo.create(other_user)
 
@@ -284,7 +262,7 @@ class TestBasicFlows:
             description="Private",
             is_public=False,
             owner_id=owner.id,
-            collection_name="private_collection"
+            collection_name="private_collection",
         )
         db_session.add(private_kb)
         db_session.commit()
@@ -296,7 +274,7 @@ class TestBasicFlows:
             description="Public",
             is_public=True,
             owner_id=owner.id,
-            collection_name="public_collection"
+            collection_name="public_collection",
         )
         db_session.add(public_kb)
         db_session.commit()
@@ -317,7 +295,7 @@ class TestBasicFlows:
             email="refresh@test.com",
             username="refreshuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -335,7 +313,9 @@ class TestBasicFlows:
         assert new_tokens["token_type"] == "bearer"
 
         # Verificar que novo token funciona
-        current_user = auth_service.get_current_user_from_token(access_token_2, user_repo)
+        current_user = auth_service.get_current_user_from_token(
+            access_token_2, user_repo
+        )
         assert current_user is not None
         assert current_user.id == user.id
 
@@ -348,7 +328,7 @@ class TestBasicFlows:
             email="logout@test.com",
             username="logoutuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -380,7 +360,7 @@ class TestBasicFlows:
             email="conversation@test.com",
             username="convuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -389,17 +369,13 @@ class TestBasicFlows:
             description="Test",
             is_public=True,
             owner_id=user.id,
-            collection_name="conv_collection"
+            collection_name="conv_collection",
         )
         db_session.add(chat_type)
         db_session.commit()
         db_session.refresh(chat_type)
 
-        chat = Chat(
-            user_id=user.id,
-            chat_type_id=chat_type.id,
-            title="Conversation"
-        )
+        chat = Chat(user_id=user.id, chat_type_id=chat_type.id, title="Conversation")
         db_session.add(chat)
         db_session.commit()
         db_session.refresh(chat)
@@ -411,7 +387,7 @@ class TestBasicFlows:
             ("user", "Tell me more"),
             ("assistant", "AI is a field of computer science"),
             ("user", "Thanks"),
-            ("assistant", "You're welcome!")
+            ("assistant", "You're welcome!"),
         ]
 
         for role_str, content in messages:
@@ -437,7 +413,7 @@ class TestBasicFlows:
             email="multichats@test.com",
             username="multichatsuser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -447,7 +423,7 @@ class TestBasicFlows:
             description="Shared knowledge base",
             is_public=True,
             owner_id=user.id,
-            collection_name="shared_collection"
+            collection_name="shared_collection",
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -457,9 +433,7 @@ class TestBasicFlows:
         chats = []
         for i in range(3):
             chat = Chat(
-                user_id=user.id,
-                chat_type_id=chat_type.id,
-                title=f"Chat {i+1}"
+                user_id=user.id, chat_type_id=chat_type.id, title=f"Chat {i + 1}"
             )
             db_session.add(chat)
             db_session.commit()
@@ -469,9 +443,7 @@ class TestBasicFlows:
         # Adicionar mensagens diferentes em cada chat
         for idx, chat in enumerate(chats):
             chat_service.save_message(
-                chat.id,
-                MessageRole.USER,
-                f"Question in chat {idx+1}"
+                chat.id, MessageRole.USER, f"Question in chat {idx + 1}"
             )
 
         # Verificar que históricos são independentes
@@ -489,15 +461,13 @@ class TestBasicFlows:
             email="wrongpwd@test.com",
             username="wrongpwduser",
             password_hash=auth_service.get_password_hash("CorrectPassword123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
         # Tentar autenticar com senha errada
         authenticated = auth_service.authenticate_user(
-            user_repo,
-            "wrongpwd@test.com",
-            "WrongPassword123!"
+            user_repo, "wrongpwd@test.com", "WrongPassword123!"
         )
 
         assert authenticated is None
@@ -509,9 +479,7 @@ class TestBasicFlows:
 
         # Tentar autenticar usuário que não existe
         authenticated = auth_service.authenticate_user(
-            user_repo,
-            "nonexistent@test.com",
-            "Password123!"
+            user_repo, "nonexistent@test.com", "Password123!"
         )
 
         assert authenticated is None
@@ -527,7 +495,7 @@ class TestBasicFlows:
             email="user1@test.com",
             username="user1",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user1 = user_repo.create(user1)
 
@@ -535,7 +503,7 @@ class TestBasicFlows:
             email="user2@test.com",
             username="user2",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user2 = user_repo.create(user2)
 
@@ -545,25 +513,17 @@ class TestBasicFlows:
             description="Shared",
             is_public=True,
             owner_id=user1.id,
-            collection_name="shared_chat_collection"
+            collection_name="shared_chat_collection",
         )
         db_session.add(chat_type)
         db_session.commit()
         db_session.refresh(chat_type)
 
         # Ambos criam chats
-        chat1 = Chat(
-            user_id=user1.id,
-            chat_type_id=chat_type.id,
-            title="User1 Chat"
-        )
+        chat1 = Chat(user_id=user1.id, chat_type_id=chat_type.id, title="User1 Chat")
         db_session.add(chat1)
 
-        chat2 = Chat(
-            user_id=user2.id,
-            chat_type_id=chat_type.id,
-            title="User2 Chat"
-        )
+        chat2 = Chat(user_id=user2.id, chat_type_id=chat_type.id, title="User2 Chat")
         db_session.add(chat2)
         db_session.commit()
         db_session.refresh(chat1)

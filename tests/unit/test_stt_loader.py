@@ -16,7 +16,7 @@ class TestSTTLoader:
 
         assert loader1 is loader2
 
-    @patch('src.ai.stt_loader.settings')
+    @patch("src.ai.stt_loader.settings")
     def test_stt_loader_disabled(self, mock_settings):
         """Testa carregamento quando STT está desabilitado"""
         mock_settings.STT_ENABLED = False
@@ -26,8 +26,8 @@ class TestSTTLoader:
         with pytest.raises(RuntimeError, match="STT is not enabled"):
             loader.get_provider()
 
-    @patch('src.ai.stt_loader.settings')
-    @patch('src.ai.stt_loader.WhisperModel')
+    @patch("src.ai.stt_loader.settings")
+    @patch("src.ai.stt_loader.WhisperModel")
     def test_stt_loader_get_provider(self, mock_whisper_model, mock_settings):
         """Testa carregamento do provider"""
         mock_settings.STT_ENABLED = True
@@ -45,8 +45,8 @@ class TestSTTLoader:
         assert provider is not None
         assert loader.is_loaded()
 
-    @patch('src.ai.stt_loader.settings')
-    @patch('src.ai.stt_loader.WhisperModel')
+    @patch("src.ai.stt_loader.settings")
+    @patch("src.ai.stt_loader.WhisperModel")
     def test_stt_loader_get_provider_caches(self, mock_whisper_model, mock_settings):
         """Testa que get_provider cacheia o provider"""
         mock_settings.STT_ENABLED = True
@@ -65,8 +65,8 @@ class TestSTTLoader:
         assert provider1 is provider2
         mock_whisper_model.assert_called_once()
 
-    @patch('src.ai.stt_loader.settings')
-    @patch('src.ai.stt_loader.WhisperModel')
+    @patch("src.ai.stt_loader.settings")
+    @patch("src.ai.stt_loader.WhisperModel")
     def test_stt_loader_timeout(self, mock_whisper_model, mock_settings):
         """Testa timeout ao carregar modelo"""
         mock_settings.STT_ENABLED = True
@@ -82,8 +82,8 @@ class TestSTTLoader:
         with pytest.raises(TimeoutError, match="Failed to load STT model"):
             loader.get_provider()
 
-    @patch('src.ai.stt_loader.settings')
-    @patch('src.ai.stt_loader.WhisperModel')
+    @patch("src.ai.stt_loader.settings")
+    @patch("src.ai.stt_loader.WhisperModel")
     def test_stt_loader_unload_model(self, mock_whisper_model, mock_settings):
         """Testa descarga do modelo"""
         mock_settings.STT_ENABLED = True

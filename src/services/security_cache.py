@@ -15,7 +15,9 @@ class SecurityCache:
     """
 
     def __init__(self, cache_dir: str | None = None):
-        self.cache_dir = Path(cache_dir or os.path.join(settings.BASE_DIR, "cache", "security"))
+        self.cache_dir = Path(
+            cache_dir or os.path.join(settings.BASE_DIR, "cache", "security")
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Arquivos de cache
@@ -25,11 +27,15 @@ class SecurityCache:
         self.anomalies_file = self.cache_dir / "anomalies.json"
 
         # Configurações personalizáveis
-        self.multiple_ip_threshold = getattr(settings, 'MULTIPLE_IP_THRESHOLD', 3)
-        self.multiple_user_threshold = getattr(settings, 'MULTIPLE_USER_THRESHOLD', 5)
-        self.rapid_attempts_threshold = getattr(settings, 'RAPID_ATTEMPTS_THRESHOLD', 10)
-        self.consecutive_failures_threshold = getattr(settings, 'CONSECUTIVE_FAILURES_THRESHOLD', 3)
-        self.ip_block_threshold = getattr(settings, 'IP_BLOCK_THRESHOLD', 15)
+        self.multiple_ip_threshold = getattr(settings, "MULTIPLE_IP_THRESHOLD", 3)
+        self.multiple_user_threshold = getattr(settings, "MULTIPLE_USER_THRESHOLD", 5)
+        self.rapid_attempts_threshold = getattr(
+            settings, "RAPID_ATTEMPTS_THRESHOLD", 10
+        )
+        self.consecutive_failures_threshold = getattr(
+            settings, "CONSECUTIVE_FAILURES_THRESHOLD", 3
+        )
+        self.ip_block_threshold = getattr(settings, "IP_BLOCK_THRESHOLD", 15)
 
         # Inicializar arquivos se não existirem
         self._init_cache_files()
@@ -40,17 +46,21 @@ class SecurityCache:
 
     def _init_cache_files(self):
         """Inicializa arquivos de cache"""
-        for file_path in [self.login_attempts_file, self.ip_tracking_file,
-                         self.user_tracking_file, self.anomalies_file]:
+        for file_path in [
+            self.login_attempts_file,
+            self.ip_tracking_file,
+            self.user_tracking_file,
+            self.anomalies_file,
+        ]:
             if not file_path.exists():
-                with open(file_path, 'w') as f:
+                with open(file_path, "w") as f:
                     json.dump({}, f)
 
     def _load_cache(self, file_path: Path) -> dict:
         """Carrega cache do arquivo"""
         try:
             if file_path.exists():
-                with open(file_path, encoding='utf-8') as f:
+                with open(file_path, encoding="utf-8") as f:
                     return json.load(f)
             return {}
         except Exception as e:
@@ -60,14 +70,21 @@ class SecurityCache:
     def _save_cache(self, file_path: Path, data: dict):
         """Salva cache no arquivo"""
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
         except Exception as e:
             logger.error(f"Error saving cache to {file_path}: {str(e)}")
 
-    def record_login_attempt(self, email: str, ip_address: str, user_agent: str,
-                           success: bool, failure_reason: str | None = None,
-                           risk_score: str = "LOW", anomalies: list[str] | None = None):
+    def record_login_attempt(
+        self,
+        email: str,
+        ip_address: str,
+        user_agent: str,
+        success: bool,
+        failure_reason: str | None = None,
+        risk_score: str = "LOW",
+        anomalies: list[str] | None = None,
+    ):
         """Registra tentativa de login no cache"""
         timestamp = datetime.now(UTC).isoformat()
 
@@ -85,7 +102,7 @@ class SecurityCache:
             "failure_reason": failure_reason,
             "risk_score": risk_score,
             "anomalies": anomalies or [],
-            "unix_timestamp": time.time()
+            "unix_timestamp": time.time(),
         }
 
         # Salvar
@@ -99,7 +116,9 @@ class SecurityCache:
         if anomalies:
             self._record_anomaly(email, ip_address, risk_score, anomalies, timestamp)
 
-        logger.debug(f"Login attempt recorded: {email} from {ip_address} - {'SUCCESS' if success else 'FAILURE'}")
+        logger.debug(
+            f"Login attempt recorded: {email} from {ip_address} - {'SUCCESS' if success else 'FAILURE'}"
+        )
 
         # Verificar limpeza automática periodicamente
         self.auto_cleanup_check()
@@ -115,7 +134,7 @@ class SecurityCache:
                 "emails": [],
                 "attempt_count": 0,
                 "success_count": 0,
-                "failure_count": 0
+                "failure_count": 0,
             }
 
         # Atualizar dados
@@ -138,7 +157,7 @@ class SecurityCache:
                 "ips": [],
                 "attempt_count": 0,
                 "success_count": 0,
-                "failure_count": 0
+                "failure_count": 0,
             }
 
         # Atualizar dados
@@ -150,8 +169,14 @@ class SecurityCache:
 
         self._save_cache(self.user_tracking_file, user_data)
 
-    def _record_anomaly(self, email: str, ip_address: str, risk_score: str,
-                       anomalies: list[str], timestamp: str):
+    def _record_anomaly(
+        self,
+        email: str,
+        ip_address: str,
+        risk_score: str,
+        anomalies: list[str],
+        timestamp: str,
+    ):
         """Registra anomalia detectada"""
         anomalies_data = self._load_cache(self.anomalies_file)
 
@@ -162,12 +187,14 @@ class SecurityCache:
             "ip_address": ip_address,
             "risk_score": risk_score,
             "anomalies": anomalies,
-            "unix_timestamp": time.time()
+            "unix_timestamp": time.time(),
         }
 
         self._save_cache(self.anomalies_file, anomalies_data)
 
-    def detect_anomalies(self, email: str, ip_address: str, user_agent: str) -> dict[str, Any]:
+    def detect_anomalies(
+        self, email: str, ip_address: str, user_agent: str
+    ) -> dict[str, Any]:
         """Detecta anomalias baseado nos dados em cache"""
         anomalies = []
         risk_score = "LOW"
@@ -195,9 +222,10 @@ class SecurityCache:
 
         # 3. Verificar tentativas rápidas (último minuto)
         recent_attempts = [
-            attempt for attempt in attempts.values()
-            if attempt["ip_address"] == ip_address and
-            current_time - attempt["unix_timestamp"] <= 60
+            attempt
+            for attempt in attempts.values()
+            if attempt["ip_address"] == ip_address
+            and current_time - attempt["unix_timestamp"] <= 60
         ]
 
         if len(recent_attempts) > self.rapid_attempts_threshold:
@@ -220,21 +248,24 @@ class SecurityCache:
 
         # 5. Verificar falhas consecutivas
         recent_failures = [
-            attempt for attempt in attempts.values()
-            if attempt["email"] == email and
-            not attempt["success"] and
-            current_time - attempt["unix_timestamp"] <= 300  # 5 minutos
+            attempt
+            for attempt in attempts.values()
+            if attempt["email"] == email
+            and not attempt["success"]
+            and current_time - attempt["unix_timestamp"] <= 300  # 5 minutos
         ]
 
         if len(recent_failures) > self.consecutive_failures_threshold:
-            anomalies.append(f"Falhas consecutivas: {len(recent_failures)} em 5 minutos")
+            anomalies.append(
+                f"Falhas consecutivas: {len(recent_failures)} em 5 minutos"
+            )
             risk_score = "HIGH" if risk_score == "LOW" else "CRITICAL"
 
         return {
             "risk_score": risk_score,
             "anomalies": anomalies,
             "is_anomaly": len(anomalies) > 0,
-            "anomaly_details": "; ".join(anomalies) if anomalies else None
+            "anomaly_details": "; ".join(anomalies) if anomalies else None,
         }
 
     def get_security_summary(self, hours: int = 24) -> dict[str, Any]:
@@ -246,12 +277,14 @@ class SecurityCache:
 
         # Filtrar dados recentes
         recent_attempts = [
-            attempt for attempt in attempts.values()
+            attempt
+            for attempt in attempts.values()
             if attempt["unix_timestamp"] > cutoff_time
         ]
 
         recent_anomalies = [
-            anomaly for anomaly in anomalies_data.values()
+            anomaly
+            for anomaly in anomalies_data.values()
             if anomaly["unix_timestamp"] > cutoff_time
         ]
 
@@ -277,7 +310,9 @@ class SecurityCache:
             "risk_distribution": risk_counts,
             "unique_ips": unique_ips,
             "unique_emails": unique_emails,
-            "success_rate": (successful_attempts / total_attempts * 100) if total_attempts > 0 else 0
+            "success_rate": (successful_attempts / total_attempts * 100)
+            if total_attempts > 0
+            else 0,
         }
 
     def cleanup_old_data(self):
@@ -287,16 +322,14 @@ class SecurityCache:
         # Limpar tentativas antigas
         attempts = self._load_cache(self.login_attempts_file)
         filtered_attempts = {
-            k: v for k, v in attempts.items()
-            if v["unix_timestamp"] > cutoff_time
+            k: v for k, v in attempts.items() if v["unix_timestamp"] > cutoff_time
         }
         self._save_cache(self.login_attempts_file, filtered_attempts)
 
         # Limpar anomalias antigas
         anomalies = self._load_cache(self.anomalies_file)
         filtered_anomalies = {
-            k: v for k, v in anomalies.items()
-            if v["unix_timestamp"] > cutoff_time
+            k: v for k, v in anomalies.items() if v["unix_timestamp"] > cutoff_time
         }
         self._save_cache(self.anomalies_file, filtered_anomalies)
 
@@ -320,7 +353,9 @@ class SecurityCache:
 
         self._save_cache(self.user_tracking_file, filtered_user_data)
 
-        logger.info(f"Security cache cleanup completed. Removed data older than {self.max_age_hours} hours")
+        logger.info(
+            f"Security cache cleanup completed. Removed data older than {self.max_age_hours} hours"
+        )
 
     def cleanup_cache_directory(self, force_cleanup: bool = False):
         """Limpa completamente o diretório de cache se necessário"""
@@ -338,7 +373,9 @@ class SecurityCache:
             # Limpar se for muito grande (>10MB) ou se forçado
             max_size_mb = 10
             if total_size > (max_size_mb * 1024 * 1024) or force_cleanup:
-                logger.warning(f"Cache directory too large: {total_size/1024/1024:.2f}MB, {file_count} files. Cleaning up...")
+                logger.warning(
+                    f"Cache directory too large: {total_size / 1024 / 1024:.2f}MB, {file_count} files. Cleaning up..."
+                )
 
                 # Backup dos dados recentes antes de limpar
                 if not force_cleanup:
@@ -355,7 +392,9 @@ class SecurityCache:
 
                 return True
             else:
-                logger.debug(f"Cache directory size OK: {total_size/1024:.2f}KB, {file_count} files")
+                logger.debug(
+                    f"Cache directory size OK: {total_size / 1024:.2f}KB, {file_count} files"
+                )
                 return False
 
         except Exception as e:
@@ -386,7 +425,7 @@ class SecurityCache:
 
             if should_cleanup:
                 self.cleanup_cache_directory(force_cleanup=True)
-                with open(last_cleanup_file, 'w') as f:
+                with open(last_cleanup_file, "w") as f:
                     f.write(str(current_time))
                 logger.info("Periodic full cache cleanup completed")
 
@@ -399,7 +438,8 @@ class SecurityCache:
         anomalies_data = self._load_cache(self.anomalies_file)
 
         recent_anomalies = [
-            anomaly for anomaly in anomalies_data.values()
+            anomaly
+            for anomaly in anomalies_data.values()
             if anomaly["unix_timestamp"] > cutoff_time
         ]
 
@@ -419,15 +459,19 @@ class SecurityCache:
         # Verificar tentativas recentes
         current_time = time.time()
         recent_attempts = [
-            attempt for attempt in attempts.values()
-            if attempt["ip_address"] == ip_address and
-            current_time - attempt["unix_timestamp"] <= 300  # 5 minutos
+            attempt
+            for attempt in attempts.values()
+            if attempt["ip_address"] == ip_address
+            and current_time - attempt["unix_timestamp"] <= 300  # 5 minutos
         ]
 
         # Se muitas tentativas falhas, bloquear
         failed_attempts = len([a for a in recent_attempts if not a["success"]])
         if failed_attempts > self.ip_block_threshold:
-            return True, f"IP bloqueado por excesso de tentativas falhas: {failed_attempts}"
+            return (
+                True,
+                f"IP bloqueado por excesso de tentativas falhas: {failed_attempts}",
+            )
 
         return False, None
 

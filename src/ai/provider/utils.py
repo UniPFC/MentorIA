@@ -2,13 +2,12 @@
 Utility functions for providers.
 """
 
-
 from config.settings import settings
 
 URLS = {
     "ollama": "http://host.docker.internal:11434/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
-    "openai": "https://api.openai.com/v1"
+    "openai": "https://api.openai.com/v1",
 }
 
 

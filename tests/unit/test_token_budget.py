@@ -12,19 +12,24 @@ class TestUserModel:
             username="admin",
             email="admin@example.com",
             password_hash="hashed",
-            level=UserLevel.LEVEL_05
+            level=UserLevel.LEVEL_05,
         )
         assert user.has_unlimited_budget is True
 
     def test_has_unlimited_budget_false_for_other_levels(self):
         """Test that non-LEVEL_05 users don't have unlimited budget."""
-        for level in [UserLevel.LEVEL_01, UserLevel.LEVEL_02, UserLevel.LEVEL_03, UserLevel.LEVEL_04]:
+        for level in [
+            UserLevel.LEVEL_01,
+            UserLevel.LEVEL_02,
+            UserLevel.LEVEL_03,
+            UserLevel.LEVEL_04,
+        ]:
             user = User(
                 username="user",
                 email="user@example.com",
                 password_hash="hashed",
                 level=level,
-                token_budget=1000
+                token_budget=1000,
             )
             assert user.has_unlimited_budget is False
 
@@ -34,7 +39,7 @@ class TestUserModel:
             username="admin",
             email="admin@example.com",
             password_hash="hashed",
-            level=UserLevel.LEVEL_05
+            level=UserLevel.LEVEL_05,
         )
         assert user.can_afford_tokens(1000000) is True
 
@@ -45,7 +50,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=1000
+            token_budget=1000,
         )
         assert user.can_afford_tokens(500) is True
 
@@ -56,7 +61,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=100
+            token_budget=100,
         )
         assert user.can_afford_tokens(500) is False
 
@@ -67,7 +72,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=None
+            token_budget=None,
         )
         assert user.can_afford_tokens(100) is False
 
@@ -78,7 +83,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=0
+            token_budget=0,
         )
         assert user.can_afford_tokens(0) is True
 
@@ -96,5 +101,11 @@ class TestUserLevelEnum:
 
     def test_level_order(self):
         """Test that levels are comparable for ordering."""
-        levels = [UserLevel.LEVEL_01, UserLevel.LEVEL_02, UserLevel.LEVEL_03, UserLevel.LEVEL_04, UserLevel.LEVEL_05]
+        levels = [
+            UserLevel.LEVEL_01,
+            UserLevel.LEVEL_02,
+            UserLevel.LEVEL_03,
+            UserLevel.LEVEL_04,
+            UserLevel.LEVEL_05,
+        ]
         assert levels == sorted(levels)

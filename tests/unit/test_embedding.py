@@ -1,4 +1,3 @@
-
 import pytest
 
 from src.ai.embedding import EmbeddingEngine
@@ -22,10 +21,7 @@ class TestEmbeddingEngine:
         mock_embedding_provider.embed.assert_called_once_with(["test text"])
 
     def test_embed_multiple_texts(self, mock_embedding_provider):
-        mock_embedding_provider.embed.return_value = [
-            [0.1, 0.2, 0.3],
-            [0.4, 0.5, 0.6]
-        ]
+        mock_embedding_provider.embed.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
         engine = EmbeddingEngine(mock_embedding_provider)
 
         texts = ["text 1", "text 2"]
@@ -53,7 +49,5 @@ class TestEmbeddingEngine:
         result = engine.embed(["test"], batch_size=32, normalize=True)
 
         mock_embedding_provider.embed.assert_called_once_with(
-            ["test"],
-            batch_size=32,
-            normalize=True
+            ["test"], batch_size=32, normalize=True
         )

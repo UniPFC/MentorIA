@@ -30,7 +30,7 @@ class RerankerEngine:
         query: str,
         chunks: list[dict[str, Any]],
         top_k: int = 5,
-        threshold: float = 0.0
+        threshold: float = 0.0,
     ) -> list[dict[str, Any]]:
         """
         Rerank chunks by relevance to query.
@@ -50,8 +50,7 @@ class RerankerEngine:
         try:
             # Prepare documents for reranking (question + answer)
             documents = [
-                f"{chunk['question']}\n\n{chunk['answer']}"
-                for chunk in chunks
+                f"{chunk['question']}\n\n{chunk['answer']}" for chunk in chunks
             ]
 
             # Get relevance scores (thread-safe)
@@ -60,22 +59,21 @@ class RerankerEngine:
 
             # Attach scores to chunks
             for chunk, score in zip(chunks, scores):
-                chunk['rerank_score'] = score
+                chunk["rerank_score"] = score
 
             # Filter by threshold
             filtered_chunks = [
-                chunk for chunk in chunks
-                if chunk['rerank_score'] >= threshold
+                chunk for chunk in chunks if chunk["rerank_score"] >= threshold
             ]
 
             # Sort by score (descending) and take top_k
             sorted_chunks = sorted(
-                filtered_chunks,
-                key=lambda x: x['rerank_score'],
-                reverse=True
+                filtered_chunks, key=lambda x: x["rerank_score"], reverse=True
             )[:top_k]
 
-            logger.debug(f"Reranked {len(chunks)} chunks → {len(sorted_chunks)} after filtering")
+            logger.debug(
+                f"Reranked {len(chunks)} chunks → {len(sorted_chunks)} after filtering"
+            )
             return sorted_chunks
 
         except Exception as e:

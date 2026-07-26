@@ -95,7 +95,11 @@ class TestAdminRoutes:
 
         assert response.success is True
         assert "completed successfully" in response.message
-        assert response.files == ["db_dump.sql.gpg", "data_dump.tar.gz.gpg", "qdrant_dump.tar.gz.gpg"]
+        assert response.files == [
+            "db_dump.sql.gpg",
+            "data_dump.tar.gz.gpg",
+            "qdrant_dump.tar.gz.gpg",
+        ]
         backup_postgres_mock.assert_called_once()
         backup_data_mock.assert_called_once()
         backup_qdrant_mock.assert_called_once()
@@ -146,7 +150,9 @@ class TestAdminRoutes:
         """Testa trigger_backup lidando com exceções gerais (500)"""
         monkeypatch.setenv("BACKUP_PASSPHRASE", "secret_pass")
 
-        backup_postgres_mock = Mock(side_effect=Exception("Database connection timed out"))
+        backup_postgres_mock = Mock(
+            side_effect=Exception("Database connection timed out")
+        )
         monkeypatch.setattr(admin, "backup_postgres", backup_postgres_mock)
 
         current_user = Mock()
@@ -238,7 +244,9 @@ class TestAdminRoutes:
         assert "restored successfully" in response.message
         assert "01/01/2026" in response.message
         engine_mock.dispose.assert_called_once()
-        restore_backups_mock.assert_called_once_with(date_str="01012026", passphrase="custom-pass")
+        restore_backups_mock.assert_called_once_with(
+            date_str="01012026", passphrase="custom-pass"
+        )
 
     @pytest.mark.asyncio
     async def test_restore_backup_missing_passphrase(self, monkeypatch):
@@ -260,7 +268,9 @@ class TestAdminRoutes:
         engine_mock = MagicMock()
         monkeypatch.setattr("shared.database.session.engine", engine_mock)
 
-        restore_backups_mock = Mock(side_effect=FileNotFoundError("Backup folder not found"))
+        restore_backups_mock = Mock(
+            side_effect=FileNotFoundError("Backup folder not found")
+        )
         monkeypatch.setattr(admin, "restore_backups", restore_backups_mock)
 
         current_user = Mock()

@@ -12,5 +12,5 @@ class ChatTitleResponse(BaseModel):
         ...,
         min_length=1,
         max_length=200,
-        description="Generated chat title (6-8 words, sentence case)"
+        description="Generated chat title (6-8 words, sentence case)",
     )

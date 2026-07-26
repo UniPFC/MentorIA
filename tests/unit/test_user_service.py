@@ -26,13 +26,15 @@ class TestUserService:
         user.token_budget = 500
 
         service = UserService(db)
-        with patch.object(service.user_repo, "deduct_tokens", return_value=user) as mock_deduct:
+        with patch.object(
+            service.user_repo, "deduct_tokens", return_value=user
+        ) as mock_deduct:
             result = service.deduct_tokens(
                 user_id=user_id,
                 input_tokens=100,
                 output_tokens=50,
                 input_multiplier=1.5,
-                output_multiplier=2.0
+                output_multiplier=2.0,
             )
 
             # (100 * 1.5) + (50 * 2.0) = 150 + 100 = 250
@@ -75,25 +77,31 @@ class TestUserService:
         # Caso 1: Orçamento suficiente
         # (10 * 2.0) + (20 * 1.5) + 10 = 20 + 30 + 10 = 60
         user.token_budget = 60
-        assert service.can_afford_tokens(
-            user=user,
-            input_tokens=10,
-            output_tokens=20,
-            reserve=10,
-            input_multiplier=2.0,
-            output_multiplier=1.5
-        ) is True
+        assert (
+            service.can_afford_tokens(
+                user=user,
+                input_tokens=10,
+                output_tokens=20,
+                reserve=10,
+                input_multiplier=2.0,
+                output_multiplier=1.5,
+            )
+            is True
+        )
 
         # Caso 2: Orçamento insuficiente
         user.token_budget = 59
-        assert service.can_afford_tokens(
-            user=user,
-            input_tokens=10,
-            output_tokens=20,
-            reserve=10,
-            input_multiplier=2.0,
-            output_multiplier=1.5
-        ) is False
+        assert (
+            service.can_afford_tokens(
+                user=user,
+                input_tokens=10,
+                output_tokens=20,
+                reserve=10,
+                input_multiplier=2.0,
+                output_multiplier=1.5,
+            )
+            is False
+        )
 
     def test_get_budget_for_level(self):
         """Testa obtenção do orçamento padrão por nível"""
@@ -108,7 +116,9 @@ class TestUserService:
             assert service.get_budget_for_level(UserLevel.LEVEL_02) == 2000
             assert service.get_budget_for_level(UserLevel.LEVEL_03) == 3000
             assert service.get_budget_for_level(UserLevel.LEVEL_04) == 4000
-            assert service.get_budget_for_level(UserLevel.LEVEL_05) == 0  # None/Unlimited gets fallback to 0
+            assert (
+                service.get_budget_for_level(UserLevel.LEVEL_05) == 0
+            )  # None/Unlimited gets fallback to 0
             assert service.get_budget_for_level("NON_EXISTENT_LEVEL") == 0
 
     def test_upgrade_user_level_success(self):
@@ -118,9 +128,14 @@ class TestUserService:
         user = Mock(spec=User)
 
         service = UserService(db)
-        with patch.object(service, "get_budget_for_level", return_value=3000) as mock_get_budget, \
-             patch.object(service.user_repo, "set_user_level", return_value=user) as mock_set_level:
-
+        with (
+            patch.object(
+                service, "get_budget_for_level", return_value=3000
+            ) as mock_get_budget,
+            patch.object(
+                service.user_repo, "set_user_level", return_value=user
+            ) as mock_set_level,
+        ):
             result = service.upgrade_user_level(user_id, UserLevel.LEVEL_03)
 
             mock_get_budget.assert_called_once_with(UserLevel.LEVEL_03)
@@ -134,9 +149,12 @@ class TestUserService:
         user = Mock(spec=User)
 
         service = UserService(db)
-        with patch.object(service, "get_budget_for_level", return_value=0), \
-             patch.object(service.user_repo, "set_user_level", return_value=user) as mock_set_level:
-
+        with (
+            patch.object(service, "get_budget_for_level", return_value=0),
+            patch.object(
+                service.user_repo, "set_user_level", return_value=user
+            ) as mock_set_level,
+        ):
             result = service.upgrade_user_level(user_id, UserLevel.LEVEL_05)
             mock_set_level.assert_called_once_with(user_id, UserLevel.LEVEL_05, None)
             assert result == user
@@ -147,8 +165,9 @@ class TestUserService:
         user_id = uuid4()
 
         service = UserService(db)
-        with patch.object(service, "get_budget_for_level", return_value=1000), \
-             patch.object(service.user_repo, "set_user_level", return_value=None):
-
+        with (
+            patch.object(service, "get_budget_for_level", return_value=1000),
+            patch.object(service.user_repo, "set_user_level", return_value=None),
+        ):
             result = service.upgrade_user_level(user_id, UserLevel.LEVEL_01)
             assert result is None

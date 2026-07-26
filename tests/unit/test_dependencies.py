@@ -55,9 +55,10 @@ class TestDependencies:
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "valid_token"
 
-        with patch('src.api.dependencies.UserRepository') as mock_repo, \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository") as mock_repo,
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.return_value = mock_user
 
             mock_request = Mock()
@@ -74,9 +75,10 @@ class TestDependencies:
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "invalid_token"
 
-        with patch('src.api.dependencies.UserRepository'), \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository"),
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.return_value = None
 
             mock_request = Mock()
@@ -93,9 +95,10 @@ class TestDependencies:
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "token"
 
-        with patch('src.api.dependencies.UserRepository'), \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository"),
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.side_effect = Exception("Auth error")
 
             mock_request = Mock()
@@ -115,9 +118,10 @@ class TestDependencies:
         mock_request = Mock()
         mock_request.cookies = {"authToken": "valid_cookie_token"}
 
-        with patch('src.api.dependencies.UserRepository') as mock_repo, \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository") as mock_repo,
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.return_value = mock_user
 
             # Credentials is None
@@ -155,9 +159,10 @@ class TestDependencies:
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "valid_token"
 
-        with patch('src.api.dependencies.UserRepository'), \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository"),
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.return_value = mock_user
 
             mock_request = Mock()
@@ -173,9 +178,10 @@ class TestDependencies:
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "invalid_token"
 
-        with patch('src.api.dependencies.UserRepository'), \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository"),
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.side_effect = Exception("Auth error")
 
             mock_request = Mock()
@@ -192,9 +198,10 @@ class TestDependencies:
         mock_request = Mock()
         mock_request.cookies = {"authToken": "valid_cookie_token"}
 
-        with patch('src.api.dependencies.UserRepository'), \
-             patch('src.api.dependencies.auth_service') as mock_auth:
-
+        with (
+            patch("src.api.dependencies.UserRepository"),
+            patch("src.api.dependencies.auth_service") as mock_auth,
+        ):
             mock_auth.get_current_user_from_token.return_value = mock_user
 
             # Credentials is None

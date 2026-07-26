@@ -28,7 +28,7 @@ class TestBackgroundService:
         service = MagicMock()
         service.parse_spreadsheet.return_value = [
             {"question": "Q1", "answer": "A1"},
-            {"question": "Q2", "answer": "A2"}
+            {"question": "Q2", "answer": "A2"},
         ]
         service.ingest_chunks.return_value = (["point1", "point2"], 2)
         return service
@@ -56,12 +56,14 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         mock_db.commit.assert_not_called()
 
-    def test_process_ingestion_job_success(self, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_success(
+        self, mock_db, mock_ingestion_service, mock_job
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -75,7 +77,7 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.COMPLETED
@@ -90,7 +92,9 @@ class TestBackgroundService:
         )
         mock_ingestion_service.ingest_chunks.assert_called_once()
 
-    def test_process_ingestion_job_parse_error(self, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_parse_error(
+        self, mock_db, mock_ingestion_service, mock_job
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -105,14 +109,16 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.FAILED
         assert mock_job.error_message == "Parse error"
         assert mock_job.completed_at is not None
 
-    def test_process_ingestion_job_ingest_error(self, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_ingest_error(
+        self, mock_db, mock_ingestion_service, mock_job
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -127,14 +133,16 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.FAILED
         assert mock_job.error_message == "Ingest error"
         assert mock_job.completed_at is not None
 
-    def test_process_ingestion_job_sets_processing_status(self, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_sets_processing_status(
+        self, mock_db, mock_ingestion_service, mock_job
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -148,13 +156,15 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.COMPLETED
         assert mock_job.started_at is not None
 
-    def test_process_ingestion_job_progress_callback_db_error(self, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_progress_callback_db_error(
+        self, mock_db, mock_ingestion_service, mock_job
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -162,6 +172,7 @@ class TestBackgroundService:
 
         # Make db.commit fail on the 3rd call (inside progress callback)
         commit_calls = []
+
         def commit_side_effect():
             commit_calls.append(1)
             if len(commit_calls) == 3:
@@ -170,7 +181,7 @@ class TestBackgroundService:
         mock_db.commit.side_effect = commit_side_effect
 
         def ingest_with_callback(*args, **kwargs):
-            on_progress = kwargs.get('on_progress')
+            on_progress = kwargs.get("on_progress")
             if on_progress:
                 on_progress(1)
             return (["point1", "point2"], 2)
@@ -185,7 +196,7 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.COMPLETED
@@ -193,7 +204,14 @@ class TestBackgroundService:
 
     @patch("src.services.background.QdrantManager")
     @patch("src.repositories.chat_type.ChatTypeRepository")
-    def test_process_ingestion_job_qdrant_cleanup_error(self, mock_repo_class, mock_qdrant_class, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_qdrant_cleanup_error(
+        self,
+        mock_repo_class,
+        mock_qdrant_class,
+        mock_db,
+        mock_ingestion_service,
+        mock_job,
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -217,7 +235,7 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.FAILED
@@ -226,7 +244,14 @@ class TestBackgroundService:
 
     @patch("src.services.background.QdrantManager")
     @patch("src.repositories.chat_type.ChatTypeRepository")
-    def test_process_ingestion_job_chat_type_cleanup_error(self, mock_repo_class, mock_qdrant_class, mock_db, mock_ingestion_service, mock_job):
+    def test_process_ingestion_job_chat_type_cleanup_error(
+        self,
+        mock_repo_class,
+        mock_qdrant_class,
+        mock_db,
+        mock_ingestion_service,
+        mock_job,
+    ):
         job_id = uuid4()
         chat_type_id = uuid4()
 
@@ -250,7 +275,7 @@ class TestBackgroundService:
             question_col="question",
             answer_col="answer",
             ingestion_service=mock_ingestion_service,
-            db=mock_db
+            db=mock_db,
         )
 
         assert mock_job.status == IngestionStatus.FAILED
@@ -321,7 +346,9 @@ class TestBackgroundService:
 
     @patch("src.services.background._load_title_generation_prompt")
     @patch("src.services.background.Provider")
-    def test_generate_chat_title_internal_success(self, mock_provider_class, mock_load_prompt, mock_db):
+    def test_generate_chat_title_internal_success(
+        self, mock_provider_class, mock_load_prompt, mock_db
+    ):
         """Test successful title generation"""
         chat_id = uuid4()
         mock_chat = MagicMock(spec=Chat)
@@ -345,7 +372,7 @@ class TestBackgroundService:
                 # First call returns user message, second returns assistant message
                 filter_mock = mock_query.filter.return_value.filter.return_value
                 order_mock = filter_mock.order_by.return_value
-                if not hasattr(query_side_effect, 'call_count'):
+                if not hasattr(query_side_effect, "call_count"):
                     query_side_effect.call_count = 0
                 query_side_effect.call_count += 1
                 if query_side_effect.call_count == 1:
@@ -358,7 +385,7 @@ class TestBackgroundService:
 
         mock_load_prompt.side_effect = [
             "System prompt: Generate titles",
-            "User prompt: {user_question} {assistant_response}"
+            "User prompt: {user_question} {assistant_response}",
         ]
 
         mock_provider = MagicMock()
@@ -375,7 +402,9 @@ class TestBackgroundService:
 
     @patch("src.services.background._load_title_generation_prompt")
     @patch("src.services.background.Provider")
-    def test_generate_chat_title_internal_fallback_string_response(self, mock_provider_class, mock_load_prompt, mock_db):
+    def test_generate_chat_title_internal_fallback_string_response(
+        self, mock_provider_class, mock_load_prompt, mock_db
+    ):
         """Test title generation with string fallback"""
         chat_id = uuid4()
         mock_chat = MagicMock(spec=Chat)
@@ -395,7 +424,7 @@ class TestBackgroundService:
             elif args[0] == Message:
                 filter_mock = mock_query.filter.return_value.filter.return_value
                 order_mock = filter_mock.order_by.return_value
-                if not hasattr(query_side_effect, 'msg_count'):
+                if not hasattr(query_side_effect, "msg_count"):
                     query_side_effect.msg_count = 0
                 query_side_effect.msg_count += 1
                 if query_side_effect.msg_count == 1:
@@ -405,7 +434,10 @@ class TestBackgroundService:
             return mock_query
 
         mock_db.query.side_effect = query_side_effect
-        mock_load_prompt.side_effect = ["System", "User: {user_question} {assistant_response}"]
+        mock_load_prompt.side_effect = [
+            "System",
+            "User: {user_question} {assistant_response}",
+        ]
 
         mock_provider = MagicMock()
         mock_provider.generate_structured.return_value = '"Greeting Conversation"'
@@ -418,7 +450,9 @@ class TestBackgroundService:
 
     @patch("src.services.background._load_title_generation_prompt")
     @patch("src.services.background.Provider")
-    def test_generate_chat_title_internal_empty_title(self, mock_provider_class, mock_load_prompt, mock_db):
+    def test_generate_chat_title_internal_empty_title(
+        self, mock_provider_class, mock_load_prompt, mock_db
+    ):
         """Test title generation returns empty title"""
         chat_id = uuid4()
         mock_chat = MagicMock(spec=Chat)
@@ -439,7 +473,10 @@ class TestBackgroundService:
             return mock_query
 
         mock_db.query.side_effect = query_side_effect
-        mock_load_prompt.side_effect = ["System", "User: {user_question} {assistant_response}"]
+        mock_load_prompt.side_effect = [
+            "System",
+            "User: {user_question} {assistant_response}",
+        ]
 
         mock_provider = MagicMock()
         mock_provider.generate_structured.return_value = ""
@@ -452,7 +489,9 @@ class TestBackgroundService:
 
     @patch("src.services.background._load_title_generation_prompt")
     @patch("src.services.background.Provider")
-    def test_generate_chat_title_internal_exception(self, mock_provider_class, mock_load_prompt, mock_db):
+    def test_generate_chat_title_internal_exception(
+        self, mock_provider_class, mock_load_prompt, mock_db
+    ):
         """Test title generation handles exceptions"""
         chat_id = uuid4()
         mock_chat = MagicMock(spec=Chat)
@@ -483,7 +522,9 @@ class TestBackgroundService:
     @patch("src.services.background.SessionLocal")
     @patch("src.services.background._generate_chat_title_internal")
     @patch("src.services.background.threading.Thread")
-    def test_generate_chat_title_background(self, mock_thread_class, mock_generate_internal, mock_session_local):
+    def test_generate_chat_title_background(
+        self, mock_thread_class, mock_generate_internal, mock_session_local
+    ):
         """Test background title generation thread creation"""
         chat_id = uuid4()
         mock_session = MagicMock()
@@ -497,12 +538,14 @@ class TestBackgroundService:
 
         mock_thread_class.assert_called_once()
         call_kwargs = mock_thread_class.call_args[1]
-        assert call_kwargs['daemon'] is True
+        assert call_kwargs["daemon"] is True
         mock_thread.start.assert_called_once()
 
     @patch("src.services.background.SessionLocal")
     @patch("src.services.background._generate_chat_title_internal")
-    def test_generate_chat_title_background_executes_task(self, mock_generate_internal, mock_session_local):
+    def test_generate_chat_title_background_executes_task(
+        self, mock_generate_internal, mock_session_local
+    ):
         """Test background task actually executes and closes session"""
         chat_id = uuid4()
         mock_session = MagicMock()
@@ -512,9 +555,10 @@ class TestBackgroundService:
         with patch("src.services.background.threading.Thread") as mock_thread_class:
             # Capture the target function
             target_func = None
+
             def capture_thread(*args, **kwargs):
                 nonlocal target_func
-                target_func = kwargs['target']
+                target_func = kwargs["target"]
                 mock_thread = MagicMock()
                 return mock_thread
 
@@ -530,7 +574,9 @@ class TestBackgroundService:
 
     @patch("src.services.background.SessionLocal")
     @patch("src.services.background._generate_chat_title_internal")
-    def test_generate_chat_title_background_handles_exception(self, mock_generate_internal, mock_session_local):
+    def test_generate_chat_title_background_handles_exception(
+        self, mock_generate_internal, mock_session_local
+    ):
         """Test background task handles exceptions and closes session"""
         chat_id = uuid4()
         mock_session = MagicMock()
@@ -539,9 +585,10 @@ class TestBackgroundService:
 
         with patch("src.services.background.threading.Thread") as mock_thread_class:
             target_func = None
+
             def capture_thread(*args, **kwargs):
                 nonlocal target_func
-                target_func = kwargs['target']
+                target_func = kwargs["target"]
                 return MagicMock()
 
             mock_thread_class.side_effect = capture_thread

@@ -43,12 +43,12 @@ class TestWebsocketRoutes:
         """Testa broadcast com loop rodando"""
         from src.api.routes.websocket import broadcast_chat_update, manager
 
-        with patch('asyncio.get_running_loop') as mock_get_loop:
+        with patch("asyncio.get_running_loop") as mock_get_loop:
             mock_loop = Mock()
             mock_loop.is_running.return_value = True
             mock_get_loop.return_value = mock_loop
 
-            with patch.object(manager, 'send_to_chat', new=Mock()):
+            with patch.object(manager, "send_to_chat", new=Mock()):
                 broadcast_chat_update("test_chat", "title", {"title": "New Title"})
 
                 mock_loop.is_running.assert_called_once()
@@ -57,15 +57,15 @@ class TestWebsocketRoutes:
         """Testa broadcast sem loop rodando"""
         from src.api.routes.websocket import broadcast_chat_update, manager
 
-        with patch('asyncio.get_running_loop') as mock_get_loop:
+        with patch("asyncio.get_running_loop") as mock_get_loop:
             mock_get_loop.side_effect = RuntimeError("No running event loop")
 
-            with patch.object(manager, 'get_event_loop') as mock_get_event_loop:
+            with patch.object(manager, "get_event_loop") as mock_get_event_loop:
                 mock_loop = Mock()
                 mock_loop.is_running.return_value = False
                 mock_get_event_loop.return_value = mock_loop
 
-                with patch.object(manager, 'send_to_chat', new=Mock()):
+                with patch.object(manager, "send_to_chat", new=Mock()):
                     broadcast_chat_update("test_chat", "title", {"title": "New Title"})
 
                     mock_loop.run_until_complete.assert_called_once()
@@ -74,10 +74,10 @@ class TestWebsocketRoutes:
         """Testa broadcast com erro no loop"""
         from src.api.routes.websocket import broadcast_chat_update, manager
 
-        with patch('asyncio.get_running_loop') as mock_get_loop:
+        with patch("asyncio.get_running_loop") as mock_get_loop:
             mock_get_loop.side_effect = RuntimeError("No running event loop")
 
-            with patch.object(manager, 'get_event_loop') as mock_get_event_loop:
+            with patch.object(manager, "get_event_loop") as mock_get_event_loop:
                 mock_get_event_loop.side_effect = Exception("Loop error")
 
                 # Should not raise
@@ -107,7 +107,7 @@ class TestWebsocketRoutes:
         mock_ws.close = AsyncMock()
         mock_ws.accept = AsyncMock()
 
-        with patch('src.api.routes.websocket.auth_service') as mock_auth:
+        with patch("src.api.routes.websocket.auth_service") as mock_auth:
             mock_auth.get_current_user_from_token.return_value = None
 
             await websocket_endpoint(mock_ws, "test_chat", token="invalid")
@@ -132,8 +132,10 @@ class TestWebsocketRoutes:
         mock_chat = Mock()
         mock_chat.user_id = other_user_id
 
-        with patch('src.api.routes.websocket.auth_service') as mock_auth, \
-             patch('src.api.routes.websocket.ChatRepository') as mock_chat_repo:
+        with (
+            patch("src.api.routes.websocket.auth_service") as mock_auth,
+            patch("src.api.routes.websocket.ChatRepository") as mock_chat_repo,
+        ):
             mock_auth.get_current_user_from_token.return_value = mock_user
             mock_repo = Mock()
             mock_repo.get_by_id.return_value = mock_chat
@@ -153,9 +155,11 @@ class TestWebsocketRoutes:
         mock_ws.close = AsyncMock()
         mock_ws.accept = AsyncMock()
 
-        with patch('src.api.routes.websocket.auth_service') as mock_auth:
+        with patch("src.api.routes.websocket.auth_service") as mock_auth:
             mock_auth.get_current_user_from_token.side_effect = Exception("Auth error")
 
             await websocket_endpoint(mock_ws, "test_chat", token="valid_token")
 
-            mock_ws.close.assert_called_once_with(code=4001, reason="Authentication failed")
+            mock_ws.close.assert_called_once_with(
+                code=4001, reason="Authentication failed"
+            )

@@ -206,6 +206,7 @@ Certifique-se que a API tem CORS habilitado:
 ```python
 # FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
 ```
 

@@ -48,14 +48,14 @@ class TestSecurityCache:
         assert security_cache.user_tracking_file.exists()
         assert security_cache.anomalies_file.exists()
 
-    @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
+    @patch("src.services.security_cache.SecurityCache.auto_cleanup_check")
     def test_record_login_attempt_success(self, mock_auto_cleanup, security_cache):
         """Test recording successful login attempt"""
         security_cache.record_login_attempt(
             email="test@example.com",
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
-            success=True
+            success=True,
         )
 
         # Load and verify that saved data
@@ -64,7 +64,7 @@ class TestSecurityCache:
         # Should have at least one attempt
         assert len(data) > 0
 
-    @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
+    @patch("src.services.security_cache.SecurityCache.auto_cleanup_check")
     def test_record_login_attempt_failure(self, mock_auto_cleanup, security_cache):
         """Test recording failed login attempt"""
         security_cache.record_login_attempt(
@@ -72,7 +72,7 @@ class TestSecurityCache:
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
             success=False,
-            failure_reason="Invalid password"
+            failure_reason="Invalid password",
         )
 
         # Load and verify that saved data
@@ -81,7 +81,7 @@ class TestSecurityCache:
         # Should have at least one attempt
         assert len(data) > 0
 
-    @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
+    @patch("src.services.security_cache.SecurityCache.auto_cleanup_check")
     def test_get_recent_anomalies(self, mock_auto_cleanup, security_cache):
         """Test getting recent anomalies"""
         current_time = time.time()
@@ -92,7 +92,7 @@ class TestSecurityCache:
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
             success=False,
-            anomalies=["suspicious_activity"]
+            anomalies=["suspicious_activity"],
         )
 
         # Manually add old anomaly
@@ -102,7 +102,7 @@ class TestSecurityCache:
             "ip_address": "192.168.1.2",
             "risk_score": "HIGH",
             "anomalies": ["old_suspicious"],
-            "unix_timestamp": current_time - 1000  # Old
+            "unix_timestamp": current_time - 1000,  # Old
         }
         security_cache._save_cache(security_cache.anomalies_file, old_data)
 
@@ -111,7 +111,7 @@ class TestSecurityCache:
         # Should return some anomalies (recent ones)
         assert isinstance(recent_anomalies, list)
 
-    @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
+    @patch("src.services.security_cache.SecurityCache.auto_cleanup_check")
     def test_should_block_ip_false(self, mock_auto_cleanup, security_cache):
         """Test IP blocking check when IP should not be blocked"""
         # Add few failed attempts (below threshold)
@@ -120,7 +120,7 @@ class TestSecurityCache:
                 email=f"test{i}@example.com",
                 ip_address="192.168.1.1",
                 user_agent="Mozilla/5.0",
-                success=False
+                success=False,
             )
 
         should_block, reason = security_cache.should_block_ip("192.168.1.1")
@@ -128,7 +128,7 @@ class TestSecurityCache:
         assert should_block is False
         assert reason is None
 
-    @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
+    @patch("src.services.security_cache.SecurityCache.auto_cleanup_check")
     def test_should_block_ip_true(self, mock_auto_cleanup, security_cache):
         """Test IP blocking check when IP should be blocked"""
         # Add many failed attempts (above threshold)
@@ -137,7 +137,7 @@ class TestSecurityCache:
                 email=f"test{i}@example.com",
                 ip_address="192.168.1.1",
                 user_agent="Mozilla/5.0",
-                success=False
+                success=False,
             )
 
         should_block, reason = security_cache.should_block_ip("192.168.1.1")
@@ -146,7 +146,7 @@ class TestSecurityCache:
         assert reason is not None
         assert "excesso" in reason.lower()
 
-    @patch('src.services.security_cache.SecurityCache.auto_cleanup_check')
+    @patch("src.services.security_cache.SecurityCache.auto_cleanup_check")
     def test_should_block_ip_not_tracked(self, mock_auto_cleanup, security_cache):
         """Test IP blocking check for IP not in tracking"""
         # Add attempts for different IP
@@ -154,7 +154,7 @@ class TestSecurityCache:
             email="test@example.com",
             ip_address="192.168.1.2",
             user_agent="Mozilla/5.0",
-            success=False
+            success=False,
         )
 
         should_block, reason = security_cache.should_block_ip("192.168.1.1")
@@ -169,7 +169,7 @@ class TestSecurityCache:
             email="test@example.com",
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
-            success=True
+            success=True,
         )
 
         # Run cleanup (should not raise exceptions)
@@ -185,7 +185,7 @@ class TestSecurityCache:
             email="test@example.com",
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
-            success=True
+            success=True,
         )
 
         result = security_cache.cleanup_cache_directory()
@@ -211,8 +211,8 @@ class TestSecurityCache:
         """Test loading cache file with invalid JSON"""
         # Create file with invalid JSON
         invalid_file = security_cache.cache_dir / "invalid.json"
-        with open(invalid_file, 'w') as f:
-            f.write('invalid json')
+        with open(invalid_file, "w") as f:
+            f.write("invalid json")
 
         result = security_cache._load_cache(invalid_file)
 
@@ -250,7 +250,7 @@ class TestSecurityCache:
         user_data = {
             email: {
                 "ips": ["192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4"],
-                "attempt_count": 4
+                "attempt_count": 4,
             }
         }
         security_cache._save_cache(security_cache.user_tracking_file, user_data)
@@ -260,13 +260,22 @@ class TestSecurityCache:
         assert result["risk_score"] == "HIGH"
         assert "Múltiplos IPs" in result["anomaly_details"]
 
-    def test_detect_anomalies_multiple_users_and_rapid_attempts_and_suspicious_ua(self, security_cache):
+    def test_detect_anomalies_multiple_users_and_rapid_attempts_and_suspicious_ua(
+        self, security_cache
+    ):
         """Test multiple users on same IP, rapid attempts, and suspicious user agent"""
         ip = "192.168.1.1"
         ip_data = {
             ip: {
-                "emails": ["a@ex.com", "b@ex.com", "c@ex.com", "d@ex.com", "e@ex.com", "f@ex.com"],
-                "attempt_count": 6
+                "emails": [
+                    "a@ex.com",
+                    "b@ex.com",
+                    "c@ex.com",
+                    "d@ex.com",
+                    "e@ex.com",
+                    "f@ex.com",
+                ],
+                "attempt_count": 6,
             }
         }
         security_cache._save_cache(security_cache.ip_tracking_file, ip_data)
@@ -280,12 +289,14 @@ class TestSecurityCache:
                 "email": f"user{i}@ex.com",
                 "ip_address": ip,
                 "unix_timestamp": now - 10,
-                "success": False
+                "success": False,
             }
         security_cache._save_cache(security_cache.login_attempts_file, attempts)
 
         # Test suspicious user agent
-        result = security_cache.detect_anomalies("test@ex.com", ip, "python-requests/2.28")
+        result = security_cache.detect_anomalies(
+            "test@ex.com", ip, "python-requests/2.28"
+        )
         assert result["is_anomaly"] is True
         assert result["risk_score"] == "CRITICAL"
         assert "Múltiplos usuários" in result["anomaly_details"]
@@ -311,7 +322,7 @@ class TestSecurityCache:
                 "email": email,
                 "ip_address": "192.168.1.1",
                 "unix_timestamp": now - 30,
-                "success": False
+                "success": False,
             }
         security_cache._save_cache(security_cache.login_attempts_file, attempts)
 
@@ -323,14 +334,37 @@ class TestSecurityCache:
         """Test generating security summary"""
         now = time.time()
         attempts = {
-            "att1": {"unix_timestamp": now - 100, "success": True, "risk_score": "LOW", "email": "a@ex.com", "ip_address": "1.1.1.1"},
-            "att2": {"unix_timestamp": now - 200, "success": False, "risk_score": "HIGH", "email": "b@ex.com", "ip_address": "2.2.2.2"},
-            "att3": {"unix_timestamp": now - 7200 * 1000, "success": True, "risk_score": "LOW", "email": "c@ex.com", "ip_address": "3.3.3.3"} # very old
+            "att1": {
+                "unix_timestamp": now - 100,
+                "success": True,
+                "risk_score": "LOW",
+                "email": "a@ex.com",
+                "ip_address": "1.1.1.1",
+            },
+            "att2": {
+                "unix_timestamp": now - 200,
+                "success": False,
+                "risk_score": "HIGH",
+                "email": "b@ex.com",
+                "ip_address": "2.2.2.2",
+            },
+            "att3": {
+                "unix_timestamp": now - 7200 * 1000,
+                "success": True,
+                "risk_score": "LOW",
+                "email": "c@ex.com",
+                "ip_address": "3.3.3.3",
+            },  # very old
         }
         security_cache._save_cache(security_cache.login_attempts_file, attempts)
 
         anomalies = {
-            "ano1": {"unix_timestamp": now - 50, "email": "b@ex.com", "ip_address": "2.2.2.2", "risk_score": "HIGH"}
+            "ano1": {
+                "unix_timestamp": now - 50,
+                "email": "b@ex.com",
+                "ip_address": "2.2.2.2",
+                "risk_score": "HIGH",
+            }
         }
         security_cache._save_cache(security_cache.anomalies_file, anomalies)
 
@@ -348,14 +382,14 @@ class TestSecurityCache:
         # IP data
         ip_data = {
             "1.1.1.1": {"unix_timestamp": now - 10, "emails": []},
-            "2.2.2.2": {"unix_timestamp": now - 7200 * 3600, "emails": []} # very old
+            "2.2.2.2": {"unix_timestamp": now - 7200 * 3600, "emails": []},  # very old
         }
         security_cache._save_cache(security_cache.ip_tracking_file, ip_data)
 
         # User data
         user_data = {
             "a@ex.com": {"unix_timestamp": now - 10, "ips": []},
-            "b@ex.com": {"unix_timestamp": now - 7200 * 3600, "ips": []} # very old
+            "b@ex.com": {"unix_timestamp": now - 7200 * 3600, "ips": []},  # very old
         }
         security_cache._save_cache(security_cache.user_tracking_file, user_data)
 
@@ -379,7 +413,7 @@ class TestSecurityCache:
         result = security_cache.cleanup_cache_directory(force_cleanup=True)
         assert result is True
         assert not f.exists()
-        assert security_cache.login_attempts_file.exists() # reinitialized
+        assert security_cache.login_attempts_file.exists()  # reinitialized
 
         # Simulating exception on listdir/iterdir
         with patch("pathlib.Path.iterdir", side_effect=Exception("Iterdir error")):
@@ -390,17 +424,18 @@ class TestSecurityCache:
         """Test auto_cleanup_check flow and periodic full cleanup when .last_full_cleanup exists"""
         # Save last full cleanup timestamp as old
         last_cleanup_file = security_cache.cache_dir / ".last_full_cleanup"
-        last_cleanup_file.write_text(str(time.time() - 90000)) # older than 24h
+        last_cleanup_file.write_text(str(time.time() - 90000))  # older than 24h
 
         # Add temporary file that should be cleaned on full cleanup
         temp_f = security_cache.cache_dir / "temp_to_be_deleted.txt"
         temp_f.write_text("delete me")
 
         security_cache.auto_cleanup_check()
-        assert not temp_f.exists() # Should have run force_cleanup=True
+        assert not temp_f.exists()  # Should have run force_cleanup=True
 
         # Test exception inside auto_cleanup_check
-        with patch.object(security_cache, "cleanup_old_data", side_effect=Exception("Cleanup error")):
+        with patch.object(
+            security_cache, "cleanup_old_data", side_effect=Exception("Cleanup error")
+        ):
             # Should not raise exception
             security_cache.auto_cleanup_check()
-

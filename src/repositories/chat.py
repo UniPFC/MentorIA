@@ -17,7 +17,7 @@ class ChatRepository:
         user_id: UUID,
         chat_type_id: UUID | None = None,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> list[Chat]:
         query = self.db.query(Chat).filter(Chat.user_id == user_id)
 

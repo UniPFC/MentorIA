@@ -34,7 +34,7 @@ class TestRegressionAuthFlow:
             email=email,
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash(password),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -57,7 +57,7 @@ class TestRegressionAuthFlow:
             email=_unique_email("token"),
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -68,8 +68,7 @@ class TestRegressionAuthFlow:
 
         # Verificar que token funciona
         current_user = auth_service.get_current_user_from_token(
-            tokens["access_token"],
-            user_repo
+            tokens["access_token"], user_repo
         )
         assert current_user is not None
         assert current_user.id == user.id
@@ -90,7 +89,7 @@ class TestRegressionChatFlow:
             email=_unique_email("chat"),
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -100,18 +99,14 @@ class TestRegressionChatFlow:
             description="Test KB",
             is_public=True,
             owner_id=user.id,
-            collection_name=f"coll_{uuid.uuid4().hex[:8]}"
+            collection_name=f"coll_{uuid.uuid4().hex[:8]}",
         )
         db_session.add(chat_type)
         db_session.commit()
         db_session.refresh(chat_type)
 
         # Criar Chat
-        chat = Chat(
-            user_id=user.id,
-            chat_type_id=chat_type.id,
-            title="Regression Chat"
-        )
+        chat = Chat(user_id=user.id, chat_type_id=chat_type.id, title="Regression Chat")
         db_session.add(chat)
         db_session.commit()
         db_session.refresh(chat)
@@ -140,7 +135,7 @@ class TestRegressionChatFlow:
             email=_unique_email("multichats"),
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -149,7 +144,7 @@ class TestRegressionChatFlow:
             description="Test",
             is_public=True,
             owner_id=user.id,
-            collection_name=f"coll_{uuid.uuid4().hex[:8]}"
+            collection_name=f"coll_{uuid.uuid4().hex[:8]}",
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -194,7 +189,7 @@ class TestRegressionDataIntegrity:
             email=email,
             username=username,
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
         user_id = user.id
@@ -217,7 +212,7 @@ class TestRegressionDataIntegrity:
             email=_unique_email("order"),
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -226,7 +221,7 @@ class TestRegressionDataIntegrity:
             description="Test",
             is_public=True,
             owner_id=user.id,
-            collection_name=f"coll_{uuid.uuid4().hex[:8]}"
+            collection_name=f"coll_{uuid.uuid4().hex[:8]}",
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -265,15 +260,13 @@ class TestRegressionErrorHandling:
             email=email,
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash("CorrectPassword123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
         # Tentar autenticar com senha errada
         authenticated = auth_service.authenticate_user(
-            user_repo,
-            email,
-            "WrongPassword123!"
+            user_repo, email, "WrongPassword123!"
         )
 
         assert authenticated is None
@@ -296,7 +289,7 @@ class TestRegressionErrorHandling:
             email=_unique_email("empty"),
             username=f"user_{uuid.uuid4().hex[:8]}",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -305,7 +298,7 @@ class TestRegressionErrorHandling:
             description="Test",
             is_public=True,
             owner_id=user.id,
-            collection_name=f"coll_{uuid.uuid4().hex[:8]}"
+            collection_name=f"coll_{uuid.uuid4().hex[:8]}",
         )
         db_session.add(chat_type)
         db_session.commit()

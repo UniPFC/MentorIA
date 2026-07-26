@@ -28,7 +28,11 @@ from src.repositories.chat_type_favorite import ChatTypeFavoriteRepository
 router = APIRouter(prefix="/chat-types", tags=["chat-types"])
 
 
-def enrich_chat_type_with_owner(chat_type: ChatType, favorite_repo: ChatTypeFavoriteRepository | None = None, user_id: UUID | None = None) -> dict:
+def enrich_chat_type_with_owner(
+    chat_type: ChatType,
+    favorite_repo: ChatTypeFavoriteRepository | None = None,
+    user_id: UUID | None = None,
+) -> dict:
     """
     Helper function to add owner_name, is_favorited, and tags to ChatType response.
     Returns dict compatible with ChatTypeResponse schema.
@@ -55,7 +59,7 @@ def enrich_chat_type_with_owner(chat_type: ChatType, favorite_repo: ChatTypeFavo
         "collection_name": chat_type.collection_name,
         "created_at": chat_type.created_at,
         "owner_name": owner_name,
-        "is_favorited": is_favorited
+        "is_favorited": is_favorited,
     }
     return data
 
@@ -65,14 +69,13 @@ def create_chat_type(
     chat_type_data: ChatTypeCreate,
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Create a new ChatType.
     Creates both the database record and the Qdrant collection.
     """
     try:
-
         # Generate collection name
         collection_name = f"chat_type_{chat_type_data.name.lower().replace(' ', '_')}"
 
@@ -81,7 +84,7 @@ def create_chat_type(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"ChatType with name '{chat_type_data.name}' already exists"
+                detail=f"ChatType with name '{chat_type_data.name}' already exists",
             )
 
         # Create database record
@@ -90,7 +93,7 @@ def create_chat_type(
             description=chat_type_data.description,
             is_public=chat_type_data.is_public,
             owner_id=current_user.id,
-            collection_name=collection_name
+            collection_name=collection_name,
         )
 
         chat_type = chat_type_repo.create(chat_type)
@@ -104,12 +107,14 @@ def create_chat_type(
             qdrant = QdrantManager()
             qdrant.create_collection(chat_type.id, vector_size=1024)
         except Exception as e:
-            logger.error(f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}")
+            logger.error(
+                f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}"
+            )
             # Rollback: delete the created chat_type
             chat_type_repo.delete(chat_type)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create vector collection: {str(e)}"
+                detail=f"Failed to create vector collection: {str(e)}",
             )
 
         logger.info(f"Created ChatType: {chat_type.name} (id={chat_type.id})")
@@ -118,7 +123,11 @@ def create_chat_type(
         fetched_chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
         if not fetched_chat_type:
             raise HTTPException(status_code=404, detail="ChatType not found")
-        return ChatTypeResponse(**enrich_chat_type_with_owner(fetched_chat_type, favorite_repo, current_user.id))
+        return ChatTypeResponse(
+            **enrich_chat_type_with_owner(
+                fetched_chat_type, favorite_repo, current_user.id
+            )
+        )
 
     except HTTPException:
         raise
@@ -126,7 +135,7 @@ def create_chat_type(
         logger.error(f"Failed to create ChatType: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create chat type: {str(e)}"
+            detail=f"Failed to create chat type: {str(e)}",
         )
 
 
@@ -136,10 +145,12 @@ def search_chat_types(
     is_public: bool | None = Query(None, description="Filter by public/private"),
     owner_id: UUID | None = Query(None, description="Filter by owner"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of records to return"
+    ),
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Search and filter chat types with advanced options.
@@ -147,17 +158,21 @@ def search_chat_types(
     Supports text search in name and description.
     """
     try:
-
         chat_types, total = chat_type_repo.search(
             query=query,
             is_public=is_public,
             owner_id=owner_id,
             user_id=current_user.id,
             skip=skip,
-            limit=limit
+            limit=limit,
         )
 
-        enriched_chat_types = [ChatTypeResponse(**enrich_chat_type_with_owner(ct, favorite_repo, current_user.id)) for ct in chat_types]
+        enriched_chat_types = [
+            ChatTypeResponse(
+                **enrich_chat_type_with_owner(ct, favorite_repo, current_user.id)
+            )
+            for ct in chat_types
+        ]
 
         return ChatTypeListResponse(chat_types=enriched_chat_types, total=total)
 
@@ -165,7 +180,7 @@ def search_chat_types(
         logger.error(f"Failed to search chat types: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search chat types: {str(e)}"
+            detail=f"Failed to search chat types: {str(e)}",
         )
 
 
@@ -174,10 +189,12 @@ def list_chat_types(
     is_public: bool | None = Query(None, description="Filter by public/private"),
     owner_id: UUID | None = Query(None, description="Filter by owner"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of records to return"
+    ),
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     List chat types available to the user (Steam Workshop style).
@@ -188,7 +205,6 @@ def list_chat_types(
     For browsing all public chat types, use /search endpoint.
     """
     try:
-
         favorited_ids = favorite_repo.get_user_favorite_ids(current_user.id)
 
         chat_types, total = chat_type_repo.list_user_available(
@@ -197,10 +213,15 @@ def list_chat_types(
             is_public=is_public,
             owner_id=owner_id,
             skip=skip,
-            limit=limit
+            limit=limit,
         )
 
-        enriched_chat_types = [ChatTypeResponse(**enrich_chat_type_with_owner(ct, favorite_repo, current_user.id)) for ct in chat_types]
+        enriched_chat_types = [
+            ChatTypeResponse(
+                **enrich_chat_type_with_owner(ct, favorite_repo, current_user.id)
+            )
+            for ct in chat_types
+        ]
 
         return ChatTypeListResponse(chat_types=enriched_chat_types, total=total)
 
@@ -208,7 +229,7 @@ def list_chat_types(
         logger.error(f"Failed to list chat types: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list chat types: {str(e)}"
+            detail=f"Failed to list chat types: {str(e)}",
         )
 
 
@@ -217,7 +238,7 @@ def get_chat_type(
     chat_type_id: UUID,
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Get a specific chat type by ID.
@@ -229,17 +250,19 @@ def get_chat_type(
     if not chat_type:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"ChatType with id {chat_type_id} not found"
+            detail=f"ChatType with id {chat_type_id} not found",
         )
 
     # Check access
     if not chat_type.is_public and chat_type.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this chat type"
+            detail="You don't have permission to access this chat type",
         )
 
-    return ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id))
+    return ChatTypeResponse(
+        **enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id)
+    )
 
 
 @router.patch("/{chat_type_id}", response_model=ChatTypeResponse)
@@ -248,27 +271,26 @@ def update_chat_type(
     chat_type_data: ChatTypeUpdate,
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Update a chat type (name, description, is_public, tags).
     Only the owner can update it. All fields are optional.
     """
     try:
-
         chat_type = chat_type_repo.get_by_id(chat_type_id, load_owner=True)
 
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"ChatType with id {chat_type_id} not found"
+                detail=f"ChatType with id {chat_type_id} not found",
             )
 
         # Check ownership
         if chat_type.owner_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to update this chat type"
+                detail="You don't have permission to update this chat type",
             )
 
         # Update only provided fields
@@ -292,7 +314,11 @@ def update_chat_type(
         fetched_chat_type = chat_type_repo.get_by_id(chat_type.id, load_owner=True)
         if not fetched_chat_type:
             raise HTTPException(status_code=404, detail="ChatType not found")
-        return ChatTypeResponse(**enrich_chat_type_with_owner(fetched_chat_type, favorite_repo, current_user.id))
+        return ChatTypeResponse(
+            **enrich_chat_type_with_owner(
+                fetched_chat_type, favorite_repo, current_user.id
+            )
+        )
 
     except HTTPException:
         raise
@@ -300,7 +326,7 @@ def update_chat_type(
         logger.error(f"Failed to update ChatType {chat_type_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update chat type: {str(e)}"
+            detail=f"Failed to update chat type: {str(e)}",
         )
 
 
@@ -308,27 +334,26 @@ def update_chat_type(
 def delete_chat_type(
     chat_type_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo)
+    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
 ):
     """
     Delete a chat type and its Qdrant collection.
     Only the owner can delete it.
     """
     try:
-
         chat_type = chat_type_repo.get_by_id(chat_type_id)
 
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"ChatType with id {chat_type_id} not found"
+                detail=f"ChatType with id {chat_type_id} not found",
             )
 
         # Check ownership
         if chat_type.owner_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to delete this chat type"
+                detail="You don't have permission to delete this chat type",
             )
 
         # Delete Qdrant collection
@@ -346,7 +371,7 @@ def delete_chat_type(
         logger.error(f"Failed to delete ChatType {chat_type_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete chat type: {str(e)}"
+            detail=f"Failed to delete chat type: {str(e)}",
         )
 
 
@@ -355,7 +380,7 @@ def get_chat_type_info(
     chat_type_id: UUID,
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Get detailed info about a chat type including Qdrant collection stats.
@@ -367,14 +392,14 @@ def get_chat_type_info(
     if not chat_type:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"ChatType with id {chat_type_id} not found"
+            detail=f"ChatType with id {chat_type_id} not found",
         )
 
     # Check ownership
     if chat_type.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to view detailed info for this chat type"
+            detail="You don't have permission to view detailed info for this chat type",
         )
 
     try:
@@ -382,48 +407,53 @@ def get_chat_type_info(
         collection_info = qdrant.get_collection_info(chat_type_id)
 
         return {
-            "chat_type": ChatTypeResponse(**enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id)),
-            "collection_info": collection_info
+            "chat_type": ChatTypeResponse(
+                **enrich_chat_type_with_owner(chat_type, favorite_repo, current_user.id)
+            ),
+            "collection_info": collection_info,
         }
 
     except Exception as e:
         logger.error(f"Failed to get chat type info: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get chat type info: {str(e)}"
+            detail=f"Failed to get chat type info: {str(e)}",
         )
 
 
-@router.post("/{chat_type_id}/favorite", response_model=ChatTypeFavoriteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{chat_type_id}/favorite",
+    response_model=ChatTypeFavoriteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def favorite_chat_type(
     chat_type_id: UUID,
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Add a chat type to user's favorites.
     """
     try:
-
         chat_type = chat_type_repo.get_by_id(chat_type_id)
 
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"ChatType with id {chat_type_id} not found"
+                detail=f"ChatType with id {chat_type_id} not found",
             )
 
         if not chat_type.is_public and chat_type.owner_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to favorite this chat type"
+                detail="You don't have permission to favorite this chat type",
             )
 
         if favorite_repo.is_favorited(current_user.id, chat_type_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Chat type is already in favorites"
+                detail="Chat type is already in favorites",
             )
 
         favorite = favorite_repo.create(current_user.id, chat_type_id)
@@ -438,7 +468,7 @@ def favorite_chat_type(
         logger.error(f"Failed to favorite chat type: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to favorite chat type: {str(e)}"
+            detail=f"Failed to favorite chat type: {str(e)}",
         )
 
 
@@ -446,17 +476,18 @@ def favorite_chat_type(
 def unfavorite_chat_type(
     chat_type_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo)
+    favorite_repo: ChatTypeFavoriteRepository = Depends(get_chat_type_favorite_repo),
 ):
     """
     Remove a chat type from user's favorites.
     """
     try:
-
-        if not favorite_repo.delete_by_user_and_chat_type(current_user.id, chat_type_id):
+        if not favorite_repo.delete_by_user_and_chat_type(
+            current_user.id, chat_type_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Chat type is not in favorites"
+                detail="Chat type is not in favorites",
             )
 
         logger.info(f"User {current_user.id} unfavorited ChatType {chat_type_id}")
@@ -467,5 +498,5 @@ def unfavorite_chat_type(
         logger.error(f"Failed to unfavorite chat type: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to unfavorite chat type: {str(e)}"
+            detail=f"Failed to unfavorite chat type: {str(e)}",
         )

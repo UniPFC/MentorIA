@@ -7,7 +7,7 @@ from shared.database.session import get_db
 
 @pytest.mark.unit
 class TestDatabaseSession:
-    @patch('shared.database.session.SessionLocal')
+    @patch("shared.database.session.SessionLocal")
     def test_get_db_yields_session(self, mock_session_local):
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
@@ -18,7 +18,7 @@ class TestDatabaseSession:
         assert db == mock_session
         mock_session_local.assert_called_once()
 
-    @patch('shared.database.session.SessionLocal')
+    @patch("shared.database.session.SessionLocal")
     def test_get_db_closes_session(self, mock_session_local):
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
@@ -33,7 +33,7 @@ class TestDatabaseSession:
 
         mock_session.close.assert_called_once()
 
-    @patch('shared.database.session.SessionLocal')
+    @patch("shared.database.session.SessionLocal")
     def test_get_db_closes_on_exception(self, mock_session_local):
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session

@@ -20,12 +20,12 @@ class TestHFEmbeddingProvider:
 
     def test_embed_success(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
 
         mock_encoded = {
-            'input_ids': torch.tensor([[1, 2, 3]]),
-            'attention_mask': torch.tensor([[1, 1, 1]])
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
         }
         mock_tokenizer.return_value.to.return_value = mock_encoded
 
@@ -42,12 +42,12 @@ class TestHFEmbeddingProvider:
 
     def test_embed_with_max_length(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
 
         mock_encoded = {
-            'input_ids': torch.tensor([[1, 2, 3]]),
-            'attention_mask': torch.tensor([[1, 1, 1]])
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
         }
         mock_tokenizer.return_value.to.return_value = mock_encoded
 
@@ -59,7 +59,7 @@ class TestHFEmbeddingProvider:
 
         assert isinstance(result, list)
         call_kwargs = mock_tokenizer.call_args[1]
-        assert call_kwargs['max_length'] == 512
+        assert call_kwargs["max_length"] == 512
 
     def test_embed_error_handling(self):
         mock_model = MagicMock()
@@ -87,8 +87,8 @@ class TestHFEmbeddingProvider:
 
 @pytest.mark.unit
 class TestRemoteEmbeddingProvider:
-    @patch('src.ai.provider.embedding.resolve_api_key')
-    @patch('src.ai.provider.embedding.OpenAI')
+    @patch("src.ai.provider.embedding.resolve_api_key")
+    @patch("src.ai.provider.embedding.OpenAI")
     def test_init_with_defaults(self, mock_openai, mock_resolve_key):
         mock_resolve_key.return_value = "test-key"
 
@@ -98,34 +98,29 @@ class TestRemoteEmbeddingProvider:
         mock_resolve_key.assert_called_once_with("openai", None)
         mock_openai.assert_called_once()
 
-    @patch('src.ai.provider.embedding.resolve_api_key')
-    @patch('src.ai.provider.embedding.OpenAI')
+    @patch("src.ai.provider.embedding.resolve_api_key")
+    @patch("src.ai.provider.embedding.OpenAI")
     def test_init_with_custom_url(self, mock_openai, mock_resolve_key):
         mock_resolve_key.return_value = "test-key"
 
         provider = RemoteEmbeddingProvider(
-            "custom-model",
-            provider_alias="custom",
-            base_url="https://custom.api.com"
+            "custom-model", provider_alias="custom", base_url="https://custom.api.com"
         )
 
         assert provider.target_url == "https://custom.api.com"
         assert provider.model_name == "custom-model"
 
-    @patch('src.ai.provider.embedding.resolve_api_key')
-    @patch('src.ai.provider.embedding.OpenAI')
+    @patch("src.ai.provider.embedding.resolve_api_key")
+    @patch("src.ai.provider.embedding.OpenAI")
     def test_init_with_api_key(self, mock_openai, mock_resolve_key):
         mock_resolve_key.return_value = "custom-key"
 
-        provider = RemoteEmbeddingProvider(
-            "model",
-            api_key="custom-key"
-        )
+        provider = RemoteEmbeddingProvider("model", api_key="custom-key")
 
         mock_resolve_key.assert_called_once_with("openai", "custom-key")
 
-    @patch('src.ai.provider.embedding.resolve_api_key')
-    @patch('src.ai.provider.embedding.OpenAI')
+    @patch("src.ai.provider.embedding.resolve_api_key")
+    @patch("src.ai.provider.embedding.OpenAI")
     def test_embed_success(self, mock_openai, mock_resolve_key):
         mock_resolve_key.return_value = "test-key"
 
@@ -151,8 +146,8 @@ class TestRemoteEmbeddingProvider:
         assert result[1] == [0.4, 0.5, 0.6]
         mock_client.embeddings.create.assert_called_once()
 
-    @patch('src.ai.provider.embedding.resolve_api_key')
-    @patch('src.ai.provider.embedding.OpenAI')
+    @patch("src.ai.provider.embedding.resolve_api_key")
+    @patch("src.ai.provider.embedding.OpenAI")
     def test_embed_with_kwargs(self, mock_openai, mock_resolve_key):
         mock_resolve_key.return_value = "test-key"
 
@@ -171,11 +166,11 @@ class TestRemoteEmbeddingProvider:
         result = provider.embed(["text"], dimensions=512)
 
         call_kwargs = mock_client.embeddings.create.call_args[1]
-        assert 'dimensions' in call_kwargs
-        assert call_kwargs['dimensions'] == 512
+        assert "dimensions" in call_kwargs
+        assert call_kwargs["dimensions"] == 512
 
-    @patch('src.ai.provider.embedding.resolve_api_key')
-    @patch('src.ai.provider.embedding.OpenAI')
+    @patch("src.ai.provider.embedding.resolve_api_key")
+    @patch("src.ai.provider.embedding.OpenAI")
     def test_embed_error_handling(self, mock_openai, mock_resolve_key):
         mock_resolve_key.return_value = "test-key"
 

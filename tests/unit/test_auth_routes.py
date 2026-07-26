@@ -48,10 +48,7 @@ class TestAuthRoutes:
     def test_get_client_ip_x_forwarded_for_priority(self):
         """Testa que X-Forwarded-For tem prioridade sobre X-Real-IP"""
         request = Mock()
-        request.headers = {
-            "X-Forwarded-For": "192.168.1.1",
-            "X-Real-IP": "192.168.1.2"
-        }
+        request.headers = {"X-Forwarded-For": "192.168.1.1", "X-Real-IP": "192.168.1.2"}
 
         ip = _get_client_ip(request)
         assert ip == "192.168.1.1"
@@ -78,27 +75,34 @@ class TestAuthRoutes:
     async def test_refresh_token_from_cookie(self):
         """Testa refresh token pegando o token do cookie (linha 227)"""
         from src.api.routes.auth import refresh_token
+
         request = Mock()
         request.cookies = {"refreshToken": "cookie_refresh_token"}
         response = Mock()
         user_repo = Mock()
 
-        with patch("src.api.routes.auth.auth_service") as mock_auth, patch("src.api.routes.auth.settings") as mock_settings:
+        with (
+            patch("src.api.routes.auth.auth_service") as mock_auth,
+            patch("src.api.routes.auth.settings") as mock_settings,
+        ):
             mock_settings.SECURE_COOKIES = False
             mock_auth.refresh_access_token.return_value = {
                 "access_token": "new_access",
                 "refresh_token": "new_refresh",
                 "token_type": "bearer",
-                "expires_in": 3600
+                "expires_in": 3600,
             }
             result = await refresh_token(request, response, None, user_repo)
             assert result["access_token"] == "new_access"
-            mock_auth.refresh_access_token.assert_called_once_with("cookie_refresh_token", user_repo)
+            mock_auth.refresh_access_token.assert_called_once_with(
+                "cookie_refresh_token", user_repo
+            )
 
     @pytest.mark.asyncio
     async def test_refresh_token_missing(self):
         """Testa refresh token sem enviar token nenhum (linha 230)"""
         from src.api.routes.auth import refresh_token
+
         request = Mock()
         request.cookies = {}
         response = Mock()
@@ -113,6 +117,7 @@ class TestAuthRoutes:
     async def test_logout_from_cookie(self):
         """Testa logout pegando o token do cookie (linha 290)"""
         from src.api.routes.auth import logout
+
         request = Mock()
         request.cookies = {"authToken": "cookie_auth_token"}
         response = Mock()

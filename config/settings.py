@@ -6,7 +6,6 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-
     # Project Configuration
     PROJECT_NAME: str = "MentorIA"
     LOG_LEVEL: str
@@ -88,7 +87,6 @@ class Settings(BaseSettings):
     # Password Security Configuration
     PASSWORD_PEPPER: str
 
-
     # Encryption Configuration
     ENCRYPTION_SALT: str
 
@@ -107,10 +105,10 @@ class Settings(BaseSettings):
     LOGIN_BLOCK_MINUTES: int = 10
 
     # Token Budget Configuration per User Level
-    TOKEN_BUDGET_LEVEL_01: int = 10000         # Free
-    TOKEN_BUDGET_LEVEL_02: int = 50000         # Lite
-    TOKEN_BUDGET_LEVEL_03: int = 200000        # Plus
-    TOKEN_BUDGET_LEVEL_04: int = 1000000       # Max
+    TOKEN_BUDGET_LEVEL_01: int = 10000  # Free
+    TOKEN_BUDGET_LEVEL_02: int = 50000  # Lite
+    TOKEN_BUDGET_LEVEL_03: int = 200000  # Plus
+    TOKEN_BUDGET_LEVEL_04: int = 1000000  # Max
     TOKEN_BUDGET_MINIMUM_RESERVE: int = 200
 
     # Cost Tier Configuration
@@ -175,14 +173,14 @@ class Settings(BaseSettings):
                 "provider": "ollama",
                 "description": "Llama 3.2 3B model via Ollama (local)",
                 "input_token_multiplier": 1.1,
-                "output_token_multiplier": 1.1
+                "output_token_multiplier": 1.1,
             },
             {
                 "model": "llama3.1:8b",
                 "provider": "ollama",
                 "description": "Llama 3.1 8B model via Ollama (local)",
                 "input_token_multiplier": 1.5,
-                "output_token_multiplier": 1.5
+                "output_token_multiplier": 1.5,
             },
         ]
 
@@ -191,7 +189,7 @@ class Settings(BaseSettings):
             "provider": self.LLM_PROVIDER,
             "description": f"Default model ({self.LLM_MODEL} via {self.LLM_PROVIDER})",
             "input_token_multiplier": 1.0,
-            "output_token_multiplier": 1.0
+            "output_token_multiplier": 1.0,
         }
 
         models = [default_model]
@@ -204,5 +202,6 @@ class Settings(BaseSettings):
                 seen.add(key)
 
         return models
+
 
 settings = Settings()

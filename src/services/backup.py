@@ -17,11 +17,12 @@ def get_backup_dir(date_folder: bool = True) -> str:
     """Get or create backup directory with optional date-based folder"""
     if date_folder:
         date_str = datetime.datetime.now().strftime("%d%m%Y")
-        backup_dir = os.path.join(settings.BASE_DIR, 'cache', 'backups', date_str)
+        backup_dir = os.path.join(settings.BASE_DIR, "cache", "backups", date_str)
     else:
-        backup_dir = os.path.join(settings.BASE_DIR, 'cache', 'backups')
+        backup_dir = os.path.join(settings.BASE_DIR, "cache", "backups")
     os.makedirs(backup_dir, exist_ok=True)
     return backup_dir
+
 
 def backup_postgres() -> str:
     """Backup PostgreSQL database using pg_dump"""
@@ -31,15 +32,20 @@ def backup_postgres() -> str:
 
     cmd = [
         "pg_dump",
-        "-h", settings.POSTGRES_HOST,
-        "-p", str(settings.POSTGRES_PORT),
-        "-U", settings.POSTGRES_USER,
-        "-d", settings.POSTGRES_DB,
-        "-f", dump_file
+        "-h",
+        settings.POSTGRES_HOST,
+        "-p",
+        str(settings.POSTGRES_PORT),
+        "-U",
+        settings.POSTGRES_USER,
+        "-d",
+        settings.POSTGRES_DB,
+        "-f",
+        dump_file,
     ]
 
     env = os.environ.copy()
-    env['PGPASSWORD'] = settings.POSTGRES_PASSWORD
+    env["PGPASSWORD"] = settings.POSTGRES_PASSWORD
 
     try:
         subprocess.run(cmd, env=env, check=True, capture_output=True)
@@ -48,6 +54,7 @@ def backup_postgres() -> str:
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to backup PostgreSQL: {e}")
         raise
+
 
 def backup_data() -> str:
     """Backup data directory"""
@@ -64,6 +71,7 @@ def backup_data() -> str:
         logger.error(f"Failed to backup data: {e}")
         raise
 
+
 def backup_qdrant() -> str:
     """Backup Qdrant by creating snapshots and tarring storage"""
     from qdrant_client import QdrantClient
@@ -73,7 +81,11 @@ def backup_qdrant() -> str:
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = get_backup_dir()
     tar_file = os.path.join(backup_dir, f"qdrant_backup_{timestamp}.tar.gz")
-    storage_path = getattr(settings, 'QDRANT_STORAGE_DIR', os.getenv('QDRANT_STORAGE_DIR', '/qdrant/storage'))
+    storage_path = getattr(
+        settings,
+        "QDRANT_STORAGE_DIR",
+        os.getenv("QDRANT_STORAGE_DIR", "/qdrant/storage"),
+    )
 
     try:
         collections = client.get_collections().collections
@@ -83,7 +95,9 @@ def backup_qdrant() -> str:
             logger.info(f"Snapshot created for collection {name}: {snapshot}")
 
         if not os.path.isdir(storage_path):
-            raise FileNotFoundError(f"Qdrant storage directory not found: {storage_path}")
+            raise FileNotFoundError(
+                f"Qdrant storage directory not found: {storage_path}"
+            )
 
         with tarfile.open(tar_file, "w:gz") as tar:
             for item in os.listdir(storage_path):
@@ -96,16 +110,19 @@ def backup_qdrant() -> str:
         logger.error(f"Failed to backup Qdrant: {e}")
         raise
 
+
 def encrypt_file(file_path: str, passphrase: str) -> str:
     """Encrypt file using GPG symmetric encryption"""
     gpg = gnupg.GPG()
-    enc_file = file_path + '.gpg'
+    enc_file = file_path + ".gpg"
 
     try:
-        with open(file_path, 'rb') as f:
-            encrypted = gpg.encrypt_file(f, recipients=None, symmetric=True, passphrase=passphrase)
+        with open(file_path, "rb") as f:
+            encrypted = gpg.encrypt_file(
+                f, recipients=None, symmetric=True, passphrase=passphrase
+            )
 
-        with open(enc_file, 'wb') as f:
+        with open(enc_file, "wb") as f:
             f.write(encrypted.data)
 
         os.remove(file_path)
@@ -115,24 +132,27 @@ def encrypt_file(file_path: str, passphrase: str) -> str:
         logger.error(f"Failed to encrypt {file_path}: {e}")
         raise
 
-def decrypt_file(file_path: str, passphrase: str, output_path: str | None = None) -> str:
+
+def decrypt_file(
+    file_path: str, passphrase: str, output_path: str | None = None
+) -> str:
     """Decrypt a GPG-encrypted file and return the decrypted file path"""
     gpg = gnupg.GPG()
 
     if output_path is None:
-        if file_path.endswith('.gpg'):
+        if file_path.endswith(".gpg"):
             output_path = file_path[:-4]
         else:
-            output_path = file_path + '.dec'
+            output_path = file_path + ".dec"
 
     try:
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             decrypted = gpg.decrypt_file(f, passphrase=passphrase)
 
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
 
-        with open(output_path, 'wb') as out_f:
+        with open(output_path, "wb") as out_f:
             out_f.write(decrypted.data)
 
         os.remove(file_path)
@@ -148,7 +168,7 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
     gpg = gnupg.GPG()
 
     try:
-        with open(encrypted_file_path, 'rb') as f:
+        with open(encrypted_file_path, "rb") as f:
             decrypted = gpg.decrypt_file(f, passphrase=passphrase)
 
         if not decrypted.ok:
@@ -158,14 +178,18 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
         logger.info("Dropping and recreating database...")
         drop_recreate_cmd = [
             "psql",
-            "-h", settings.POSTGRES_HOST,
-            "-p", str(settings.POSTGRES_PORT),
-            "-U", settings.POSTGRES_USER,
-            "-d", "postgres"
+            "-h",
+            settings.POSTGRES_HOST,
+            "-p",
+            str(settings.POSTGRES_PORT),
+            "-U",
+            settings.POSTGRES_USER,
+            "-d",
+            "postgres",
         ]
 
         env = os.environ.copy()
-        env['PGPASSWORD'] = settings.POSTGRES_PASSWORD
+        env["PGPASSWORD"] = settings.POSTGRES_PASSWORD
 
         drop_recreate_sql = f"""
         SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{settings.POSTGRES_DB}' AND pid <> pg_backend_pid();
@@ -173,24 +197,42 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
         CREATE DATABASE {settings.POSTGRES_DB};
         """
 
-        process = subprocess.Popen(drop_recreate_cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate(input=drop_recreate_sql.encode('utf-8'))
+        process = subprocess.Popen(
+            drop_recreate_cmd,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, stderr = process.communicate(input=drop_recreate_sql.encode("utf-8"))
 
         if process.returncode != 0:
-            raise Exception(f"Failed to drop/recreate database: {stderr.decode('utf-8')}")
+            raise Exception(
+                f"Failed to drop/recreate database: {stderr.decode('utf-8')}"
+            )
 
         logger.info("Database dropped and recreated successfully")
 
         # Restore the backup
         cmd = [
             "psql",
-            "-h", settings.POSTGRES_HOST,
-            "-p", str(settings.POSTGRES_PORT),
-            "-U", settings.POSTGRES_USER,
-            "-d", settings.POSTGRES_DB
+            "-h",
+            settings.POSTGRES_HOST,
+            "-p",
+            str(settings.POSTGRES_PORT),
+            "-U",
+            settings.POSTGRES_USER,
+            "-d",
+            settings.POSTGRES_DB,
         ]
 
-        process = subprocess.Popen(cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(
+            cmd,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         stdout, stderr = process.communicate(input=decrypted.data)
 
         if process.returncode != 0:
@@ -201,21 +243,23 @@ def restore_postgres_in_memory(encrypted_file_path: str, passphrase: str):
         logger.error(f"Failed to restore PostgreSQL from memory: {e}")
         raise
 
+
 def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_path: str):
     """Decrypts tar.gz backup and extracts directly to the target path via memory"""
     gpg = gnupg.GPG()
 
     try:
-        with open(encrypted_file_path, 'rb') as f:
+        with open(encrypted_file_path, "rb") as f:
             decrypted = gpg.decrypt_file(f, passphrase=passphrase)
 
         if not decrypted.ok:
             raise ValueError(f"Decryption failed: {decrypted.status}")
 
         # Clear the extract path before restoring (only if it's a subdirectory, not root)
-        if os.path.exists(extract_path) and extract_path != '/app':
+        if os.path.exists(extract_path) and extract_path != "/app":
             logger.info(f"Clearing directory contents: {extract_path}")
             import shutil
+
             for item in os.listdir(extract_path):
                 item_path = os.path.join(extract_path, item)
                 try:
@@ -225,12 +269,13 @@ def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_pat
                         os.remove(item_path)
                 except Exception as e:
                     logger.warning(f"Could not remove {item_path}: {e}")
-        elif extract_path == '/app':
+        elif extract_path == "/app":
             # For /app, only clear data subdirectory contents
-            data_path = os.path.join(extract_path, 'data')
+            data_path = os.path.join(extract_path, "data")
             if os.path.exists(data_path):
                 logger.info(f"Clearing data directory contents: {data_path}")
                 import shutil
+
                 for item in os.listdir(data_path):
                     item_path = os.path.join(data_path, item)
                     try:
@@ -244,12 +289,13 @@ def restore_tar_in_memory(encrypted_file_path: str, passphrase: str, extract_pat
         file_like_object = io.BytesIO(decrypted.data)
 
         with tarfile.open(fileobj=file_like_object, mode="r:gz") as tar:
-            tar.extractall(path=extract_path, filter='data')
+            tar.extractall(path=extract_path, filter="data")
 
         logger.info(f"Files extracted successfully to {extract_path}")
     except Exception as e:
         logger.error(f"Failed to extract tar from memory: {e}")
         raise
+
 
 def wait_for_postgres_ready():
     for _ in range(30):
@@ -259,7 +305,7 @@ def wait_for_postgres_ready():
                 port=settings.POSTGRES_PORT,
                 user=settings.POSTGRES_USER,
                 password=settings.POSTGRES_PASSWORD,
-                database=settings.POSTGRES_DB
+                database=settings.POSTGRES_DB,
             ).close()
             logger.info("PostgreSQL is ready")
             return
@@ -269,6 +315,7 @@ def wait_for_postgres_ready():
             time.sleep(1)
     else:
         raise Exception("PostgreSQL not ready after 30 attempts")
+
 
 def wait_for_qdrant_ready():
     for _ in range(30):
@@ -285,10 +332,11 @@ def wait_for_qdrant_ready():
     else:
         raise Exception("Qdrant not ready after 30 attempts")
 
+
 def restore_backups(
     date_str: str | None = None,
     passphrase: str | None = None,
-    second_pass: bool = False
+    second_pass: bool = False,
 ):
     """Restore all backups from a specific date directly into memory/services"""
 
@@ -299,22 +347,15 @@ def restore_backups(
         date_str = datetime.datetime.now().strftime("%d%m%Y")
 
     if passphrase is None:
-        passphrase = os.getenv('BACKUP_PASSPHRASE')
+        passphrase = os.getenv("BACKUP_PASSPHRASE")
         if not passphrase:
             raise ValueError("BACKUP_PASSPHRASE not set")
 
-    backup_date_dir = os.path.join(
-        settings.BASE_DIR,
-        'cache',
-        'backups',
-        date_str
-    )
+    backup_date_dir = os.path.join(settings.BASE_DIR, "cache", "backups", date_str)
 
     if not os.path.exists(backup_date_dir):
         logger.error(f"Backup directory not found: {backup_date_dir}")
-        raise FileNotFoundError(
-            f"No backups found for date {date_str}"
-        )
+        raise FileNotFoundError(f"No backups found for date {date_str}")
 
     try:
         postgres_files = []
@@ -322,7 +363,7 @@ def restore_backups(
         qdrant_files = []
 
         for filename in os.listdir(backup_date_dir):
-            if not filename.endswith('.gpg'):
+            if not filename.endswith(".gpg"):
                 continue
 
             if "postgres_backup" in filename:
@@ -341,8 +382,7 @@ def restore_backups(
             latest_postgres = postgres_files[-1]
             logger.info(f"Restoring PostgreSQL from latest backup: {latest_postgres}")
             restore_postgres_in_memory(
-                os.path.join(backup_date_dir, latest_postgres),
-                passphrase
+                os.path.join(backup_date_dir, latest_postgres), passphrase
             )
 
         if data_files:
@@ -350,9 +390,7 @@ def restore_backups(
             logger.info(f"Restoring Data from latest backup: {latest_data}")
             extract_path = os.path.dirname(settings.DATA_DIR)
             restore_tar_in_memory(
-                os.path.join(backup_date_dir, latest_data),
-                passphrase,
-                extract_path
+                os.path.join(backup_date_dir, latest_data), passphrase, extract_path
             )
 
         if qdrant_files:
@@ -361,22 +399,18 @@ def restore_backups(
             restore_tar_in_memory(
                 os.path.join(backup_date_dir, latest_qdrant),
                 passphrase,
-                "/qdrant/storage"
+                "/qdrant/storage",
             )
 
-        logger.info(
-            f"All backups restored successfully for date {date_str}"
-        )
+        logger.info(f"All backups restored successfully for date {date_str}")
     except Exception as e:
-        logger.error(
-            f"Failed to restore backups for date {date_str}: {e}"
-        )
+        logger.error(f"Failed to restore backups for date {date_str}: {e}")
         raise
 
 
 def main():
     """Main backup function"""
-    passphrase = os.getenv('BACKUP_PASSPHRASE')
+    passphrase = os.getenv("BACKUP_PASSPHRASE")
     if not passphrase:
         logger.error("BACKUP_PASSPHRASE environment variable not set")
         raise ValueError("BACKUP_PASSPHRASE not set")
@@ -408,12 +442,13 @@ def main():
         logger.error(f"Backup failed: {e}")
         raise
 
+
 def cleanup_old_backups(days: int = 7, base_dir: str | None = None):
     """Remove backup date folders older than specified days"""
     import time
 
     if base_dir is None:
-        base_dir = os.path.join(settings.BASE_DIR, 'cache', 'backups')
+        base_dir = os.path.join(settings.BASE_DIR, "cache", "backups")
 
     cutoff = time.time() - (days * 86400)
 
@@ -422,18 +457,20 @@ def cleanup_old_backups(days: int = 7, base_dir: str | None = None):
             folder_path = os.path.join(base_dir, foldername)
 
             # Skip non-directory entries and special folders
-            if not os.path.isdir(folder_path) or foldername == 'DECRYPTED':
+            if not os.path.isdir(folder_path) or foldername == "DECRYPTED":
                 continue
 
             # Check if folder name is in format DDMMYYYY (8 digits)
             if len(foldername) == 8 and foldername.isdigit():
                 if os.path.getmtime(folder_path) < cutoff:
                     import shutil
+
                     shutil.rmtree(folder_path)
                     logger.info(f"Removed old backup folder: {foldername}")
     except Exception as e:
         logger.error(f"Failed to cleanup old backups: {e}")
         raise
+
 
 if __name__ == "__main__":
     main()

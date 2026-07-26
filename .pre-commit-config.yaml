@@ -1,0 +1,42 @@
+repos:
+  # General file and security checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=2000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+
+  # Commit message linting (conventional commits)
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  # Python formatting and linting (Local Environment via uv)
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff-check
+        entry: uvx ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff-format
+        entry: uvx ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: mypy
+        name: mypy
+        entry: uvx mypy --config-file=pyproject.toml --check-untyped-defs
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+        exclude: ^(tests/|alembic/)

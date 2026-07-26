@@ -40,7 +40,7 @@ class TestEndToEnd:
             email=email,
             username=username,
             password_hash=auth_service.get_password_hash(password),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(new_user)
 
@@ -60,7 +60,7 @@ class TestEndToEnd:
             description="Complete AI and ML knowledge base",
             is_public=True,
             owner_id=user.id,
-            collection_name="ai_kb_collection"
+            collection_name="ai_kb_collection",
         )
         db_session.add(knowledge_base)
         db_session.commit()
@@ -71,27 +71,46 @@ class TestEndToEnd:
 
         # ========== PASSO 4: Adição de chunks de conhecimento ==========
         import json
+
         knowledge_chunks = [
             KnowledgeChunk(
                 chat_type_id=knowledge_base.id,
                 qdrant_point_id="chunk_1",
                 source_file="ai_basics.txt",
                 row_number=1,
-                chunk_metadata=json.dumps({"question": "What is AI?", "answer": "AI is the simulation of human intelligence", "category": "fundamentals"})
+                chunk_metadata=json.dumps(
+                    {
+                        "question": "What is AI?",
+                        "answer": "AI is the simulation of human intelligence",
+                        "category": "fundamentals",
+                    }
+                ),
             ),
             KnowledgeChunk(
                 chat_type_id=knowledge_base.id,
                 qdrant_point_id="chunk_2",
                 source_file="ml_basics.txt",
                 row_number=1,
-                chunk_metadata=json.dumps({"question": "What is ML?", "answer": "ML is a subset of AI", "category": "fundamentals"})
+                chunk_metadata=json.dumps(
+                    {
+                        "question": "What is ML?",
+                        "answer": "ML is a subset of AI",
+                        "category": "fundamentals",
+                    }
+                ),
             ),
             KnowledgeChunk(
                 chat_type_id=knowledge_base.id,
                 qdrant_point_id="chunk_3",
                 source_file="dl_basics.txt",
                 row_number=1,
-                chunk_metadata=json.dumps({"question": "What is DL?", "answer": "DL uses neural networks", "category": "advanced"})
+                chunk_metadata=json.dumps(
+                    {
+                        "question": "What is DL?",
+                        "answer": "DL uses neural networks",
+                        "category": "advanced",
+                    }
+                ),
             ),
         ]
 
@@ -100,16 +119,16 @@ class TestEndToEnd:
         db_session.commit()
 
         # Verificar chunks foram salvos
-        saved_chunks = db_session.query(KnowledgeChunk).filter(
-            KnowledgeChunk.chat_type_id == knowledge_base.id
-        ).all()
+        saved_chunks = (
+            db_session.query(KnowledgeChunk)
+            .filter(KnowledgeChunk.chat_type_id == knowledge_base.id)
+            .all()
+        )
         assert len(saved_chunks) == 3
 
         # ========== PASSO 5: Criação de chat ==========
         chat = Chat(
-            user_id=user.id,
-            chat_type_id=knowledge_base.id,
-            title="AI Learning Session"
+            user_id=user.id, chat_type_id=knowledge_base.id, title="AI Learning Session"
         )
         db_session.add(chat)
         db_session.commit()
@@ -122,11 +141,20 @@ class TestEndToEnd:
         # ========== PASSO 6: Conversa com histórico ==========
         conversation = [
             ("user", "Hello, I want to learn about AI"),
-            ("assistant", "Great! I can help you learn about AI. What would you like to know?"),
+            (
+                "assistant",
+                "Great! I can help you learn about AI. What would you like to know?",
+            ),
             ("user", "What is the difference between AI and ML?"),
-            ("assistant", "AI is broader - it includes all intelligent systems. ML is a subset that learns from data."),
+            (
+                "assistant",
+                "AI is broader - it includes all intelligent systems. ML is a subset that learns from data.",
+            ),
             ("user", "What about Deep Learning?"),
-            ("assistant", "Deep Learning uses neural networks with multiple layers for complex pattern recognition."),
+            (
+                "assistant",
+                "Deep Learning uses neural networks with multiple layers for complex pattern recognition.",
+            ),
             ("user", "Thank you for the explanation"),
             ("assistant", "You're welcome! Feel free to ask more questions anytime."),
         ]
@@ -139,7 +167,10 @@ class TestEndToEnd:
         history = chat_service.get_chat_history(chat.id)
         assert len(history) == 8  # All 8 messages (last is assistant, not excluded)
         assert history[0]["content"] == "Hello, I want to learn about AI"
-        assert history[-1]["content"] == "You're welcome! Feel free to ask more questions anytime."
+        assert (
+            history[-1]["content"]
+            == "You're welcome! Feel free to ask more questions anytime."
+        )
 
         # ========== PASSO 7: Geração de tokens ==========
         tokens = auth_service.create_user_tokens(user, user_repo)
@@ -149,18 +180,24 @@ class TestEndToEnd:
         assert tokens["token_type"] == "bearer"
 
         # Verificar que token funciona
-        current_user = auth_service.get_current_user_from_token(tokens["access_token"], user_repo)
+        current_user = auth_service.get_current_user_from_token(
+            tokens["access_token"], user_repo
+        )
         assert current_user is not None
         assert current_user.id == user.id
 
         # ========== PASSO 8: Refresh de token ==========
-        new_tokens = auth_service.refresh_access_token(tokens["refresh_token"], user_repo)
+        new_tokens = auth_service.refresh_access_token(
+            tokens["refresh_token"], user_repo
+        )
 
         assert new_tokens is not None
         assert new_tokens["access_token"] != tokens["access_token"]
 
         # Verificar novo token funciona
-        current_user = auth_service.get_current_user_from_token(new_tokens["access_token"], user_repo)
+        current_user = auth_service.get_current_user_from_token(
+            new_tokens["access_token"], user_repo
+        )
         assert current_user is not None
         assert current_user.id == user.id
 
@@ -170,7 +207,9 @@ class TestEndToEnd:
         db_session.commit()
 
         # Verificar que token não funciona mais
-        current_user = auth_service.get_current_user_from_token(new_tokens["access_token"], user_repo)
+        current_user = auth_service.get_current_user_from_token(
+            new_tokens["access_token"], user_repo
+        )
         assert current_user is None
 
     def test_multi_user_knowledge_sharing(self, db_session: Session):
@@ -191,7 +230,7 @@ class TestEndToEnd:
             email="usera@example.com",
             username="usera",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user_a = user_repo.create(user_a)
 
@@ -199,7 +238,7 @@ class TestEndToEnd:
             email="userb@example.com",
             username="userb",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user_b = user_repo.create(user_b)
 
@@ -209,7 +248,7 @@ class TestEndToEnd:
             description="Public knowledge base for all users",
             is_public=True,
             owner_id=user_a.id,
-            collection_name="shared_kb_collection"
+            collection_name="shared_kb_collection",
         )
         db_session.add(shared_kb)
         db_session.commit()
@@ -217,20 +256,33 @@ class TestEndToEnd:
 
         # ========== PASSO 3: Usuário A adiciona chunks ==========
         import json
+
         chunks = [
             KnowledgeChunk(
                 chat_type_id=shared_kb.id,
                 qdrant_point_id="shared_chunk_1",
                 source_file="shared_data.txt",
                 row_number=1,
-                chunk_metadata=json.dumps({"question": "Question 1", "answer": "Answer 1 from User A", "author": "user_a"})
+                chunk_metadata=json.dumps(
+                    {
+                        "question": "Question 1",
+                        "answer": "Answer 1 from User A",
+                        "author": "user_a",
+                    }
+                ),
             ),
             KnowledgeChunk(
                 chat_type_id=shared_kb.id,
                 qdrant_point_id="shared_chunk_2",
                 source_file="shared_data.txt",
                 row_number=2,
-                chunk_metadata=json.dumps({"question": "Question 2", "answer": "Answer 2 from User A", "author": "user_a"})
+                chunk_metadata=json.dumps(
+                    {
+                        "question": "Question 2",
+                        "answer": "Answer 2 from User A",
+                        "author": "user_a",
+                    }
+                ),
             ),
         ]
 
@@ -239,18 +291,10 @@ class TestEndToEnd:
         db_session.commit()
 
         # ========== PASSO 4: Ambos criam chats ==========
-        chat_a = Chat(
-            user_id=user_a.id,
-            chat_type_id=shared_kb.id,
-            title="User A Chat"
-        )
+        chat_a = Chat(user_id=user_a.id, chat_type_id=shared_kb.id, title="User A Chat")
         db_session.add(chat_a)
 
-        chat_b = Chat(
-            user_id=user_b.id,
-            chat_type_id=shared_kb.id,
-            title="User B Chat"
-        )
+        chat_b = Chat(user_id=user_b.id, chat_type_id=shared_kb.id, title="User B Chat")
         db_session.add(chat_b)
         db_session.commit()
         db_session.refresh(chat_a)
@@ -290,7 +334,7 @@ class TestEndToEnd:
             email="metadata@example.com",
             username="metadatauser",
             password_hash=auth_service.get_password_hash("Password123!"),
-            is_active=True
+            is_active=True,
         )
         user = user_repo.create(user)
 
@@ -300,7 +344,7 @@ class TestEndToEnd:
             description="KB with rich metadata",
             is_public=True,
             owner_id=user.id,
-            collection_name="metadata_collection"
+            collection_name="metadata_collection",
         )
         db_session.add(kb)
         db_session.commit()
@@ -308,30 +352,55 @@ class TestEndToEnd:
 
         # Adicionar chunks com diferentes metadados
         import json
+
         chunks_data = [
             {
                 "qdrant_id": "meta_chunk_1",
                 "file": "python.txt",
                 "row": 1,
-                "metadata": {"question": "Python basics", "answer": "Python is a programming language", "language": "python", "level": "beginner", "category": "programming"}
+                "metadata": {
+                    "question": "Python basics",
+                    "answer": "Python is a programming language",
+                    "language": "python",
+                    "level": "beginner",
+                    "category": "programming",
+                },
             },
             {
                 "qdrant_id": "meta_chunk_2",
                 "file": "python.txt",
                 "row": 2,
-                "metadata": {"question": "Python advanced", "answer": "Advanced Python features include decorators and metaclasses", "language": "python", "level": "advanced", "category": "programming"}
+                "metadata": {
+                    "question": "Python advanced",
+                    "answer": "Advanced Python features include decorators and metaclasses",
+                    "language": "python",
+                    "level": "advanced",
+                    "category": "programming",
+                },
             },
             {
                 "qdrant_id": "meta_chunk_3",
                 "file": "javascript.txt",
                 "row": 1,
-                "metadata": {"question": "JavaScript basics", "answer": "JavaScript is a web programming language", "language": "javascript", "level": "beginner", "category": "web"}
+                "metadata": {
+                    "question": "JavaScript basics",
+                    "answer": "JavaScript is a web programming language",
+                    "language": "javascript",
+                    "level": "beginner",
+                    "category": "web",
+                },
             },
             {
                 "qdrant_id": "meta_chunk_4",
                 "file": "datascience.txt",
                 "row": 1,
-                "metadata": {"question": "Data Science", "answer": "Data Science uses statistics and ML", "language": "python", "level": "advanced", "category": "data_science"}
+                "metadata": {
+                    "question": "Data Science",
+                    "answer": "Data Science uses statistics and ML",
+                    "language": "python",
+                    "level": "advanced",
+                    "category": "data_science",
+                },
             },
         ]
 
@@ -341,24 +410,38 @@ class TestEndToEnd:
                 qdrant_point_id=data["qdrant_id"],
                 source_file=data["file"],
                 row_number=data["row"],
-                chunk_metadata=json.dumps(data["metadata"])
+                chunk_metadata=json.dumps(data["metadata"]),
             )
             db_session.add(chunk)
         db_session.commit()
 
         # Verificar chunks foram salvos
-        all_chunks = db_session.query(KnowledgeChunk).filter(
-            KnowledgeChunk.chat_type_id == kb.id
-        ).all()
+        all_chunks = (
+            db_session.query(KnowledgeChunk)
+            .filter(KnowledgeChunk.chat_type_id == kb.id)
+            .all()
+        )
 
         assert len(all_chunks) == 4
 
         # Verificar metadados
-        python_chunks = [c for c in all_chunks if json.loads(c.chunk_metadata).get("language") == "python"]
+        python_chunks = [
+            c
+            for c in all_chunks
+            if json.loads(c.chunk_metadata).get("language") == "python"
+        ]
         assert len(python_chunks) == 3
 
-        beginner_chunks = [c for c in all_chunks if json.loads(c.chunk_metadata).get("level") == "beginner"]
+        beginner_chunks = [
+            c
+            for c in all_chunks
+            if json.loads(c.chunk_metadata).get("level") == "beginner"
+        ]
         assert len(beginner_chunks) == 2
 
-        advanced_chunks = [c for c in all_chunks if json.loads(c.chunk_metadata).get("level") == "advanced"]
+        advanced_chunks = [
+            c
+            for c in all_chunks
+            if json.loads(c.chunk_metadata).get("level") == "advanced"
+        ]
         assert len(advanced_chunks) == 2

@@ -24,14 +24,16 @@ class TestIngestionJobRepository:
             chat_type_id=sample_chat_type.id,
             filename="file.xlsx",
             status=IngestionStatus.PENDING,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(job)
         db_session.commit()
         db_session.refresh(job)
         return job
 
-    def test_get_by_id_found(self, job_repo: IngestionJobRepository, sample_job: IngestionJob):
+    def test_get_by_id_found(
+        self, job_repo: IngestionJobRepository, sample_job: IngestionJob
+    ):
         result = job_repo.get_by_id(sample_job.id)
 
         assert result is not None
@@ -44,20 +46,26 @@ class TestIngestionJobRepository:
 
         assert result is None
 
-    def test_get_by_user(self, job_repo: IngestionJobRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+    def test_get_by_user(
+        self,
+        job_repo: IngestionJobRepository,
+        db_session: Session,
+        sample_user: User,
+        sample_chat_type: ChatType,
+    ):
         job1 = IngestionJob(
             id=uuid4(),
             chat_type_id=sample_chat_type.id,
             filename="file1.xlsx",
             status=IngestionStatus.PENDING,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         job2 = IngestionJob(
             id=uuid4(),
             chat_type_id=sample_chat_type.id,
             filename="file2.xlsx",
             status=IngestionStatus.COMPLETED,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([job1, job2])
         db_session.commit()
@@ -67,14 +75,16 @@ class TestIngestionJobRepository:
         assert len(result) == 2
         assert all(job.chat_type_id == sample_chat_type.id for job in result)
 
-    def test_get_by_user_with_chat_type_filter(self, job_repo: IngestionJobRepository, db_session: Session, sample_user: User):
+    def test_get_by_user_with_chat_type_filter(
+        self, job_repo: IngestionJobRepository, db_session: Session, sample_user: User
+    ):
         ct1 = ChatType(
             id=uuid4(),
             name="Type 1",
             description="Description 1",
             owner_id=sample_user.id,
             collection_name="type_1",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         ct2 = ChatType(
             id=uuid4(),
@@ -82,7 +92,7 @@ class TestIngestionJobRepository:
             description="Description 2",
             owner_id=sample_user.id,
             collection_name="type_2",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([ct1, ct2])
         db_session.commit()
@@ -92,14 +102,14 @@ class TestIngestionJobRepository:
             chat_type_id=ct1.id,
             filename="file1.xlsx",
             status=IngestionStatus.PENDING,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         job2 = IngestionJob(
             id=uuid4(),
             chat_type_id=ct2.id,
             filename="file2.xlsx",
             status=IngestionStatus.COMPLETED,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([job1, job2])
         db_session.commit()
@@ -109,14 +119,20 @@ class TestIngestionJobRepository:
         assert len(result) == 1
         assert result[0].chat_type_id == ct1.id
 
-    def test_get_by_user_with_pagination(self, job_repo: IngestionJobRepository, db_session: Session, sample_user: User, sample_chat_type: ChatType):
+    def test_get_by_user_with_pagination(
+        self,
+        job_repo: IngestionJobRepository,
+        db_session: Session,
+        sample_user: User,
+        sample_chat_type: ChatType,
+    ):
         for i in range(5):
             job = IngestionJob(
                 id=uuid4(),
                 chat_type_id=sample_chat_type.id,
                 filename=f"file{i}.xlsx",
                 status=IngestionStatus.PENDING,
-                created_at=datetime.now(UTC)
+                created_at=datetime.now(UTC),
             )
             db_session.add(job)
         db_session.commit()
@@ -125,14 +141,16 @@ class TestIngestionJobRepository:
 
         assert len(result) == 2
 
-    def test_get_by_user_only_owned_chat_types(self, job_repo: IngestionJobRepository, db_session: Session, sample_user: User):
+    def test_get_by_user_only_owned_chat_types(
+        self, job_repo: IngestionJobRepository, db_session: Session, sample_user: User
+    ):
         other_user = User(
             id=uuid4(),
             username="otheruser",
             email="other@example.com",
             password_hash="hash",
             is_active=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(other_user)
         db_session.commit()
@@ -143,7 +161,7 @@ class TestIngestionJobRepository:
             description="My type",
             owner_id=sample_user.id,
             collection_name="my_type",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         other_chat_type = ChatType(
             id=uuid4(),
@@ -151,7 +169,7 @@ class TestIngestionJobRepository:
             description="Other type",
             owner_id=other_user.id,
             collection_name="other_type",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([my_chat_type, other_chat_type])
         db_session.commit()
@@ -161,14 +179,14 @@ class TestIngestionJobRepository:
             chat_type_id=my_chat_type.id,
             filename="my_file.xlsx",
             status=IngestionStatus.PENDING,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         other_job = IngestionJob(
             id=uuid4(),
             chat_type_id=other_chat_type.id,
             filename="other_file.xlsx",
             status=IngestionStatus.PENDING,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([my_job, other_job])
         db_session.commit()
@@ -184,7 +202,7 @@ class TestIngestionJobRepository:
             chat_type_id=sample_chat_type.id,
             filename="new_file.xlsx",
             status=IngestionStatus.PENDING,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
 
         result = job_repo.create(job)
@@ -201,7 +219,9 @@ class TestIngestionJobRepository:
 
         assert result.status == IngestionStatus.PROCESSING
 
-    def test_update_with_completion(self, job_repo: IngestionJobRepository, sample_job: IngestionJob):
+    def test_update_with_completion(
+        self, job_repo: IngestionJobRepository, sample_job: IngestionJob
+    ):
         sample_job.status = IngestionStatus.COMPLETED
         sample_job.completed_at = datetime.now(UTC)
         sample_job.processed_chunks = 100
@@ -212,7 +232,9 @@ class TestIngestionJobRepository:
         assert result.completed_at is not None
         assert result.processed_chunks == 100
 
-    def test_update_with_error(self, job_repo: IngestionJobRepository, sample_job: IngestionJob):
+    def test_update_with_error(
+        self, job_repo: IngestionJobRepository, sample_job: IngestionJob
+    ):
         sample_job.status = IngestionStatus.FAILED
         sample_job.error_message = "Test error"
 
@@ -221,10 +243,17 @@ class TestIngestionJobRepository:
         assert result.status == IngestionStatus.FAILED
         assert result.error_message == "Test error"
 
-    def test_delete(self, job_repo: IngestionJobRepository, db_session: Session, sample_job: IngestionJob):
+    def test_delete(
+        self,
+        job_repo: IngestionJobRepository,
+        db_session: Session,
+        sample_job: IngestionJob,
+    ):
         job_id = sample_job.id
 
         job_repo.delete(sample_job)
 
-        deleted = db_session.query(IngestionJob).filter(IngestionJob.id == job_id).first()
+        deleted = (
+            db_session.query(IngestionJob).filter(IngestionJob.id == job_id).first()
+        )
         assert deleted is None

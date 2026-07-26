@@ -48,9 +48,7 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 
 
 @router.get("/models/available", response_model=AvailableModelsResponse)
-def get_available_models(
-    current_user: User = Depends(get_current_active_user)
-):
+def get_available_models(current_user: User = Depends(get_current_active_user)):
     """
     Get list of available LLM models and providers from settings.
     Returns configured models that can be used in chats.
@@ -76,28 +74,31 @@ def get_available_models(
                     model=m.get("model"),
                     provider=m.get("provider"),
                     description=m.get("description"),
-                    cost_tier=tier
+                    cost_tier=tier,
                 )
             )
 
         current_default = f"{settings.LLM_MODEL} ({settings.LLM_PROVIDER})"
 
-        logger.info(f"Listed {len(available_models)} available models for user {current_user.id}")
+        logger.info(
+            f"Listed {len(available_models)} available models for user {current_user.id}"
+        )
 
         return AvailableModelsResponse(
-            models=available_models,
-            current_default=current_default
+            models=available_models, current_default=current_default
         )
 
     except Exception as e:
         logger.error(f"Failed to list available models: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list available models: {str(e)}"
+            detail=f"Failed to list available models: {str(e)}",
         )
 
 
-def verify_chat_ownership(chat_id: UUID, user_id: UUID, chat_repo: ChatRepository) -> Chat:
+def verify_chat_ownership(
+    chat_id: UUID, user_id: UUID, chat_repo: ChatRepository
+) -> Chat:
     """
     Verify that a chat belongs to the specified user.
 
@@ -117,13 +118,13 @@ def verify_chat_ownership(chat_id: UUID, user_id: UUID, chat_repo: ChatRepositor
     if not chat:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Chat with id {chat_id} not found"
+            detail=f"Chat with id {chat_id} not found",
         )
 
     if chat.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this chat"
+            detail="You don't have permission to access this chat",
         )
 
     return chat
@@ -134,7 +135,7 @@ def create_chat(
     chat_data: ChatCreate,
     current_user: User = Depends(get_current_active_user),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    chat_repo: ChatRepository = Depends(get_chat_repo)
+    chat_repo: ChatRepository = Depends(get_chat_repo),
 ):
     """
     Create a new chat session.
@@ -142,20 +143,19 @@ def create_chat(
     Title can be auto-generated after first message/response if placeholder was used.
     """
     try:
-
         # Verify chat type exists
         chat_type = chat_type_repo.get_by_id(chat_data.chat_type_id)
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"ChatType with id {chat_data.chat_type_id} not found"
+                detail=f"ChatType with id {chat_data.chat_type_id} not found",
             )
 
         # Check access: user must own it or it must be public
         if not chat_type.is_public and chat_type.owner_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to create chats with this chat type"
+                detail="You don't have permission to create chats with this chat type",
             )
 
         # Determine title and whether it's auto-generated
@@ -175,12 +175,14 @@ def create_chat(
             title=title,
             title_auto_generated=title_auto_generated,
             llm_model=settings.LLM_MODEL,
-            llm_provider=settings.LLM_PROVIDER
+            llm_provider=settings.LLM_PROVIDER,
         )
 
         chat = chat_repo.create(chat)
 
-        logger.info(f"Created Chat: {chat.title} (id={chat.id}, auto_generated={title_auto_generated}, model={chat.llm_model}, provider={chat.llm_provider})")
+        logger.info(
+            f"Created Chat: {chat.title} (id={chat.id}, auto_generated={title_auto_generated}, model={chat.llm_model}, provider={chat.llm_provider})"
+        )
         return chat
 
     except HTTPException:
@@ -189,7 +191,7 @@ def create_chat(
         logger.error(f"Failed to create chat: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create chat: {str(e)}"
+            detail=f"Failed to create chat: {str(e)}",
         )
 
 
@@ -199,17 +201,14 @@ def list_chats(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    chat_repo: ChatRepository = Depends(get_chat_repo)
+    chat_repo: ChatRepository = Depends(get_chat_repo),
 ):
     """
     List chats with optional filtering.
     """
     try:
         chats = chat_repo.get_by_user(
-            user_id=current_user.id,
-            chat_type_id=chat_type_id,
-            skip=skip,
-            limit=limit
+            user_id=current_user.id, chat_type_id=chat_type_id, skip=skip, limit=limit
         )
         return chats
 
@@ -217,7 +216,7 @@ def list_chats(
         logger.error(f"Failed to list chats: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list chats: {str(e)}"
+            detail=f"Failed to list chats: {str(e)}",
         )
 
 
@@ -225,7 +224,7 @@ def list_chats(
 def get_chat(
     chat_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    chat_repo: ChatRepository = Depends(get_chat_repo)
+    chat_repo: ChatRepository = Depends(get_chat_repo),
 ):
     """
     Get a chat with all its messages.
@@ -241,7 +240,7 @@ def update_chat_model(
     model_update: ChatModelUpdate,
     current_user: User = Depends(get_current_active_user),
     chat_repo: ChatRepository = Depends(get_chat_repo),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Update the LLM model and/or provider for a chat.
@@ -260,15 +259,25 @@ def update_chat_model(
         available_model_pairs = {(m["model"], m["provider"]) for m in available_models}
 
         # Determine the new model and provider
-        new_model = model_update.llm_model if model_update.llm_model is not None else chat.llm_model
-        new_provider = model_update.llm_provider if model_update.llm_provider is not None else chat.llm_provider
+        new_model = (
+            model_update.llm_model
+            if model_update.llm_model is not None
+            else chat.llm_model
+        )
+        new_provider = (
+            model_update.llm_provider
+            if model_update.llm_provider is not None
+            else chat.llm_provider
+        )
 
         # Validate that the new model/provider combination is available
         if (new_model, new_provider) not in available_model_pairs:
-            available_list = ", ".join([f"{m['model']} ({m['provider']})" for m in available_models])
+            available_list = ", ".join(
+                [f"{m['model']} ({m['provider']})" for m in available_models]
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Model '{new_model}' with provider '{new_provider}' is not available. Available models: {available_list}"
+                detail=f"Model '{new_model}' with provider '{new_provider}' is not available. Available models: {available_list}",
             )
 
         # Update the chat
@@ -276,7 +285,9 @@ def update_chat_model(
         chat.llm_provider = new_provider
         chat = chat_repo.update(chat)
 
-        logger.info(f"Updated Chat model: {chat_id} -> model={chat.llm_model}, provider={chat.llm_provider}")
+        logger.info(
+            f"Updated Chat model: {chat_id} -> model={chat.llm_model}, provider={chat.llm_provider}"
+        )
         return chat
 
     except HTTPException:
@@ -285,7 +296,7 @@ def update_chat_model(
         logger.error(f"Failed to update chat model: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update chat model: {str(e)}"
+            detail=f"Failed to update chat model: {str(e)}",
         )
 
 
@@ -293,7 +304,7 @@ def update_chat_model(
 def delete_chat(
     chat_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    chat_repo: ChatRepository = Depends(get_chat_repo)
+    chat_repo: ChatRepository = Depends(get_chat_repo),
 ):
     """
     Delete a chat and all its messages.
@@ -310,7 +321,7 @@ def delete_chat(
         logger.error(f"Failed to delete chat {chat_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete chat: {str(e)}"
+            detail=f"Failed to delete chat: {str(e)}",
         )
 
 
@@ -320,7 +331,7 @@ async def send_message(
     message_data: SendMessageRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-    chat_repo: ChatRepository = Depends(get_chat_repo)
+    chat_repo: ChatRepository = Depends(get_chat_repo),
 ):
     """
     Send a message and get RAG-powered response.
@@ -332,7 +343,9 @@ async def send_message(
     """
     try:
         # Verify ownership and get chat (offload sync DB call)
-        chat = await asyncio.to_thread(verify_chat_ownership, chat_id, current_user.id, chat_repo)
+        chat = await asyncio.to_thread(
+            verify_chat_ownership, chat_id, current_user.id, chat_repo
+        )
 
         # Initialize Service
         chat_service = ChatService(db)
@@ -342,7 +355,7 @@ async def send_message(
             chat_service.save_message,
             chat_id=chat_id,
             role=MessageRole.USER,
-            content=message_data.content
+            content=message_data.content,
         )
 
         # Get chat history (offload sync DB call)
@@ -351,7 +364,9 @@ async def send_message(
         # Count input tokens before calling the AI
         token_mode = mode_from_provider(chat.llm_provider)
         input_tokens = count_tokens(message_data.content, mode=token_mode)
-        logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
+        logger.info(
+            f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}"
+        )
 
         # Check user token budget before sending message
         user_service = UserService(db)
@@ -361,17 +376,27 @@ async def send_message(
         input_multiplier = 1.0
         output_multiplier = 1.0
         for model in available_models:
-            if model["model"] == chat.llm_model and model["provider"] == chat.llm_provider:
+            if (
+                model["model"] == chat.llm_model
+                and model["provider"] == chat.llm_provider
+            ):
                 input_multiplier = model.get("input_token_multiplier", 1.0)
                 output_multiplier = model.get("output_token_multiplier", 1.0)
                 break
 
         # Check if user can afford input tokens + reserve (only check input, not output)
         actual_input_tokens = int(input_tokens * input_multiplier)
-        if not user_service.can_afford_tokens(current_user, input_tokens, 0, settings.TOKEN_BUDGET_MINIMUM_RESERVE, input_multiplier, 1.0):
+        if not user_service.can_afford_tokens(
+            current_user,
+            input_tokens,
+            0,
+            settings.TOKEN_BUDGET_MINIMUM_RESERVE,
+            input_multiplier,
+            1.0,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)"
+                detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)",
             )
 
         # Run RAG pipeline in a thread to avoid blocking the event loop
@@ -383,7 +408,7 @@ async def send_message(
             query=message_data.content,
             chat_history=chat_history if chat_history else None,
             llm_model=chat.llm_model,
-            llm_provider=chat.llm_provider
+            llm_provider=chat.llm_provider,
         )
 
         assistant_content = result["answer"]
@@ -391,7 +416,9 @@ async def send_message(
 
         # Token usage logging
         output_tokens = count_tokens(assistant_content, mode=token_mode)
-        logger.info(f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}")
+        logger.info(
+            f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}"
+        )
         logger.info(
             f"[TOKEN USAGE] chat={chat_id} provider={chat.llm_provider or 'default'} "
             f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
@@ -399,14 +426,20 @@ async def send_message(
         )
 
         # Deduct tokens from user budget
-        user_service.deduct_tokens(current_user.id, input_tokens, output_tokens, input_multiplier, output_multiplier)
+        user_service.deduct_tokens(
+            current_user.id,
+            input_tokens,
+            output_tokens,
+            input_multiplier,
+            output_multiplier,
+        )
 
         # Format chunks for response (and storage)
         chunks_response = [
             {
                 "question": chunk["question"],
                 "answer": chunk["answer"],
-                "score": chunk.get("rerank_score", chunk.get("score", 0))
+                "score": chunk.get("rerank_score", chunk.get("score", 0)),
             }
             for chunk in retrieved_chunks
         ]
@@ -416,12 +449,14 @@ async def send_message(
             chat_service.save_message,
             chat_id=chat_id,
             role=MessageRole.ASSISTANT,
-            content=assistant_content
+            content=assistant_content,
         )
 
         schedule_title_generation(chat_id)
 
-        logger.info(f"Processed RAG message in chat {chat_id} with {len(retrieved_chunks)} chunks")
+        logger.info(
+            f"Processed RAG message in chat {chat_id} with {len(retrieved_chunks)} chunks"
+        )
 
         # Return full chat with all messages - reload to get updated messages (offload sync DB call)
         chat = await asyncio.to_thread(chat_repo.get_by_id, chat_id)  # type: ignore
@@ -429,8 +464,7 @@ async def send_message(
             raise HTTPException(status_code=404, detail="Chat not found")
 
         return SendMessageResponse(
-            chat=ChatWithMessagesResponse.model_validate(chat),
-            sources=chunks_response
+            chat=ChatWithMessagesResponse.model_validate(chat), sources=chunks_response
         )
 
     except HTTPException:
@@ -439,7 +473,7 @@ async def send_message(
         logger.error(f"Failed to send message: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send message: {str(e)}"
+            detail=f"Failed to send message: {str(e)}",
         )
 
 
@@ -449,7 +483,7 @@ async def send_message_stream(
     message_data: SendMessageRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-    chat_repo: ChatRepository = Depends(get_chat_repo)
+    chat_repo: ChatRepository = Depends(get_chat_repo),
 ):
     """
     Send a message and get a streaming RAG-powered response.
@@ -463,7 +497,9 @@ async def send_message_stream(
     """
 
     # Verify ownership (offload sync DB call)
-    chat = await asyncio.to_thread(verify_chat_ownership, chat_id, current_user.id, chat_repo)
+    chat = await asyncio.to_thread(
+        verify_chat_ownership, chat_id, current_user.id, chat_repo
+    )
 
     # Initialize Service
     chat_service = ChatService(db)
@@ -473,7 +509,7 @@ async def send_message_stream(
         chat_service.save_message,
         chat_id=chat_id,
         role=MessageRole.USER,
-        content=message_data.content
+        content=message_data.content,
     )
 
     # Get chat history (offload sync DB call)
@@ -482,7 +518,9 @@ async def send_message_stream(
     # Count input tokens before calling the AI
     token_mode = mode_from_provider(chat.llm_provider)
     input_tokens = count_tokens(message_data.content, mode=token_mode)
-    logger.info(f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}")
+    logger.info(
+        f"[INPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={input_tokens}"
+    )
 
     # Check user token budget before sending message
     user_service = UserService(db)
@@ -499,10 +537,17 @@ async def send_message_stream(
 
     # Check if user can afford input tokens + reserve (only check input, not output)
     actual_input_tokens = int(input_tokens * input_multiplier)
-    if not user_service.can_afford_tokens(current_user, input_tokens, 0, settings.TOKEN_BUDGET_MINIMUM_RESERVE, input_multiplier, 1.0):
+    if not user_service.can_afford_tokens(
+        current_user,
+        input_tokens,
+        0,
+        settings.TOKEN_BUDGET_MINIMUM_RESERVE,
+        input_multiplier,
+        1.0,
+    ):
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)"
+            detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)",
         )
 
     # Initialize pipeline
@@ -519,7 +564,9 @@ async def send_message_stream(
 
         try:
             # Check for instant response first
-            instant_response = InstantResponseService.get_instant_response(message_data.content)
+            instant_response = InstantResponseService.get_instant_response(
+                message_data.content
+            )
 
             if instant_response:
                 # Use instant response instead of RAG
@@ -539,7 +586,7 @@ async def send_message_stream(
                     query=message_data.content,
                     chat_history=chat_history,
                     llm_model=chat.llm_model,
-                    llm_provider=chat.llm_provider
+                    llm_provider=chat.llm_provider,
                 ):
                     # Collect data for DB save (regardless of client connection)
                     if chunk["type"] == "token":
@@ -554,7 +601,9 @@ async def send_message_stream(
                         except GeneratorExit:
                             # Client disconnected, but continue generating
                             client_connected = False
-                            logger.info(f"Client disconnected from stream for chat {chat_id}, continuing generation...")
+                            logger.info(
+                                f"Client disconnected from stream for chat {chat_id}, continuing generation..."
+                            )
 
             # Save Assistant Message after streaming completes (even if client disconnected)
             assistant_content = "".join(full_response)
@@ -562,16 +611,16 @@ async def send_message_stream(
                 assistant_content = "Erro ao gerar resposta (sem conteúdo)."
 
             saved_message = stream_service.save_message(
-                chat_id=chat_id,
-                role=MessageRole.ASSISTANT,
-                content=assistant_content
+                chat_id=chat_id, role=MessageRole.ASSISTANT, content=assistant_content
             )
 
             schedule_title_generation(chat_id)
 
             # Token usage logging
             output_tokens = count_tokens(assistant_content, mode=token_mode)
-            logger.info(f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}")
+            logger.info(
+                f"[OUTPUT TOKENS] chat={chat_id} provider={chat.llm_provider or 'default'} model={chat.llm_model or 'default'} tokens={output_tokens}"
+            )
             logger.info(
                 f"[TOKEN USAGE] chat={chat_id} provider={chat.llm_provider or 'default'} "
                 f"model={chat.llm_model or 'default'} input_tokens={input_tokens} output_tokens={output_tokens} "
@@ -579,17 +628,30 @@ async def send_message_stream(
             )
 
             # Deduct tokens from user budget
-            user_service.deduct_tokens(current_user.id, input_tokens, output_tokens, input_multiplier, output_multiplier)
+            user_service.deduct_tokens(
+                current_user.id,
+                input_tokens,
+                output_tokens,
+                input_multiplier,
+                output_multiplier,
+            )
 
-            logger.info(f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}")
+            logger.info(
+                f"Stream completed. Saved assistant message to chat {chat_id}. Client connected: {client_connected}"
+            )
 
             # Send final message object only if client is still connected
             if client_connected:
                 message_response = MessageResponse.model_validate(saved_message)
-                yield json.dumps({
-                    "type": "message",
-                    "content": json.loads(message_response.model_dump_json())
-                }) + "\n"
+                yield (
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "content": json.loads(message_response.model_dump_json()),
+                        }
+                    )
+                    + "\n"
+                )
 
         except GeneratorExit:
             # Client disconnected
@@ -602,12 +664,16 @@ async def send_message_stream(
                     stream_service.save_message(
                         chat_id=chat_id,
                         role=MessageRole.ASSISTANT,
-                        content=assistant_content
+                        content=assistant_content,
                     )
-                    logger.info(f"Saved complete response to chat {chat_id} after client disconnect")
+                    logger.info(
+                        f"Saved complete response to chat {chat_id} after client disconnect"
+                    )
 
                 except Exception as save_err:
-                    logger.error(f"Failed to save response after disconnect: {save_err}")
+                    logger.error(
+                        f"Failed to save response after disconnect: {save_err}"
+                    )
 
         except Exception as e:
             logger.error(f"Stream error in chat {chat_id}: {e}")
@@ -619,7 +685,7 @@ async def send_message_stream(
                     stream_service.save_message(
                         chat_id=chat_id,
                         role=MessageRole.ASSISTANT,
-                        content=assistant_content
+                        content=assistant_content,
                     )
                     logger.info(f"Saved response to chat {chat_id} after error")
                 except Exception as save_err:
@@ -627,7 +693,15 @@ async def send_message_stream(
 
             if client_connected:
                 try:
-                    yield json.dumps({"type": "error", "content": f"Erro no processamento: {str(e)}"}) + "\n"
+                    yield (
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "content": f"Erro no processamento: {str(e)}",
+                            }
+                        )
+                        + "\n"
+                    )
                 except GeneratorExit:
                     pass
         finally:

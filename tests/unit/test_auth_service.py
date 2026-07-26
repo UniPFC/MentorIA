@@ -13,7 +13,7 @@ from src.services.auth import AuthService
 class TestAuthService:
     @pytest.fixture
     def auth_service(self):
-        with patch('src.services.auth.settings') as mock_settings:
+        with patch("src.services.auth.settings") as mock_settings:
             mock_settings.SECRET_KEY = "test_secret_key"
             mock_settings.ALGORITHM = "HS256"
             mock_settings.ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -49,12 +49,16 @@ class TestAuthService:
         assert auth_service.verify_password(wrong_password, hashed) is False
 
     def test_verify_password_error_handling(self, auth_service):
-        with patch('src.services.auth.bcrypt.checkpw', side_effect=Exception("Bcrypt error")):
+        with patch(
+            "src.services.auth.bcrypt.checkpw", side_effect=Exception("Bcrypt error")
+        ):
             result = auth_service.verify_password("password", "hash")
             assert result is False
 
     def test_get_password_hash_error_handling(self, auth_service):
-        with patch('src.services.auth.bcrypt.hashpw', side_effect=Exception("Hash error")):
+        with patch(
+            "src.services.auth.bcrypt.hashpw", side_effect=Exception("Hash error")
+        ):
             with pytest.raises(Exception, match="Hash error"):
                 auth_service.get_password_hash("password")
 
@@ -125,14 +129,16 @@ class TestAuthService:
         assert payload is None
 
     def test_verify_token_no_exp(self, auth_service):
-        with patch('src.services.auth.jwt.decode') as mock_decode:
+        with patch("src.services.auth.jwt.decode") as mock_decode:
             mock_decode.return_value = {"sub": "user_id", "type": "access"}
 
             payload = auth_service.verify_token("token", "access")
 
             assert payload is None
 
-    def test_authenticate_user_success(self, auth_service, db_session: Session, sample_user: User):
+    def test_authenticate_user_success(
+        self, auth_service, db_session: Session, sample_user: User
+    ):
         mock_repo = MagicMock()
         mock_repo.get_by_email.return_value = sample_user
 
@@ -148,7 +154,9 @@ class TestAuthService:
         mock_repo = MagicMock()
         mock_repo.get_by_email.return_value = sample_user
 
-        user = auth_service.authenticate_user(mock_repo, sample_user.email, "wrong_password")
+        user = auth_service.authenticate_user(
+            mock_repo, sample_user.email, "wrong_password"
+        )
 
         assert user is None
 
@@ -156,7 +164,9 @@ class TestAuthService:
         mock_repo = MagicMock()
         mock_repo.get_by_email.return_value = None
 
-        user = auth_service.authenticate_user(mock_repo, "nonexistent@example.com", "password")
+        user = auth_service.authenticate_user(
+            mock_repo, "nonexistent@example.com", "password"
+        )
 
         assert user is None
 
@@ -172,10 +182,9 @@ class TestAuthService:
         assert mock_repo.create_token.call_count == 2
 
     def test_refresh_access_token_success(self, auth_service, sample_user: User):
-        refresh_token = auth_service.create_refresh_token({
-            "sub": str(sample_user.id),
-            "username": sample_user.username
-        })
+        refresh_token = auth_service.create_refresh_token(
+            {"sub": str(sample_user.id), "username": sample_user.username}
+        )
 
         mock_stored_token = MagicMock()
         mock_stored_token.token_type = "refresh"
@@ -214,15 +223,16 @@ class TestAuthService:
         mock_stored_token.is_active = True
         mock_repo.get_token.return_value = mock_stored_token
 
-        result = auth_service.get_current_user_from_token("invalid.jwt.token", mock_repo)
+        result = auth_service.get_current_user_from_token(
+            "invalid.jwt.token", mock_repo
+        )
 
         assert result is None
 
     def test_get_current_user_from_token_no_sub(self, auth_service):
-        access_token = auth_service.create_access_token({
-            "username": "testuser",
-            "email": "test@example.com"
-        })
+        access_token = auth_service.create_access_token(
+            {"username": "testuser", "email": "test@example.com"}
+        )
 
         mock_stored_token = MagicMock()
         mock_stored_token.is_active = True
@@ -234,11 +244,13 @@ class TestAuthService:
         assert result is None
 
     def test_get_current_user_from_token_invalid_uuid(self, auth_service):
-        access_token = auth_service.create_access_token({
-            "sub": "not-a-valid-uuid",
-            "username": "testuser",
-            "email": "test@example.com"
-        })
+        access_token = auth_service.create_access_token(
+            {
+                "sub": "not-a-valid-uuid",
+                "username": "testuser",
+                "email": "test@example.com",
+            }
+        )
 
         mock_stored_token = MagicMock()
         mock_stored_token.is_active = True
@@ -250,11 +262,13 @@ class TestAuthService:
         assert result is None
 
     def test_get_current_user_from_token_success(self, auth_service, sample_user: User):
-        access_token = auth_service.create_access_token({
-            "sub": str(sample_user.id),
-            "username": sample_user.username,
-            "email": sample_user.email
-        })
+        access_token = auth_service.create_access_token(
+            {
+                "sub": str(sample_user.id),
+                "username": sample_user.username,
+                "email": sample_user.email,
+            }
+        )
 
         mock_stored_token = MagicMock()
         mock_stored_token.is_active = True

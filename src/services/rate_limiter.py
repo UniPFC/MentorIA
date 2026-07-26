@@ -9,7 +9,9 @@ class SimpleRateLimiter:
     Implementação simples de rate limiting em memória
     """
 
-    def __init__(self, max_attempts: int = 5, window_minutes: int = 5, block_minutes: int = 10):
+    def __init__(
+        self, max_attempts: int = 5, window_minutes: int = 5, block_minutes: int = 10
+    ):
         self.max_attempts = max_attempts
         self.window_minutes = window_minutes
         self.block_minutes = block_minutes
@@ -20,7 +22,8 @@ class SimpleRateLimiter:
         """Remove tentativas antigas da janela de tempo"""
         cutoff_time = datetime.now(UTC) - timedelta(minutes=self.window_minutes)
         self.attempts[key] = [
-            attempt_time for attempt_time in self.attempts[key]
+            attempt_time
+            for attempt_time in self.attempts[key]
             if attempt_time > cutoff_time
         ]
 
@@ -32,7 +35,9 @@ class SimpleRateLimiter:
         if key in self.blocks:
             block_expiry = self.blocks[key]
             if datetime.now(UTC) < block_expiry:
-                remaining_minutes = int((block_expiry - datetime.now(UTC)).total_seconds() / 60)
+                remaining_minutes = int(
+                    (block_expiry - datetime.now(UTC)).total_seconds() / 60
+                )
                 return True, remaining_minutes
             else:
                 # Bloqueio expirou
@@ -62,7 +67,9 @@ class SimpleRateLimiter:
             self.blocks[key] = block_expiry
 
             remaining_minutes = self.block_minutes
-            logger.warning(f"Rate limit exceeded for {key}. Blocked for {remaining_minutes} minutes.")
+            logger.warning(
+                f"Rate limit exceeded for {key}. Blocked for {remaining_minutes} minutes."
+            )
             return False, remaining_minutes
 
         return True, None
@@ -94,5 +101,5 @@ from config.settings import settings
 rate_limiter = SimpleRateLimiter(
     max_attempts=settings.LOGIN_MAX_ATTEMPTS,
     window_minutes=settings.LOGIN_WINDOW_MINUTES,
-    block_minutes=settings.LOGIN_BLOCK_MINUTES
+    block_minutes=settings.LOGIN_BLOCK_MINUTES,
 )

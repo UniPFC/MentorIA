@@ -1,4 +1,4 @@
-name: Tests and Regression
+name: Code Quality & Tests
 
 on:
   push:
@@ -36,6 +36,12 @@ jobs:
     - name: Load test environment variables
       run: |
         grep -v '^#' tests/.env.test | grep -v '^$' >> $GITHUB_ENV
+    
+    - name: Run Pre-commit Hooks (Format, Lint, Security, Mypy)
+      run: |
+        uv pip install pre-commit
+        pre-commit run --all-files
+
     
     - name: Run Unit Tests with Coverage
       run: |

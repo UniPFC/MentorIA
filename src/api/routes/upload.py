@@ -48,7 +48,7 @@ def get_ingestion_service() -> ChunkIngestionService:
     if provider_type == "remote":
         emb_provider = RemoteEmbeddingProvider(
             model_name=settings.EMBEDDING_REMOTE_MODEL,
-            provider_alias=settings.EMBEDDING_REMOTE_PROVIDER
+            provider_alias=settings.EMBEDDING_REMOTE_PROVIDER,
         )
     else:
         loader = ModelLoader()
@@ -61,10 +61,16 @@ def get_ingestion_service() -> ChunkIngestionService:
     return ChunkIngestionService(emb_engine, qdrant)
 
 
-@router.post("/chat-type", response_model=UploadResponseAsync, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/chat-type",
+    response_model=UploadResponseAsync,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def create_chat_type_from_file(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="Excel or CSV file with questions and answers"),
+    file: UploadFile = File(
+        ..., description="Excel or CSV file with questions and answers"
+    ),
     name: str = Form(..., description="Name of the chat type"),
     description: str | None = Form(None, description="Description"),
     is_public: bool = Form(False, description="Whether chat type is public"),
@@ -74,7 +80,7 @@ async def create_chat_type_from_file(
     current_user: User = Depends(get_current_active_user),
     ingestion_service: ChunkIngestionService = Depends(get_ingestion_service),
     chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
-    job_repo: IngestionJobRepository = Depends(get_ingestion_job_repo)
+    job_repo: IngestionJobRepository = Depends(get_ingestion_job_repo),
 ):
     """
     Create a new ChatType from an uploaded spreadsheet.
@@ -87,10 +93,10 @@ async def create_chat_type_from_file(
     """
     try:
         # Validate file type
-        if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        if not file.filename.endswith((".xlsx", ".xls", ".csv")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File must be Excel (.xlsx, .xls) or CSV (.csv)"
+                detail="File must be Excel (.xlsx, .xls) or CSV (.csv)",
             )
 
         # Read file content
@@ -104,7 +110,7 @@ async def create_chat_type_from_file(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"ChatType with name '{name}' already exists"
+                detail=f"ChatType with name '{name}' already exists",
             )
 
         # Create ChatType record
@@ -113,7 +119,7 @@ async def create_chat_type_from_file(
             description=description,
             is_public=is_public,
             owner_id=current_user.id,
-            collection_name=collection_name
+            collection_name=collection_name,
         )
 
         chat_type = chat_type_repo.create(chat_type)
@@ -125,11 +131,13 @@ async def create_chat_type_from_file(
             qdrant = QdrantManager()
             qdrant.create_collection(chat_type.id, vector_size=1024)
         except Exception as e:
-            logger.error(f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}")
+            logger.error(
+                f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}"
+            )
             chat_type_repo.delete(chat_type)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create vector collection: {str(e)}"
+                detail=f"Failed to create vector collection: {str(e)}",
             )
 
         # Create ingestion job
@@ -137,7 +145,7 @@ async def create_chat_type_from_file(
             IngestionJob(
                 chat_type_id=chat_type.id,
                 filename=file.filename,
-                status=IngestionStatus.PENDING
+                status=IngestionStatus.PENDING,
             )
         )
 
@@ -153,14 +161,14 @@ async def create_chat_type_from_file(
             question_col=question_column,
             answer_col=answer_column,
             ingestion_service=ingestion_service,
-            db=db
+            db=db,
         )
 
         return UploadResponseAsync(
             job_id=job.id,
             chat_type_id=chat_type.id,
             message=f"ChatType '{name}' created. Processing {file.filename} in background.",
-            status_url=f"/api/v1/upload/jobs/{job.id}"
+            status_url=f"/api/v1/upload/jobs/{job.id}",
         )
 
     except HTTPException:
@@ -169,46 +177,47 @@ async def create_chat_type_from_file(
         logger.error(f"Failed to create chat type from file: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create chat type from file: {str(e)}"
+            detail=f"Failed to create chat type from file: {str(e)}",
         )
 
 
 @router.post("/{chat_type_id}/chunks", response_model=UploadResponse)
 async def add_chunks_to_chat_type(
     chat_type_id: UUID,
-    file: UploadFile = File(..., description="Excel or CSV file with questions and answers"),
+    file: UploadFile = File(
+        ..., description="Excel or CSV file with questions and answers"
+    ),
     question_column: str = Form("question", description="Column name for questions"),
     answer_column: str = Form("answer", description="Column name for answers"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     ingestion_service: ChunkIngestionService = Depends(get_ingestion_service),
-    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo)
+    chat_type_repo: ChatTypeRepository = Depends(get_chat_type_repo),
 ):
     """
     Add more chunks to an existing ChatType.
     """
     try:
-
         # Verify chat type exists
         chat_type = chat_type_repo.get_by_id(chat_type_id)
         if not chat_type:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"ChatType with id {chat_type_id} not found"
+                detail=f"ChatType with id {chat_type_id} not found",
             )
 
         # Verify ownership
         if chat_type.owner_id != current_user.id:
-             raise HTTPException(
+            raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to modify this chat type"
+                detail="You don't have permission to modify this chat type",
             )
 
         # Validate file type
-        if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        if not file.filename.endswith((".xlsx", ".xls", ".csv")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File must be Excel (.xlsx, .xls) or CSV (.csv)"
+                detail="File must be Excel (.xlsx, .xls) or CSV (.csv)",
             )
 
         # Read file content
@@ -221,7 +230,7 @@ async def add_chunks_to_chat_type(
             filename=file.filename,
             db_session=db,
             question_col=question_column,
-            answer_col=answer_column
+            answer_col=answer_column,
         )
 
         logger.info(f"Added {total_ingested} chunks to ChatType {chat_type_id}")
@@ -229,7 +238,7 @@ async def add_chunks_to_chat_type(
         return UploadResponse(
             chat_type_id=chat_type_id,
             chunks_ingested=total_ingested,
-            message=f"Successfully added {total_ingested} chunks to chat type '{chat_type.name}'"
+            message=f"Successfully added {total_ingested} chunks to chat type '{chat_type.name}'",
         )
 
     except HTTPException:
@@ -238,5 +247,5 @@ async def add_chunks_to_chat_type(
         logger.error(f"Failed to add chunks: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to add chunks: {str(e)}"
+            detail=f"Failed to add chunks: {str(e)}",
         )

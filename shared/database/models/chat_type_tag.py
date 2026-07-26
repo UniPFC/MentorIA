@@ -11,7 +11,12 @@ class ChatTypeTag(Base):
     __tablename__ = "chat_type_tags"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    chat_type_id = Column(Uuid(as_uuid=True), ForeignKey("chat_types.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_type_id = Column(
+        Uuid(as_uuid=True),
+        ForeignKey("chat_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     tag = Column(String(50), nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 

@@ -18,6 +18,7 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 
 class TranscribeResponse(BaseModel):
     """Response model for audio transcription."""
+
     text: str
     duration: float | None = None
     language: str | None = None
@@ -26,10 +27,7 @@ class TranscribeResponse(BaseModel):
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe_audio(
-    audio: UploadFile = File(...),
-    language: str | None = None
-):
+async def transcribe_audio(audio: UploadFile = File(...), language: str | None = None):
     """
     Transcribe audio file to text using Speech-to-Text.
 
@@ -46,17 +44,17 @@ async def transcribe_audio(
     if not settings.STT_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Speech-to-Text is not enabled"
+            detail="Speech-to-Text is not enabled",
         )
 
     # Validate file type
-    allowed_extensions = {'.wav', '.mp3', '.m4a', '.ogg', '.flac', '.webm'}
+    allowed_extensions = {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"}
     file_ext = os.path.splitext(audio.filename)[1].lower()
 
     if file_ext not in allowed_extensions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file format. Allowed: {', '.join(allowed_extensions)}"
+            detail=f"Unsupported file format. Allowed: {', '.join(allowed_extensions)}",
         )
 
     # Save to temporary file
@@ -76,11 +74,7 @@ async def transcribe_audio(
         stt_loader = get_stt_loader()
         provider = stt_loader.get_provider()
 
-        result = provider.transcribe(
-            temp_path,
-            language=language,
-            beam_size=5
-        )
+        result = provider.transcribe(temp_path, language=language, beam_size=5)
 
         transcribed_text = result["text"]
         detected_language = result["detected_language"]
@@ -95,26 +89,25 @@ async def transcribe_audio(
             text=transcribed_text,
             language=final_language,
             detected_language=detected_language,
-            language_probability=language_probability
+            language_probability=language_probability,
         )
 
     except TimeoutError as e:
         logger.error(f"STT timeout: {e}")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Failed to load STT model: insufficient memory or timeout"
+            detail="Failed to load STT model: insufficient memory or timeout",
         )
     except RuntimeError as e:
         logger.error(f"STT runtime error: {e}")
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e)
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         )
     except Exception as e:
         logger.error(f"Transcription error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Transcription failed: {str(e)}"
+            detail=f"Transcription failed: {str(e)}",
         )
     finally:
         # Clean up temporary file

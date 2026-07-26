@@ -34,7 +34,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 async def create_subscription(
     request: CreateSubscriptionRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Upgrade user level via Pagar.me subscription checkout.
@@ -47,20 +47,26 @@ async def create_subscription(
         if target_level == UserLevel.LEVEL_05:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="LEVEL_05 is reserved for admins and cannot be subscribed to."
+                detail="LEVEL_05 is reserved for admins and cannot be subscribed to.",
             )
 
         if target_level == UserLevel.LEVEL_01:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="LEVEL_01 is the free tier and does not require a subscription."
+                detail="LEVEL_01 is the free tier and does not require a subscription.",
             )
 
-        level_order = [UserLevel.LEVEL_01, UserLevel.LEVEL_02, UserLevel.LEVEL_03, UserLevel.LEVEL_04, UserLevel.LEVEL_05]
+        level_order = [
+            UserLevel.LEVEL_01,
+            UserLevel.LEVEL_02,
+            UserLevel.LEVEL_03,
+            UserLevel.LEVEL_04,
+            UserLevel.LEVEL_05,
+        ]
         if level_order.index(target_level) <= level_order.index(current_user.level):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot downgrade or stay at same level. Current: {current_user.level}, Target: {target_level}"
+                detail=f"Cannot downgrade or stay at same level. Current: {current_user.level}, Target: {target_level}",
             )
 
         budget_map = {
@@ -99,11 +105,14 @@ async def create_subscription(
                 checkout_url=None,
                 current_level=current_level,
                 target_level=target_level,
-                new_budget=new_budget if new_budget else 0
+                new_budget=new_budget if new_budget else 0,
             )
 
         # Cancel existing subscription if any
-        if current_user.subscription_id and current_user.subscription_status == "active":
+        if (
+            current_user.subscription_id
+            and current_user.subscription_status == "active"
+        ):
             await pagarme_service.cancel_subscription(current_user.subscription_id)
 
         user_repo = UserRepository(db)
@@ -113,7 +122,7 @@ async def create_subscription(
         if not customer_id:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to create payment customer. Please try again."
+                detail="Failed to create payment customer. Please try again.",
             )
 
         if not current_user.pagarme_customer_id:
@@ -122,15 +131,13 @@ async def create_subscription(
 
         # Create checkout URL — Pagar.me handles all payment data
         checkout_url = await pagarme_service.create_subscription_checkout(
-            customer_id=customer_id,
-            user=current_user,
-            target_level=target_level
+            customer_id=customer_id, user=current_user, target_level=target_level
         )
 
         if not checkout_url:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to create checkout. Please try again."
+                detail="Failed to create checkout. Please try again.",
             )
 
         logger.info(
@@ -142,7 +149,7 @@ async def create_subscription(
             message="Checkout created. Redirect user to complete payment.",
             checkout_url=checkout_url,
             current_level=current_user.level,
-            target_level=target_level
+            target_level=target_level,
         )
 
     except HTTPException:
@@ -151,7 +158,7 @@ async def create_subscription(
         logger.error(f"Failed to create subscription checkout: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create checkout. Please try again later."
+            detail="Failed to create checkout. Please try again later.",
         )
 
 
@@ -159,7 +166,7 @@ async def create_subscription(
 async def create_refill(
     request: CreateRefillRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Refill user's token budget to the maximum of their current level.
@@ -170,7 +177,7 @@ async def create_refill(
         if current_user.level == UserLevel.LEVEL_05:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Users with LEVEL_05 have unlimited budget and do not need token refills."
+                detail="Users with LEVEL_05 have unlimited budget and do not need token refills.",
             )
 
         previous_budget = current_user.token_budget or 0
@@ -180,7 +187,7 @@ async def create_refill(
         if amount_to_refill <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Token budget is already at maximum for this level."
+                detail="Token budget is already at maximum for this level.",
             )
 
         # SKIP_PAYMENT: apply immediately without payment gateway
@@ -200,7 +207,7 @@ async def create_refill(
                 checkout_url=None,
                 amount_refilled=amount_to_refill,
                 previous_budget=previous_budget,
-                new_budget=max_budget
+                new_budget=max_budget,
             )
 
         user_repo = UserRepository(db)
@@ -210,7 +217,7 @@ async def create_refill(
         if not customer_id:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to create payment customer. Please try again."
+                detail="Failed to create payment customer. Please try again.",
             )
 
         if not current_user.pagarme_customer_id:
@@ -222,13 +229,13 @@ async def create_refill(
             customer_id=customer_id,
             user=current_user,
             amount_to_refill=amount_to_refill,
-            max_budget=max_budget
+            max_budget=max_budget,
         )
 
         if not checkout_url:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to create refill checkout. Please try again."
+                detail="Failed to create refill checkout. Please try again.",
             )
 
         logger.info(
@@ -241,7 +248,7 @@ async def create_refill(
             checkout_url=checkout_url,
             amount_refilled=amount_to_refill,
             previous_budget=previous_budget,
-            new_budget=max_budget
+            new_budget=max_budget,
         )
 
     except HTTPException:
@@ -250,34 +257,35 @@ async def create_refill(
         logger.error(f"Failed to create refill: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create refill. Please try again later."
+            detail="Failed to create refill. Please try again later.",
         )
 
 
 @router.delete("/subscribe", response_model=CancelSubscriptionResponse)
 async def cancel_subscription(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Cancel the current user's subscription. Downgrades to LEVEL_01 when period ends."""
     try:
         if not current_user.subscription_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active subscription found."
+                detail="No active subscription found.",
             )
 
         if current_user.subscription_status != "active":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Subscription is not active (status: {current_user.subscription_status})."
+                detail=f"Subscription is not active (status: {current_user.subscription_status}).",
             )
 
-        success = await pagarme_service.cancel_subscription(current_user.subscription_id)
+        success = await pagarme_service.cancel_subscription(
+            current_user.subscription_id
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to cancel subscription. Please try again."
+                detail="Failed to cancel subscription. Please try again.",
             )
 
         user_repo = UserRepository(db)
@@ -292,7 +300,7 @@ async def cancel_subscription(
         return CancelSubscriptionResponse(
             success=True,
             message="Subscription canceled. Your level will revert to LEVEL_01 at the end of the billing period.",
-            effective_until=current_user.subscription_period_end
+            effective_until=current_user.subscription_period_end,
         )
 
     except HTTPException:
@@ -301,13 +309,13 @@ async def cancel_subscription(
         logger.error(f"Failed to cancel subscription: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to cancel subscription. Please try again later."
+            detail="Failed to cancel subscription. Please try again later.",
         )
 
 
 @router.get("/subscription", response_model=SubscriptionStatusResponse)
 async def get_subscription_status(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get the current user's subscription status."""
     return SubscriptionStatusResponse(
@@ -315,15 +323,12 @@ async def get_subscription_status(
         status=current_user.subscription_status,
         current_level=current_user.level,
         period_start=current_user.subscription_period_start,
-        period_end=current_user.subscription_period_end
+        period_end=current_user.subscription_period_end,
     )
 
 
 @router.post("/webhook")
-async def pagarme_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def pagarme_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Pagar.me webhook endpoint.
     Handles subscription and order events to apply upgrades, refills, and downgrades.
@@ -343,7 +348,7 @@ async def pagarme_webhook(
             logger.warning("Invalid webhook signature received")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid webhook signature"
+                detail="Invalid webhook signature",
             )
 
         payload = await request.json()
@@ -367,14 +372,12 @@ async def pagarme_webhook(
         logger.error(f"Error processing webhook: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error processing webhook"
+            detail="Error processing webhook",
         )
 
 
 async def _handle_subscription_event(
-    event_type: str,
-    data: dict,
-    user_repo: UserRepository
+    event_type: str, data: dict, user_repo: UserRepository
 ):
     """Handle Pagar.me subscription webhook events."""
     subscription_id = data.get("id")
@@ -383,7 +386,9 @@ async def _handle_subscription_event(
         return
 
     # Find user by subscription_id or metadata
-    user = user_repo.db.query(User).filter(User.subscription_id == subscription_id).first()
+    user = (
+        user_repo.db.query(User).filter(User.subscription_id == subscription_id).first()
+    )
     if not user:
         metadata = data.get("metadata", {})
         user_id = metadata.get("user_id")
@@ -423,8 +428,11 @@ async def _handle_subscription_event(
         period_end = current_period.get("end_at")
         if period_end:
             from datetime import datetime
+
             try:
-                user.subscription_period_end = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
+                user.subscription_period_end = datetime.fromisoformat(
+                    period_end.replace("Z", "+00:00")
+                )
             except (ValueError, AttributeError):
                 pass
 
@@ -435,7 +443,11 @@ async def _handle_subscription_event(
             f"level={target_level} budget={new_budget} sub_id={subscription_id}"
         )
 
-    elif event_type in ("subscription.canceled", "subscription.ended", "subscription.unpaid"):
+    elif event_type in (
+        "subscription.canceled",
+        "subscription.ended",
+        "subscription.unpaid",
+    ):
         # Downgrade to LEVEL_01
         user.level = UserLevel.LEVEL_01
         user.token_budget = settings.TOKEN_BUDGET_LEVEL_01
@@ -463,11 +475,7 @@ async def _handle_subscription_event(
         )
 
 
-async def _handle_order_event(
-    event_type: str,
-    data: dict,
-    user_repo: UserRepository
-):
+async def _handle_order_event(event_type: str, data: dict, user_repo: UserRepository):
     """Handle Pagar.me order webhook events (refill)."""
     if event_type != "order.paid":
         return

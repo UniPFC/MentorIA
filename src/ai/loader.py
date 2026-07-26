@@ -34,11 +34,12 @@ class ModelLoader:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         os.makedirs(self.cache_dir, exist_ok=True)
-        logger.info(f"ModelLoader initialized. Device: {self.device} | Cache: {self.cache_dir}")
+        logger.info(
+            f"ModelLoader initialized. Device: {self.device} | Cache: {self.cache_dir}"
+        )
 
     def _get_quantization_config(
-        self,
-        quantization: Literal["4bit", "8bit"] | None = None
+        self, quantization: Literal["4bit", "8bit"] | None = None
     ) -> BitsAndBytesConfig | None:
         """
         Create quantization config for memory optimization.
@@ -54,16 +55,14 @@ class ModelLoader:
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True
+                bnb_4bit_use_double_quant=True,
             )
         elif quantization == "8bit":
             return BitsAndBytesConfig(load_in_8bit=True)
         return None
 
     def load_embedding(
-        self,
-        model_id: str,
-        trust_remote_code: bool = True
+        self, model_id: str, trust_remote_code: bool = True
     ) -> tuple[AutoModel, AutoTokenizer]:
         """
         Load an embedding model from HuggingFace.
@@ -82,7 +81,7 @@ class ModelLoader:
                 model_id,
                 cache_dir=self.cache_dir,
                 token=self.token,
-                trust_remote_code=trust_remote_code
+                trust_remote_code=trust_remote_code,
             )
 
             model = AutoModel.from_pretrained(
@@ -90,7 +89,7 @@ class ModelLoader:
                 cache_dir=self.cache_dir,
                 token=self.token,
                 trust_remote_code=trust_remote_code,
-                dtype=torch.float16 if self.device == "cuda" else torch.float32
+                dtype=torch.float16 if self.device == "cuda" else torch.float32,
             ).to(self.device)
 
             model.eval()
@@ -103,9 +102,7 @@ class ModelLoader:
             raise
 
     def load_reranker(
-        self,
-        model_id: str,
-        trust_remote_code: bool = True
+        self, model_id: str, trust_remote_code: bool = True
     ) -> tuple[AutoModelForSequenceClassification, AutoTokenizer]:
         """
         Load a cross-encoder reranker model.
@@ -124,7 +121,7 @@ class ModelLoader:
                 model_id,
                 cache_dir=self.cache_dir,
                 token=self.token,
-                trust_remote_code=trust_remote_code
+                trust_remote_code=trust_remote_code,
             )
 
             model = AutoModelForSequenceClassification.from_pretrained(
@@ -132,7 +129,7 @@ class ModelLoader:
                 cache_dir=self.cache_dir,
                 token=self.token,
                 trust_remote_code=trust_remote_code,
-                dtype=torch.float16 if self.device == "cuda" else torch.float32
+                dtype=torch.float16 if self.device == "cuda" else torch.float32,
             ).to(self.device)
 
             model.eval()
@@ -145,9 +142,7 @@ class ModelLoader:
             raise
 
     def load_llm(
-        self,
-        model_id: str,
-        quantization: Literal["4bit", "8bit"] | None = None
+        self, model_id: str, quantization: Literal["4bit", "8bit"] | None = None
     ) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
         """
         Load a causal language model.
@@ -162,13 +157,17 @@ class ModelLoader:
         try:
             logger.info(f"Loading LLM: {model_id} with quantization: {quantization}")
 
-            quant_config = self._get_quantization_config(quantization) if self.device == "cuda" else None
+            quant_config = (
+                self._get_quantization_config(quantization)
+                if self.device == "cuda"
+                else None
+            )
 
             tokenizer = AutoTokenizer.from_pretrained(
                 model_id,
                 cache_dir=self.cache_dir,
                 token=self.token,
-                trust_remote_code=True
+                trust_remote_code=True,
             )
 
             if tokenizer.pad_token is None:
@@ -181,7 +180,7 @@ class ModelLoader:
                 quantization_config=quant_config,
                 device_map="auto" if quantization else self.device,
                 trust_remote_code=True,
-                dtype=torch.float16 if self.device == "cuda" else torch.float32
+                dtype=torch.float16 if self.device == "cuda" else torch.float32,
             )
 
             logger.info(f"Successfully loaded LLM: {model_id}")

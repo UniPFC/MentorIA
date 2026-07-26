@@ -2,7 +2,6 @@
 Reranking providers for document relevance scoring.
 """
 
-
 import torch
 
 from config.logger import logger
@@ -30,7 +29,10 @@ class HFRerankProvider(RerankProvider):
             else:
                 logger.warning("Rerank tokenizer has no pad_token")
 
-        if getattr(self.model, "config", None) and getattr(self.model.config, "pad_token_id", None) is None:
+        if (
+            getattr(self.model, "config", None)
+            and getattr(self.model.config, "pad_token_id", None) is None
+        ):
             if self.tokenizer.pad_token_id is not None:
                 self.model.config.pad_token_id = self.tokenizer.pad_token_id
 
@@ -65,7 +67,7 @@ class HFRerankProvider(RerankProvider):
                     padding=True,
                     truncation=True,
                     max_length=max_length,
-                    return_tensors="pt"
+                    return_tensors="pt",
                 ).to(self.model.device)
 
                 with torch.no_grad():

@@ -10,22 +10,22 @@ from config.settings import settings
 
 class EmailService:
     def __init__(self):
-        self.smtp_server = getattr(settings, 'SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = getattr(settings, 'SMTP_PORT', 587)
-        self.smtp_username = getattr(settings, 'SMTP_USERNAME', '')
-        self.smtp_password = getattr(settings, 'SMTP_PASSWORD', '')
-        self.from_email = getattr(settings, 'FROM_EMAIL', self.smtp_username)
-        self.frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        self.smtp_server = getattr(settings, "SMTP_SERVER", "smtp.gmail.com")
+        self.smtp_port = getattr(settings, "SMTP_PORT", 587)
+        self.smtp_username = getattr(settings, "SMTP_USERNAME", "")
+        self.smtp_password = getattr(settings, "SMTP_PASSWORD", "")
+        self.from_email = getattr(settings, "FROM_EMAIL", self.smtp_username)
+        self.frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
 
     def _send_email(self, to_email: str, subject: str, html_body: str) -> bool:
         """Envia email usando SMTP"""
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = self.from_email
-            msg['To'] = to_email
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = to_email
 
-            html_part = MIMEText(html_body, 'html')
+            html_part = MIMEText(html_body, "html")
             msg.attach(html_part)
 
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
@@ -43,7 +43,9 @@ class EmailService:
         """Gera token seguro para reset de senha"""
         return secrets.token_urlsafe(32)
 
-    def send_password_reset_email(self, to_email: str, username: str, reset_token: str) -> bool:
+    def send_password_reset_email(
+        self, to_email: str, username: str, reset_token: str
+    ) -> bool:
         """Envia email de reset de senha"""
         # Para desenvolvimento, usar a API diretamente
         reset_link = "http://localhost:8000/api/v1/auth/confirm-reset-password"
@@ -136,9 +138,9 @@ class EmailService:
 
         return self._send_email(to_email, "Senha Alterada - MentorIA", html_body)
 
-    def send_password_reset_notification(self, to_email: str, username:str) -> bool:
+    def send_password_reset_notification(self, to_email: str, username: str) -> bool:
         """Nofifica o usuário sobre o reset de senha.
-            Envia ANTES do link de reset, serve como alerta de segurança.
+        Envia ANTES do link de reset, serve como alerta de segurança.
         """
         try:
             subject = "⚠️ Solicitação de redefinição de senha - MentorIA"
@@ -146,7 +148,7 @@ class EmailService:
             <html><body>
             <h2>Olá, {username}!</h2>
             <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>MentorIA</strong>.</p>
-            <p><strong>Data/Hora:</strong> {datetime.now(UTC).strftime('%d/%m/%Y às %H:%M')}
+            <p><strong>Data/Hora:</strong> {datetime.now(UTC).strftime("%d/%m/%Y às %H:%M")}
  (UTC)</p>
 
           <p>Se <strong>você fez essa solicitação</strong>, pode ignorar este email —
@@ -168,8 +170,11 @@ class EmailService:
             return self._send_email(to_email, subject, html_body)
 
         except Exception as e:
-            logger.error(f"Failed to send password reset notification to {to_email}: {str(e)}")
+            logger.error(
+                f"Failed to send password reset notification to {to_email}: {str(e)}"
+            )
             return False
+
 
 # Instância global do serviço
 email_service = EmailService()

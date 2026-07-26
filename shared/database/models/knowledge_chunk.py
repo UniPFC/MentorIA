@@ -13,10 +13,16 @@ class KnowledgeChunk(Base):
     The actual content (question, answer) and embeddings are stored in Qdrant collections.
     This table is used for tracking, auditing, and linking chunks to chat types.
     """
+
     __tablename__ = "knowledge_chunks"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    chat_type_id = Column(Uuid(as_uuid=True), ForeignKey("chat_types.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_type_id = Column(
+        Uuid(as_uuid=True),
+        ForeignKey("chat_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     qdrant_point_id = Column(String(100), nullable=False, index=True)
     source_file = Column(String(255), nullable=True)
     row_number = Column(Integer, nullable=True)

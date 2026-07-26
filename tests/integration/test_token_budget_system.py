@@ -13,19 +13,24 @@ class TestUserModel:
             username="admin",
             email="admin@example.com",
             password_hash="hashed",
-            level=UserLevel.LEVEL_05
+            level=UserLevel.LEVEL_05,
         )
         assert user.has_unlimited_budget is True
 
     def test_has_unlimited_budget_false_for_other_levels(self):
         """Test that non-LEVEL_05 users don't have unlimited budget."""
-        for level in [UserLevel.LEVEL_01, UserLevel.LEVEL_02, UserLevel.LEVEL_03, UserLevel.LEVEL_04]:
+        for level in [
+            UserLevel.LEVEL_01,
+            UserLevel.LEVEL_02,
+            UserLevel.LEVEL_03,
+            UserLevel.LEVEL_04,
+        ]:
             user = User(
                 username="user",
                 email="user@example.com",
                 password_hash="hashed",
                 level=level,
-                token_budget=1000
+                token_budget=1000,
             )
             assert user.has_unlimited_budget is False
 
@@ -35,7 +40,7 @@ class TestUserModel:
             username="admin",
             email="admin@example.com",
             password_hash="hashed",
-            level=UserLevel.LEVEL_05
+            level=UserLevel.LEVEL_05,
         )
         assert user.can_afford_tokens(1000000) is True
 
@@ -46,7 +51,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=1000
+            token_budget=1000,
         )
         assert user.can_afford_tokens(500) is True
 
@@ -57,7 +62,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=100
+            token_budget=100,
         )
         assert user.can_afford_tokens(500) is False
 
@@ -68,7 +73,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=None
+            token_budget=None,
         )
         assert user.can_afford_tokens(100) is False
 
@@ -86,7 +91,7 @@ class TestUserModel:
                 username="user",
                 email="user@example.com",
                 password_hash="hashed",
-                level=level
+                level=level,
             )
             assert user.max_token_budget == expected_budget
 
@@ -97,7 +102,7 @@ class TestUserModel:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=5000
+            token_budget=5000,
         )
         assert user.remaining_tokens == 5000
 
@@ -167,7 +172,9 @@ class TestTokenDeductionCalculation:
         input_multiplier = 1.0
         output_multiplier = 1.0
 
-        actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
+        actual_tokens = int(
+            (input_tokens * input_multiplier) + (output_tokens * output_multiplier)
+        )
         assert actual_tokens == 300
 
     def test_deduction_with_multipliers(self):
@@ -177,7 +184,9 @@ class TestTokenDeductionCalculation:
         input_multiplier = 1.5
         output_multiplier = 2.0
 
-        actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
+        actual_tokens = int(
+            (input_tokens * input_multiplier) + (output_tokens * output_multiplier)
+        )
         assert actual_tokens == int(150 + 400)  # 550
 
     def test_deduction_different_multipliers(self):
@@ -187,7 +196,9 @@ class TestTokenDeductionCalculation:
         input_multiplier = 1.1
         output_multiplier = 1.5
 
-        actual_tokens = int((input_tokens * input_multiplier) + (output_tokens * output_multiplier))
+        actual_tokens = int(
+            (input_tokens * input_multiplier) + (output_tokens * output_multiplier)
+        )
         assert actual_tokens == int(110 + 150)  # 260
 
 
@@ -201,7 +212,7 @@ class TestBudgetCheckCalculation:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=1000
+            token_budget=1000,
         )
 
         input_tokens = 500
@@ -223,7 +234,7 @@ class TestBudgetCheckCalculation:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=1000
+            token_budget=1000,
         )
 
         input_tokens = 500
@@ -245,7 +256,7 @@ class TestBudgetCheckCalculation:
             email="user@example.com",
             password_hash="hashed",
             level=UserLevel.LEVEL_01,
-            token_budget=1000
+            token_budget=1000,
         )
 
         input_tokens = 500
@@ -263,19 +274,30 @@ class TestBudgetCheckCalculation:
 
 def print_test_results():
     """Run and print test results for manual verification."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TOKEN BUDGET SYSTEM TEST RESULTS")
-    print("="*60)
+    print("=" * 60)
 
     # Test User Model
     print("\n[User Model Tests]")
-    user = User(username="user", email="user@example.com", password_hash="hashed", level=UserLevel.LEVEL_01, token_budget=5000)
+    user = User(
+        username="user",
+        email="user@example.com",
+        password_hash="hashed",
+        level=UserLevel.LEVEL_01,
+        token_budget=5000,
+    )
     print(f"  has_unlimited_budget (LEVEL_01): {user.has_unlimited_budget}")
     print(f"  can_afford_tokens(1000): {user.can_afford_tokens(1000)}")
     print(f"  max_token_budget: {user.max_token_budget}")
     print(f"  remaining_tokens: {user.remaining_tokens}")
 
-    admin = User(username="admin", email="admin@example.com", password_hash="hashed", level=UserLevel.LEVEL_05)
+    admin = User(
+        username="admin",
+        email="admin@example.com",
+        password_hash="hashed",
+        level=UserLevel.LEVEL_05,
+    )
     print(f"  has_unlimited_budget (LEVEL_05): {admin.has_unlimited_budget}")
     print(f"  max_token_budget (LEVEL_05): {admin.max_token_budget}")
 
@@ -300,7 +322,9 @@ def print_test_results():
     output_mult = 2.0
     actual = int((input_tokens * input_mult) + (output_tokens * output_mult))
     print(f"  Input: {input_tokens} * {input_mult} = {int(input_tokens * input_mult)}")
-    print(f"  Output: {output_tokens} * {output_mult} = {int(output_tokens * output_mult)}")
+    print(
+        f"  Output: {output_tokens} * {output_mult} = {int(output_tokens * output_mult)}"
+    )
     print(f"  Total: {actual}")
 
     # Test Budget Check
@@ -318,9 +342,9 @@ def print_test_results():
     print(f"  Required: {required}")
     print(f"  Can Afford: {can_afford}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TESTS COMPLETED")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

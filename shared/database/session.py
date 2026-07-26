@@ -6,7 +6,9 @@ from config.settings import settings
 
 class Base(DeclarativeBase):
     """Declarative base class."""
+
     pass
+
 
 engine = create_engine(
     settings.POSTGRES_URL,
@@ -20,6 +22,7 @@ SessionLocal = sessionmaker(
     autocommit=False,
     future=True,
 )
+
 
 def get_db():
     """FastAPI dependency for database sessions."""

@@ -11,7 +11,9 @@ class ChatTypeRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, chat_type_id: UUID, load_owner: bool = False) -> ChatType | None:
+    def get_by_id(
+        self, chat_type_id: UUID, load_owner: bool = False
+    ) -> ChatType | None:
         query = self.db.query(ChatType)
         if load_owner:
             query = query.options(joinedload(ChatType.owner))
@@ -37,7 +39,7 @@ class ChatTypeRepository:
         owner_id: UUID | None = None,
         user_id: UUID | None = None,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> tuple[list[ChatType], int]:
         """
         Search chat types with filters.
@@ -48,17 +50,14 @@ class ChatTypeRepository:
         # Security filter: Public OR Owned by user
         if user_id:
             db_query = db_query.filter(
-                or_(
-                    ChatType.is_public == True,
-                    ChatType.owner_id == user_id
-                )
+                or_(ChatType.is_public == True, ChatType.owner_id == user_id)
             )
 
         # Text search in name and description
         if query:
             search_filter = or_(
                 ChatType.name.ilike(f"%{query}%"),
-                ChatType.description.ilike(f"%{query}%")
+                ChatType.description.ilike(f"%{query}%"),
             )
             db_query = db_query.filter(search_filter)
 
@@ -82,7 +81,7 @@ class ChatTypeRepository:
         is_public: bool | None = None,
         owner_id: UUID | None = None,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> tuple[list[ChatType], int]:
         """
         List chat types available to user (Steam Workshop style).
@@ -94,7 +93,7 @@ class ChatTypeRepository:
         db_query = db_query.filter(
             or_(
                 ChatType.owner_id == user_id,
-                ChatType.id.in_(favorited_ids) if favorited_ids else False
+                ChatType.id.in_(favorited_ids) if favorited_ids else False,
             )
         )
 
@@ -110,10 +109,7 @@ class ChatTypeRepository:
         return chat_types, total
 
     def list_by_ids(
-        self,
-        chat_type_ids: list[UUID],
-        skip: int = 0,
-        limit: int = 100
+        self, chat_type_ids: list[UUID], skip: int = 0, limit: int = 100
     ) -> tuple[list[ChatType], int]:
         """
         List chat types by IDs with pagination.
@@ -121,9 +117,11 @@ class ChatTypeRepository:
         if not chat_type_ids:
             return [], 0
 
-        db_query = self.db.query(ChatType).filter(
-            ChatType.id.in_(chat_type_ids)
-        ).options(joinedload(ChatType.owner))
+        db_query = (
+            self.db.query(ChatType)
+            .filter(ChatType.id.in_(chat_type_ids))
+            .options(joinedload(ChatType.owner))
+        )
 
         total = db_query.count()
         chat_types = db_query.offset(skip).limit(limit).all()
@@ -133,7 +131,9 @@ class ChatTypeRepository:
     def add_tags(self, chat_type_id: UUID, tags: list[str]) -> None:
         """Add tags to a chat type, replacing existing tags."""
         # Delete existing tags
-        self.db.query(ChatTypeTag).filter(ChatTypeTag.chat_type_id == chat_type_id).delete()
+        self.db.query(ChatTypeTag).filter(
+            ChatTypeTag.chat_type_id == chat_type_id
+        ).delete()
 
         # Add new tags
         for tag in tags:
@@ -144,7 +144,9 @@ class ChatTypeRepository:
 
     def get_tags(self, chat_type_id: UUID) -> list[str]:
         """Get all tags for a chat type."""
-        tags = self.db.query(ChatTypeTag).filter(
-            ChatTypeTag.chat_type_id == chat_type_id
-        ).all()
+        tags = (
+            self.db.query(ChatTypeTag)
+            .filter(ChatTypeTag.chat_type_id == chat_type_id)
+            .all()
+        )
         return [tag.tag for tag in tags]

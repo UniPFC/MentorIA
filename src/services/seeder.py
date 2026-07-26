@@ -1,6 +1,7 @@
 """
 Seeder service to initialize default data and knowledge bases.
 """
+
 import logging
 import os
 
@@ -19,6 +20,7 @@ from src.services.ingestion import ChunkIngestionService
 logger = logging.getLogger(__name__)
 
 DATA_DIR = settings.DATA_DIR
+
 
 def seed_default_knowledge():
     """
@@ -39,28 +41,40 @@ def seed_default_knowledge():
 
         # Try to find by email or username using repository
         from src.repositories.user import UserRepository
+
         user_repo = UserRepository(db)
         system_user = user_repo.get_by_email(system_email)
         if not system_user:
-            system_user = db.query(User).filter(User.username == system_username).first()
+            system_user = (
+                db.query(User).filter(User.username == system_username).first()
+            )
 
         if not system_user:
             logger.info("Creating MentorIA system user...")
             system_user = User(
                 email=system_email,
-                password_hash=auth_service.get_password_hash(settings.SYSTEM_USER_PASSWORD),
+                password_hash=auth_service.get_password_hash(
+                    settings.SYSTEM_USER_PASSWORD
+                ),
                 username=system_username,
                 is_active=True,
-                level=UserLevel.LEVEL_05
+                level=UserLevel.LEVEL_05,
             )
             db.add(system_user)
             db.commit()
             db.refresh(system_user)
-            logger.info(f"MentorIA system user created with ID: {system_user.id} and level: {system_user.level}")
+            logger.info(
+                f"MentorIA system user created with ID: {system_user.id} and level: {system_user.level}"
+            )
         else:
             # Ensure username is 'MentorIA' and level is LEVEL_05
-            if system_user.username != system_username or system_user.level != UserLevel.LEVEL_05:
-                logger.info(f"Updating system user username to '{system_username}' and level to LEVEL_05...")
+            if (
+                system_user.username != system_username
+                or system_user.level != UserLevel.LEVEL_05
+            ):
+                logger.info(
+                    f"Updating system user username to '{system_username}' and level to LEVEL_05..."
+                )
                 system_user.username = system_username
                 system_user.level = UserLevel.LEVEL_05
                 system_user.token_budget = None  # Admin has unlimited budget
@@ -74,7 +88,7 @@ def seed_default_knowledge():
 
         # 2. Iterate through all files in data directory
         for filename in os.listdir(DATA_DIR):
-            if not filename.endswith(('.xlsx', '.xls', '.csv')):
+            if not filename.endswith((".xlsx", ".xls", ".csv")):
                 continue
 
             file_path = os.path.join(DATA_DIR, filename)
@@ -108,19 +122,23 @@ def seed_default_knowledge():
                     description=chat_desc,
                     is_public=True,  # Available to all users
                     owner_id=system_user.id,
-                    collection_name=collection_name
+                    collection_name=collection_name,
                 )
                 db.add(chat_type)
                 db.commit()
                 db.refresh(chat_type)
 
-            # Ensure Qdrant collection exists and has correct dimension
+                # Ensure Qdrant collection exists and has correct dimension
                 if not qdrant_manager:
                     qdrant_manager = QdrantManager()
                 qdrant_manager.create_collection(chat_type.id)
 
             # 3. Check data and Ingest if needed
-            chunk_count = db.query(KnowledgeChunk).filter(KnowledgeChunk.chat_type_id == chat_type.id).count()
+            chunk_count = (
+                db.query(KnowledgeChunk)
+                .filter(KnowledgeChunk.chat_type_id == chat_type.id)
+                .count()
+            )
 
             if chunk_count == 0:
                 logger.info(f"Ingesting data for '{chat_title}' from {filename}...")
@@ -133,11 +151,13 @@ def seed_default_knowledge():
                     if provider_type == "remote":
                         emb_provider = RemoteEmbeddingProvider(
                             model_name=settings.EMBEDDING_REMOTE_MODEL,
-                            provider_alias=settings.EMBEDDING_REMOTE_PROVIDER
+                            provider_alias=settings.EMBEDDING_REMOTE_PROVIDER,
                         )
                     else:
                         loader = ModelLoader()
-                        emb_model, emb_tokenizer = loader.load_embedding(settings.EMBEDDING_MODEL_ID)
+                        emb_model, emb_tokenizer = loader.load_embedding(
+                            settings.EMBEDDING_MODEL_ID
+                        )
                         emb_provider = HFEmbeddingProvider(emb_model, emb_tokenizer)  # type: ignore
 
                     embedding_engine = EmbeddingEngine(emb_provider)
@@ -145,7 +165,9 @@ def seed_default_knowledge():
                     if not qdrant_manager:
                         qdrant_manager = QdrantManager()
 
-                    ingestion_service = ChunkIngestionService(embedding_engine, qdrant_manager)
+                    ingestion_service = ChunkIngestionService(
+                        embedding_engine, qdrant_manager
+                    )
                     models_loaded = True
 
                 try:
@@ -154,16 +176,18 @@ def seed_default_knowledge():
 
                     if ingestion_service:
                         ingestion_service.ingest_from_file(
-                        chat_type_id=chat_type.id,
-                        file_content=file_content,
-                        filename=filename,
-                        db_session=db
-                    )
+                            chat_type_id=chat_type.id,
+                            file_content=file_content,
+                            filename=filename,
+                            db_session=db,
+                        )
                     logger.info(f"Ingestion for '{chat_title}' completed successfully.")
                 except Exception as e:
                     logger.error(f"Failed to ingest {filename}: {e}")
             else:
-                logger.info(f"ChatType '{chat_title}' already has data ({chunk_count} chunks). Skipping ingestion.")
+                logger.info(
+                    f"ChatType '{chat_title}' already has data ({chunk_count} chunks). Skipping ingestion."
+                )
 
     except Exception as e:
         logger.error(f"Seeding process failed: {e}")

@@ -14,7 +14,7 @@ class TestHTTPSRedirectMiddleware:
     """Testes unitários para HTTPSRedirectMiddleware"""
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_force_https_disabled(self, mock_settings):
         """Testa que quando FORCE_HTTPS=False, não redireciona"""
         mock_settings.FORCE_HTTPS = False
@@ -30,7 +30,7 @@ class TestHTTPSRedirectMiddleware:
         call_next.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_already_https(self, mock_settings):
         """Testa que quando já é HTTPS, não redireciona"""
         mock_settings.FORCE_HTTPS = True
@@ -48,7 +48,7 @@ class TestHTTPSRedirectMiddleware:
         request.url.replace.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_redirects_http_to_https(self, mock_settings):
         """Testa redirecionamento de HTTP para HTTPS"""
         mock_settings.FORCE_HTTPS = True
@@ -74,7 +74,7 @@ class TestSecurityHeadersMiddleware:
     """Testes unitários para SecurityHeadersMiddleware"""
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_adds_security_headers(self, mock_settings):
         """Testa que adiciona headers de segurança em produção"""
         # Não testamos mais a flag de DEV_MODE pois removemos o bypass.
@@ -94,7 +94,7 @@ class TestSecurityHeadersMiddleware:
             "Referrer-Policy",
             "X-XSS-Protection",
             "Content-Security-Policy",
-            "Permissions-Policy"
+            "Permissions-Policy",
         ]
 
         for header in expected_headers:
@@ -106,7 +106,7 @@ class TestSecureCookieMiddleware:
     """Testes unitários para SecureCookieMiddleware"""
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_adds_secure_flag(self, mock_settings):
         """Testa que adiciona flag Secure a cookies"""
         # Não testamos mais a flag de DEV_MODE
@@ -119,11 +119,11 @@ class TestSecureCookieMiddleware:
 
         result = await middleware.dispatch(request, call_next)
 
-        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode("latin-1")
         assert "Secure" in updated_cookie
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_adds_httponly_flag(self, mock_settings):
         """Testa que adiciona flag HttpOnly a cookies"""
         # Não testamos mais a flag de DEV_MODE
@@ -136,11 +136,11 @@ class TestSecureCookieMiddleware:
 
         result = await middleware.dispatch(request, call_next)
 
-        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode("latin-1")
         assert "HttpOnly" in updated_cookie
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_adds_samesite_flag(self, mock_settings):
         """Testa que adiciona flag SameSite a cookies"""
         # Não testamos mais a flag de DEV_MODE
@@ -153,11 +153,11 @@ class TestSecureCookieMiddleware:
 
         result = await middleware.dispatch(request, call_next)
 
-        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode("latin-1")
         assert "SameSite=Lax" in updated_cookie
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_preserves_existing_flags(self, mock_settings):
         """Testa que preserva flags existentes nos cookies"""
         # Não testamos mais a flag de DEV_MODE
@@ -172,13 +172,13 @@ class TestSecureCookieMiddleware:
 
         # Should not add Secure again (it already exists)
         # The middleware checks if 'secure=' is already present
-        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode('latin-1')
+        updated_cookie = dict(result.raw_headers).get(b"Set-Cookie").decode("latin-1")
         assert "Secure" in updated_cookie
         assert "HttpOnly" in updated_cookie
         assert "SameSite=Lax" in updated_cookie
 
     @pytest.mark.asyncio
-    @patch('src.middleware.https_security.settings')
+    @patch("src.middleware.https_security.settings")
     async def test_dispatch_case_insensitive_cookie_name(self, mock_settings):
         """Testa que detecta cookies case-insensitive"""
         # Não testamos mais a flag de DEV_MODE
@@ -191,5 +191,5 @@ class TestSecureCookieMiddleware:
 
         result = await middleware.dispatch(request, call_next)
 
-        updated_cookie = dict(result.raw_headers).get(b"set-cookie").decode('latin-1')
+        updated_cookie = dict(result.raw_headers).get(b"set-cookie").decode("latin-1")
         assert "Secure" in updated_cookie

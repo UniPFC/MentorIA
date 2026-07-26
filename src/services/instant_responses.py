@@ -17,7 +17,6 @@ class InstantResponseService:
     # Value: response text
     INSTANT_RESPONSES: dict[str, str] = {
         # Example responses - expand as needed
-
         "oi": "Olá! Como posso ajudá-lo?",
         "ola": "Olá! Como posso ajudá-lo?",
         "oi tudo bem": "Tudo bem! Como posso ajudá-lo?",
@@ -44,7 +43,7 @@ class InstantResponseService:
         "o que voce sabe": "Sou o MentorIA, seu assistente de IA. Posso ajudá-lo com informações sobre os documentos carregados nesta base de dados. Pergunte-me qualquer coisa!",
         "com oque pode me ajudar": "Sou o MentorIA, seu assistente de IA. Posso ajudá-lo a estudar diversos conteúdos! Selecione a base de dados adequada para seu estudo e vamos começar!",
         "como funciona": "Eu uso meu conhecimento baseado no conhecimento desta base de dados para responder suas dúvidas. É só perguntar!",
-        "crie um teste de estudo": "Com certeza! Posso apresentar perguntas de múltipla escolha ou discursivas sobre o conteúdo desejado! Por onde quer começar? É só me dizer uma matéria, conteúdo ou tema!"
+        "crie um teste de estudo": "Com certeza! Posso apresentar perguntas de múltipla escolha ou discursivas sobre o conteúdo desejado! Por onde quer começar? É só me dizer uma matéria, conteúdo ou tema!",
     }
 
     @staticmethod
@@ -63,15 +62,15 @@ class InstantResponseService:
             Normalized text
         """
         # Remove accents
-        text = unicodedata.normalize('NFKD', text)
-        text = ''.join([c for c in text if not unicodedata.combining(c)])
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join([c for c in text if not unicodedata.combining(c)])
 
         # Convert to lowercase
         text = text.lower()
 
         # Remove punctuation and extra spaces
-        text = re.sub(r'[^\w\s]', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r"[^\w\s]", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
 
         return text
 
@@ -92,7 +91,9 @@ class InstantResponseService:
         # Exact match only
         if normalized_question in InstantResponseService.INSTANT_RESPONSES:
             response = InstantResponseService.INSTANT_RESPONSES[normalized_question]
-            logger.info(f"Instant response matched: '{question}' -> '{response[:50]}...'")
+            logger.info(
+                f"Instant response matched: '{question}' -> '{response[:50]}...'"
+            )
             return response
 
         return None

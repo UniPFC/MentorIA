@@ -2,7 +2,6 @@
 Embedding providers for vector generation.
 """
 
-
 import torch
 from openai import OpenAI
 
@@ -46,13 +45,13 @@ class HFEmbeddingProvider(EmbeddingProvider):
                 padding=True,
                 truncation=True,
                 max_length=max_length,
-                return_tensors='pt'
+                return_tensors="pt",
             ).to(self.model.device)
 
             with torch.no_grad():
                 output = self.model(**encoded)
 
-            embeddings = self._mean_pooling(output, encoded['attention_mask'])
+            embeddings = self._mean_pooling(output, encoded["attention_mask"])
             embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
 
             return embeddings.tolist()
@@ -64,7 +63,9 @@ class HFEmbeddingProvider(EmbeddingProvider):
     def _mean_pooling(self, model_output, attention_mask):
         """Apply mean pooling with attention mask."""
         token_embeddings = model_output[0]
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        input_mask_expanded = (
+            attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        )
         return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
             input_mask_expanded.sum(1), min=1e-9
         )
@@ -78,7 +79,7 @@ class RemoteEmbeddingProvider(EmbeddingProvider):
         model_name: str,
         provider_alias: str = "openai",
         api_key: str | None = None,
-        base_url: str | None = None
+        base_url: str | None = None,
     ):
         """
         Initialize remote embedding provider.
@@ -90,11 +91,15 @@ class RemoteEmbeddingProvider(EmbeddingProvider):
             base_url: Custom base URL
         """
         normalized_alias = provider_alias.lower()
-        self.target_url = base_url if base_url else URLS.get(normalized_alias, URLS["openai"])
+        self.target_url = (
+            base_url if base_url else URLS.get(normalized_alias, URLS["openai"])
+        )
         self.api_key = resolve_api_key(normalized_alias, api_key)
         self.client = OpenAI(api_key=self.api_key, base_url=self.target_url)
         self.model_name = model_name
-        logger.info(f"RemoteEmbeddingProvider: model={model_name}, endpoint={self.target_url}")
+        logger.info(
+            f"RemoteEmbeddingProvider: model={model_name}, endpoint={self.target_url}"
+        )
 
     def embed(self, inputs: list[str], **kwargs) -> list[list[float]]:
         """
@@ -108,11 +113,11 @@ class RemoteEmbeddingProvider(EmbeddingProvider):
             List of embedding vectors
         """
         try:
-            logger.debug(f"Remote embedding: model={self.model_name}, batch={len(inputs)}")
+            logger.debug(
+                f"Remote embedding: model={self.model_name}, batch={len(inputs)}"
+            )
             response = self.client.embeddings.create(
-                input=inputs,
-                model=self.model_name,
-                **kwargs
+                input=inputs, model=self.model_name, **kwargs
             )
 
             data = sorted(response.data, key=lambda x: x.index)

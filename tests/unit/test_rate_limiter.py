@@ -20,11 +20,7 @@ class TestSimpleRateLimiter:
 
     def test_init_custom_values(self):
         """Test initialization with custom values"""
-        limiter = SimpleRateLimiter(
-            max_attempts=3,
-            window_minutes=2,
-            block_minutes=5
-        )
+        limiter = SimpleRateLimiter(max_attempts=3, window_minutes=2, block_minutes=5)
 
         assert limiter.max_attempts == 3
         assert limiter.window_minutes == 2
@@ -41,7 +37,7 @@ class TestSimpleRateLimiter:
             now - timedelta(minutes=6),  # Outside window (should be removed)
             now - timedelta(minutes=3),  # Inside window (should be kept)
             now - timedelta(minutes=1),  # Inside window (should be kept)
-            now - timedelta(minutes=10)  # Outside window (should be removed)
+            now - timedelta(minutes=10),  # Outside window (should be removed)
         ]
 
         # Cleanup
@@ -205,7 +201,7 @@ class TestSimpleRateLimiter:
         assert allowed1 is False
         assert allowed2 is True
 
-    @patch('src.services.rate_limiter.datetime')
+    @patch("src.services.rate_limiter.datetime")
     def test_with_mocked_datetime(self, mock_datetime):
         """Test with mocked datetime for consistent testing"""
         # Setup mock
@@ -286,4 +282,3 @@ class TestSimpleRateLimiter:
         limiter.attempts[key] = [datetime.now(UTC)]
 
         assert limiter.get_remaining_attempts(key) == 4
-

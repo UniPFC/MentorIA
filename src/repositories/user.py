@@ -33,13 +33,15 @@ class UserRepository:
         self.db.refresh(user)
         return user
 
-    def create_token(self, user_id: UUID, token: str, token_type: str, expires_at: datetime) -> UserToken:
+    def create_token(
+        self, user_id: UUID, token: str, token_type: str, expires_at: datetime
+    ) -> UserToken:
         user_token = UserToken(
             user_id=user_id,
             token=token,
             token_type=token_type,
             expires_at=expires_at,
-            is_active=True
+            is_active=True,
         )
         self.db.add(user_token)
         self.db.commit()
@@ -47,41 +49,37 @@ class UserRepository:
         return user_token
 
     def get_token(self, token: str) -> UserToken | None:
-        return self.db.query(UserToken).filter(
-            UserToken.token == token,
-            UserToken.is_active == True
-        ).first()
+        return (
+            self.db.query(UserToken)
+            .filter(UserToken.token == token, UserToken.is_active == True)
+            .first()
+        )
 
     def invalidate_token(self, token: str):
         self.db.query(UserToken).filter(UserToken.token == token).delete()
         self.db.commit()
 
     def invalidate_all_user_tokens(self, user_id: UUID):
-        self.db.query(UserToken).filter(
-            UserToken.user_id == user_id
-        ).delete()
+        self.db.query(UserToken).filter(UserToken.user_id == user_id).delete()
         self.db.commit()
 
     def invalidate_refresh_tokens(self, user_id: UUID):
         """Deleta todos os refresh tokens do usuário"""
         self.db.query(UserToken).filter(
-            UserToken.user_id == user_id,
-            UserToken.token_type == 'refresh'
+            UserToken.user_id == user_id, UserToken.token_type == "refresh"
         ).delete()
         self.db.commit()
 
-    def create_password_reset_token(self, user_id: UUID, token: str, expires_at: datetime) -> PasswordResetToken:
+    def create_password_reset_token(
+        self, user_id: UUID, token: str, expires_at: datetime
+    ) -> PasswordResetToken:
         # Invalidar tokens anteriores
         self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.user_id == user_id,
-            PasswordResetToken.is_active == True
+            PasswordResetToken.user_id == user_id, PasswordResetToken.is_active == True
         ).update({"is_active": False})
 
         reset_token = PasswordResetToken(
-            user_id=user_id,
-            token=token,
-            expires_at=expires_at,
-            is_active=True
+            user_id=user_id, token=token, expires_at=expires_at, is_active=True
         )
         self.db.add(reset_token)
         self.db.commit()
@@ -89,14 +87,22 @@ class UserRepository:
         return reset_token
 
     def get_password_reset_token(self, token: str) -> PasswordResetToken | None:
-        return self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.token == token,
-            PasswordResetToken.is_active == True,
-            PasswordResetToken.expires_at > datetime.now(UTC)
-        ).first()
+        return (
+            self.db.query(PasswordResetToken)
+            .filter(
+                PasswordResetToken.token == token,
+                PasswordResetToken.is_active == True,
+                PasswordResetToken.expires_at > datetime.now(UTC),
+            )
+            .first()
+        )
 
     def invalidate_password_reset_token(self, token: str):
-        reset_token = self.db.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+        reset_token = (
+            self.db.query(PasswordResetToken)
+            .filter(PasswordResetToken.token == token)
+            .first()
+        )
         if reset_token:
             reset_token.is_active = False
             reset_token.used_at = datetime.now(UTC)
@@ -114,7 +120,8 @@ class UserRepository:
         """Delete expired or inactive password reset tokens to prevent database bloat"""
         now = datetime.now(UTC)
         self.db.query(PasswordResetToken).filter(
-            (PasswordResetToken.expires_at <= now) | (PasswordResetToken.is_active == False)
+            (PasswordResetToken.expires_at <= now)
+            | (PasswordResetToken.is_active == False)
         ).delete()
         self.db.commit()
 
@@ -134,7 +141,9 @@ class UserRepository:
             self.update(user)
         return user
 
-    def set_user_level(self, user_id: UUID, level: UserLevel, budget: int | None = None) -> User | None:
+    def set_user_level(
+        self, user_id: UUID, level: UserLevel, budget: int | None = None
+    ) -> User | None:
         """Set user level and optionally budget. Returns updated user."""
         user = self.get_by_id(user_id)
         if user:

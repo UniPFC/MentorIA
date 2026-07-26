@@ -42,19 +42,22 @@ class TestWebSocketRoutes:
             ) as websocket:
                 pass
 
-    def test_websocket_chat_not_owned(self, client, sample_user: User, sample_chat: Chat):
+    def test_websocket_chat_not_owned(
+        self, client, sample_user: User, sample_chat: Chat
+    ):
         """Testa conexão WebSocket para chat que não pertence ao usuário"""
         # Cria outro usuário e tenta conectar no chat do sample_user
         auth_service = AuthService()
 
         from shared.database.models.user import User
+
         other_user = User(
             id=uuid4(),
             username="otheruser",
             email="other@example.com",
             password_hash=auth_service.get_password_hash("password123"),
             is_active=True,
-            created_at=sample_user.created_at
+            created_at=sample_user.created_at,
         )
         # Note: este teste é limitado sem salvar no DB via fixture
         # Vamos apenas verificar que a conexão é recusada para token de outro usuário
@@ -66,7 +69,9 @@ class TestWebSocketRoutes:
             ) as websocket:
                 pass
 
-    def test_websocket_successful_connection(self, client, sample_user: User, sample_chat: Chat, db_session: Session):
+    def test_websocket_successful_connection(
+        self, client, sample_user: User, sample_chat: Chat, db_session: Session
+    ):
         """Testa conexão WebSocket bem-sucedida com token válido no banco"""
         from src.services.auth import AuthService
 
@@ -79,7 +84,7 @@ class TestWebSocketRoutes:
             user_id=sample_user.id,
             token=token,
             token_type="access",
-            expires_at=datetime.now(UTC) + timedelta(hours=1)
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
         db_session.commit()
 
@@ -92,7 +97,7 @@ class TestWebSocketRoutes:
 
         connection_accepted = False
 
-        with patch('src.api.routes.websocket.get_db', mock_get_db):
+        with patch("src.api.routes.websocket.get_db", mock_get_db):
             # WebSocket connect - if rejected during handshake, raises before entering 'with'
             with client.websocket_connect(
                 f"/api/v1/ws/chats/{sample_chat.id}?token={token}"
@@ -143,7 +148,7 @@ class TestWebSocketRoutes:
         data = {"content": "test"}
 
         # Mock the send_to_chat to avoid actual async execution
-        with patch.object(manager, 'send_to_chat', new_callable=AsyncMock) as mock_send:
+        with patch.object(manager, "send_to_chat", new_callable=AsyncMock) as mock_send:
             broadcast_chat_update(chat_id, update_type, data)
 
             # Should have attempted to send

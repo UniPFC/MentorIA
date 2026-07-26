@@ -13,7 +13,10 @@ class TestInstantResponseService:
         # Test punctuation removal
         assert InstantResponseService.normalize_text("Oi, tudo bem?") == "oi tudo bem"
         # Test multiple spaces
-        assert InstantResponseService.normalize_text("  muito    espaco  ") == "muito espaco"
+        assert (
+            InstantResponseService.normalize_text("  muito    espaco  ")
+            == "muito espaco"
+        )
         # Test mixed casing
         assert InstantResponseService.normalize_text("PyThOn") == "python"
 
@@ -35,11 +38,15 @@ class TestInstantResponseService:
     def test_get_instant_response_no_partial_match(self):
         # Test that partial matches are NOT triggered
         # "como funciona" is a pattern, but "Me diga como funciona os triangulos..." should NOT match
-        response = InstantResponseService.get_instant_response("Me diga como funciona os triangulos e quais questoes preciso saber")
+        response = InstantResponseService.get_instant_response(
+            "Me diga como funciona os triangulos e quais questoes preciso saber"
+        )
         assert response is None
 
     def test_get_instant_response_no_match(self):
-        response = InstantResponseService.get_instant_response("Qual a cor do cavalo branco de Napoleão?")
+        response = InstantResponseService.get_instant_response(
+            "Qual a cor do cavalo branco de Napoleão?"
+        )
         assert response is None
 
     def test_get_instant_response_obrigado_exact(self):
@@ -48,7 +55,9 @@ class TestInstantResponseService:
         assert response == "De nada! Estou aqui para ajudar. Tem mais alguma dúvida?"
 
         # But "Muito obrigado pela ajuda" should NOT match (partial)
-        response = InstantResponseService.get_instant_response("Muito obrigado pela ajuda")
+        response = InstantResponseService.get_instant_response(
+            "Muito obrigado pela ajuda"
+        )
         assert response is None
 
     def test_get_instant_response_tchau(self):

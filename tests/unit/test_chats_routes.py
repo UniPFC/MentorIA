@@ -98,7 +98,7 @@ class TestChatsRoutes:
                 chat_data=chat_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
@@ -129,7 +129,7 @@ class TestChatsRoutes:
                 chat_data=chat_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
         assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
@@ -154,10 +154,10 @@ class TestChatsRoutes:
         model_update.llm_model = "invalid-model"
         model_update.llm_provider = "invalid-provider"
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.get_available_models.return_value = [
                 {"model": "gpt-4", "provider": "openai"},
-                {"model": "claude-3", "provider": "anthropic"}
+                {"model": "claude-3", "provider": "anthropic"},
             ]
 
             with pytest.raises(HTTPException) as exc_info:
@@ -166,7 +166,7 @@ class TestChatsRoutes:
                     model_update=model_update,
                     current_user=current_user,
                     chat_repo=chat_repo,
-                    db=Mock()
+                    db=Mock(),
                 )
 
             assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
@@ -192,10 +192,10 @@ class TestChatsRoutes:
         model_update.llm_model = "claude-3"
         model_update.llm_provider = "anthropic"
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.get_available_models.return_value = [
                 {"model": "gpt-4", "provider": "openai"},
-                {"model": "claude-3", "provider": "anthropic"}
+                {"model": "claude-3", "provider": "anthropic"},
             ]
 
             result = update_chat_model(
@@ -203,7 +203,7 @@ class TestChatsRoutes:
                 model_update=model_update,
                 current_user=current_user,
                 chat_repo=chat_repo,
-                db=Mock()
+                db=Mock(),
             )
 
             assert result.llm_model == "claude-3"
@@ -213,12 +213,16 @@ class TestChatsRoutes:
         """Testa listagem de modelos com sucesso"""
         from src.api.routes.chats import get_available_models
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.LLM_MODEL = "gpt-4"
             mock_settings.LLM_PROVIDER = "openai"
             mock_settings.get_available_models.return_value = [
                 {"model": "gpt-4", "provider": "openai", "description": "GPT-4"},
-                {"model": "claude-3", "provider": "anthropic", "description": "Claude 3"}
+                {
+                    "model": "claude-3",
+                    "provider": "anthropic",
+                    "description": "Claude 3",
+                },
             ]
 
             result = get_available_models(current_user=Mock())
@@ -232,7 +236,7 @@ class TestChatsRoutes:
 
         from src.api.routes.chats import get_available_models
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.LLM_MODEL = "gpt-4"
             mock_settings.LLM_PROVIDER = "openai"
             mock_settings.get_available_models.side_effect = Exception("Config error")
@@ -270,7 +274,7 @@ class TestChatsRoutes:
                 chat_data=chat_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -293,7 +297,7 @@ class TestChatsRoutes:
                 skip=0,
                 limit=100,
                 current_user=current_user,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
         assert exc_info.value.status_code == 500
@@ -326,7 +330,7 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat_repo.create.return_value = new_chat
 
@@ -334,7 +338,7 @@ class TestChatsRoutes:
         chat_data.chat_type_id = chat_type.id
         chat_data.title = "Custom Title"
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.LLM_MODEL = "gpt-4"
             mock_settings.LLM_PROVIDER = "openai"
 
@@ -342,7 +346,7 @@ class TestChatsRoutes:
                 chat_data=chat_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
             assert result.title == "Custom Title"
@@ -377,7 +381,7 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat_repo.create.return_value = new_chat
 
@@ -385,7 +389,7 @@ class TestChatsRoutes:
         chat_data.chat_type_id = chat_type.id
         chat_data.title = None
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.LLM_MODEL = "gpt-4"
             mock_settings.LLM_PROVIDER = "openai"
 
@@ -393,7 +397,7 @@ class TestChatsRoutes:
                 chat_data=chat_data,
                 current_user=current_user,
                 chat_type_repo=chat_type_repo,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
             assert result.title == "Chat #1"
@@ -414,15 +418,12 @@ class TestChatsRoutes:
             skip=0,
             limit=100,
             current_user=current_user,
-            chat_repo=chat_repo
+            chat_repo=chat_repo,
         )
 
         assert result == []
         chat_repo.get_by_user.assert_called_once_with(
-            user_id=current_user.id,
-            chat_type_id=None,
-            skip=0,
-            limit=100
+            user_id=current_user.id, chat_type_id=None, skip=0, limit=100
         )
 
     def test_get_chat_success(self):
@@ -445,16 +446,14 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat.messages = []
 
         chat_repo.get_by_id.return_value = chat
 
         result = get_chat(
-            chat_id=chat.id,
-            current_user=current_user,
-            chat_repo=chat_repo
+            chat_id=chat.id, current_user=current_user, chat_repo=chat_repo
         )
 
         assert result.id == chat.id
@@ -475,9 +474,7 @@ class TestChatsRoutes:
         chat_repo.get_by_id.return_value = chat
 
         result = delete_chat(
-            chat_id=chat.id,
-            current_user=current_user,
-            chat_repo=chat_repo
+            chat_id=chat.id, current_user=current_user, chat_repo=chat_repo
         )
 
         chat_repo.delete.assert_called_once_with(chat)
@@ -501,11 +498,7 @@ class TestChatsRoutes:
         chat_repo.get_by_id.return_value = chat
 
         with pytest.raises(HTTPException) as exc_info:
-            delete_chat(
-                chat_id=chat.id,
-                current_user=current_user,
-                chat_repo=chat_repo
-            )
+            delete_chat(chat_id=chat.id, current_user=current_user, chat_repo=chat_repo)
 
         assert exc_info.value.status_code == 403
 
@@ -528,11 +521,7 @@ class TestChatsRoutes:
         chat_repo.delete.side_effect = Exception("DB error")
 
         with pytest.raises(HTTPException) as exc_info:
-            delete_chat(
-                chat_id=chat.id,
-                current_user=current_user,
-                chat_repo=chat_repo
-            )
+            delete_chat(chat_id=chat.id, current_user=current_user, chat_repo=chat_repo)
 
         assert exc_info.value.status_code == 500
 
@@ -559,7 +548,7 @@ class TestChatsRoutes:
         model_update.llm_model = "gpt-4"
         model_update.llm_provider = "openai"
 
-        with patch('src.api.routes.chats.settings') as mock_settings:
+        with patch("src.api.routes.chats.settings") as mock_settings:
             mock_settings.get_available_models.return_value = [
                 {"model": "gpt-4", "provider": "openai"}
             ]
@@ -570,7 +559,7 @@ class TestChatsRoutes:
                     model_update=model_update,
                     current_user=current_user,
                     chat_repo=chat_repo,
-                    db=Mock()
+                    db=Mock(),
                 )
 
             assert exc_info.value.status_code == 500
@@ -596,7 +585,7 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat.messages = []
 
@@ -605,9 +594,10 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -616,17 +606,17 @@ class TestChatsRoutes:
             rag = Mock()
             rag.run.return_value = {
                 "answer": "Hello back",
-                "chunks": [{"question": "Q", "answer": "A", "score": 0.9}]
+                "chunks": [{"question": "Q", "answer": "A", "score": 0.9}],
             }
             mock_rag.return_value = rag
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 result = await send_message(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 assert result.chat is not None
@@ -655,7 +645,7 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat.messages = []
 
@@ -664,7 +654,7 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service:
+        with patch("src.api.routes.chats.ChatService") as mock_chat_service:
             chat_service = Mock()
             chat_service.save_message.side_effect = Exception("DB error")
             mock_chat_service.return_value = chat_service
@@ -675,7 +665,7 @@ class TestChatsRoutes:
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
             assert exc_info.value.status_code == 500
@@ -703,7 +693,7 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat.messages = []
 
@@ -712,15 +702,17 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service:
+        with patch("src.api.routes.chats.ChatService") as mock_chat_service:
             chat_service = Mock()
             chat_service.get_chat_history.return_value = []
             chat_service.save_message.return_value = Mock()
             mock_chat_service.return_value = chat_service
 
-            with patch('src.api.routes.chats.RAGPipeline') as mock_rag:
+            with patch("src.api.routes.chats.RAGPipeline") as mock_rag:
                 rag = Mock()
-                rag.run.side_effect = HTTPException(status_code=400, detail="Bad request")
+                rag.run.side_effect = HTTPException(
+                    status_code=400, detail="Bad request"
+                )
                 mock_rag.return_value = rag
 
                 with pytest.raises(HTTPException) as exc_info:
@@ -729,7 +721,7 @@ class TestChatsRoutes:
                         message_data=message_data,
                         db=Mock(),
                         current_user=current_user,
-                        chat_repo=chat_repo
+                        chat_repo=chat_repo,
                     )
 
                 assert exc_info.value.status_code == 400
@@ -755,10 +747,11 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -770,13 +763,13 @@ class TestChatsRoutes:
             rag = Mock()
             mock_rag.return_value = rag
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 # Consume the generator to trigger the instant response path
@@ -807,11 +800,12 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -822,20 +816,20 @@ class TestChatsRoutes:
             rag = Mock()
             rag.run_stream.return_value = [
                 {"type": "token", "content": "Hello"},
-                {"type": "sources", "content": [{"question": "Q", "answer": "A"}]}
+                {"type": "sources", "content": [{"question": "Q", "answer": "A"}]},
             ]
             mock_rag.return_value = rag
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 # Consume the generator to trigger run_stream
@@ -866,11 +860,12 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -885,13 +880,13 @@ class TestChatsRoutes:
             mock_session = Mock()
             mock_session_local.return_value = mock_session
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 # Consume the generator to trigger error handling
@@ -923,11 +918,12 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -937,21 +933,19 @@ class TestChatsRoutes:
 
             rag = Mock()
             # Only sources, no tokens - triggers empty content fallback
-            rag.run_stream.return_value = [
-                {"type": "sources", "content": []}
-            ]
+            rag.run_stream.return_value = [{"type": "sources", "content": []}]
             mock_rag.return_value = rag
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 body = []
@@ -984,7 +978,7 @@ class TestChatsRoutes:
             llm_model="gpt-4",
             llm_provider="openai",
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
         chat.messages = []
 
@@ -993,10 +987,11 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.UserService') as mock_user_service, \
-             patch('src.api.routes.chats.settings') as mock_settings:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.UserService") as mock_user_service,
+            patch("src.api.routes.chats.settings") as mock_settings,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -1007,7 +1002,12 @@ class TestChatsRoutes:
             mock_user_service.return_value = user_service
 
             mock_settings.get_available_models.return_value = [
-                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 2.0, "output_token_multiplier": 2.0}
+                {
+                    "model": "gpt-4",
+                    "provider": "openai",
+                    "input_token_multiplier": 2.0,
+                    "output_token_multiplier": 2.0,
+                }
             ]
             mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
 
@@ -1017,7 +1017,7 @@ class TestChatsRoutes:
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
             assert exc_info.value.status_code == 402
@@ -1047,10 +1047,11 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.UserService') as mock_user_service, \
-             patch('src.api.routes.chats.settings') as mock_settings:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.UserService") as mock_user_service,
+            patch("src.api.routes.chats.settings") as mock_settings,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -1061,7 +1062,12 @@ class TestChatsRoutes:
             mock_user_service.return_value = user_service
 
             mock_settings.get_available_models.return_value = [
-                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 2.0, "output_token_multiplier": 2.0}
+                {
+                    "model": "gpt-4",
+                    "provider": "openai",
+                    "input_token_multiplier": 2.0,
+                    "output_token_multiplier": 2.0,
+                }
             ]
             mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
 
@@ -1071,7 +1077,7 @@ class TestChatsRoutes:
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
             assert exc_info.value.status_code == 402
@@ -1100,16 +1106,17 @@ class TestChatsRoutes:
         def mock_run_stream(*args, **kwargs):
             chunks = [
                 {"type": "token", "content": "Hello"},
-                {"type": "sources", "content": []}
+                {"type": "sources", "content": []},
             ]
             yield from chunks
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
-             patch('src.api.routes.chats.schedule_title_generation'):
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.schedule_title_generation"),
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -1129,7 +1136,7 @@ class TestChatsRoutes:
                 message_data=message_data,
                 db=Mock(),
                 current_user=current_user,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
             # Consume only first chunk then stop (simulates client disconnect)
@@ -1164,14 +1171,15 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
-             patch('src.api.routes.chats.schedule_title_generation'), \
-             patch('src.api.routes.chats.UserService') as mock_user_service, \
-             patch('src.api.routes.chats.settings') as mock_settings:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.schedule_title_generation"),
+            patch("src.api.routes.chats.UserService") as mock_user_service,
+            patch("src.api.routes.chats.settings") as mock_settings,
+        ):
             chat_service = Mock()
             saved_message = Mock()
             saved_message.id = uuid4()
@@ -1179,7 +1187,9 @@ class TestChatsRoutes:
             saved_message.role = "assistant"
             saved_message.content = "Response"
             saved_message.created_at = datetime.now(UTC)
-            saved_message.model_dump_json.return_value = '{"id": "123", "role": "assistant", "content": "Response"}'
+            saved_message.model_dump_json.return_value = (
+                '{"id": "123", "role": "assistant", "content": "Response"}'
+            )
             chat_service.save_message.return_value = saved_message
             chat_service.get_chat_history.return_value = []
             mock_chat_service.return_value = chat_service
@@ -1189,7 +1199,12 @@ class TestChatsRoutes:
             mock_user_service.return_value = user_service
 
             mock_settings.get_available_models.return_value = [
-                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 1.0, "output_token_multiplier": 1.0}
+                {
+                    "model": "gpt-4",
+                    "provider": "openai",
+                    "input_token_multiplier": 1.0,
+                    "output_token_multiplier": 1.0,
+                }
             ]
             mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
 
@@ -1198,7 +1213,7 @@ class TestChatsRoutes:
             rag = Mock()
             rag.run_stream.return_value = [
                 {"type": "token", "content": "Response"},
-                {"type": "sources", "content": []}
+                {"type": "sources", "content": []},
             ]
             mock_rag.return_value = rag
 
@@ -1210,7 +1225,7 @@ class TestChatsRoutes:
                 message_data=message_data,
                 db=Mock(),
                 current_user=current_user,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
             # Consume all chunks
@@ -1243,24 +1258,27 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
-             patch('src.api.routes.chats.schedule_title_generation'), \
-             patch('src.api.routes.chats.UserService') as mock_user_service, \
-             patch('src.api.routes.chats.settings') as mock_settings, \
-             patch('src.services.chat.ChatService') as mock_chat_service_class:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.schedule_title_generation"),
+            patch("src.api.routes.chats.UserService") as mock_user_service,
+            patch("src.api.routes.chats.settings") as mock_settings,
+            patch("src.services.chat.ChatService") as mock_chat_service_class,
+        ):
             chat_service = Mock()
             # First call (user message) succeeds, second call (assistant message) fails
             call_count = [0]
+
             def side_effect(*args, **kwargs):
                 call_count[0] += 1
                 if call_count[0] == 1:
                     return Mock()  # User message save succeeds
                 else:
                     raise Exception("Save error")  # Assistant message save fails
+
             chat_service.save_message.side_effect = side_effect
             chat_service.get_chat_history.return_value = []
             mock_chat_service.return_value = chat_service
@@ -1271,7 +1289,12 @@ class TestChatsRoutes:
             mock_user_service.return_value = user_service
 
             mock_settings.get_available_models.return_value = [
-                {"model": "gpt-4", "provider": "openai", "input_token_multiplier": 1.0, "output_token_multiplier": 1.0}
+                {
+                    "model": "gpt-4",
+                    "provider": "openai",
+                    "input_token_multiplier": 1.0,
+                    "output_token_multiplier": 1.0,
+                }
             ]
             mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
 
@@ -1280,7 +1303,7 @@ class TestChatsRoutes:
             rag = Mock()
             rag.run_stream.return_value = [
                 {"type": "token", "content": "Response"},
-                {"type": "sources", "content": []}
+                {"type": "sources", "content": []},
             ]
             mock_rag.return_value = rag
 
@@ -1292,7 +1315,7 @@ class TestChatsRoutes:
                 message_data=message_data,
                 db=Mock(),
                 current_user=current_user,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
             # Consume all chunks - should handle save error gracefully
@@ -1324,12 +1347,13 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local, \
-             patch('src.api.routes.chats.schedule_title_generation'):
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.schedule_title_generation"),
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -1349,7 +1373,7 @@ class TestChatsRoutes:
                 message_data=message_data,
                 db=Mock(),
                 current_user=current_user,
-                chat_repo=chat_repo
+                chat_repo=chat_repo,
             )
 
             # Consume only error chunk then disconnect
@@ -1384,11 +1408,12 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+        ):
             chat_service = Mock()
 
             # Create a proper mock message that can be validated
@@ -1398,7 +1423,9 @@ class TestChatsRoutes:
             mock_message.role = MessageRole.ASSISTANT
             mock_message.content = "Hello back"
             mock_message.created_at = Mock()
-            mock_message.model_dump_json.return_value = '{"id": "test", "content": "Hello back"}'
+            mock_message.model_dump_json.return_value = (
+                '{"id": "test", "content": "Hello back"}'
+            )
 
             chat_service.save_message.return_value = mock_message
             chat_service.get_chat_history.return_value = []
@@ -1409,20 +1436,20 @@ class TestChatsRoutes:
             rag = Mock()
             rag.run_stream.return_value = [
                 {"type": "token", "content": "Hello"},
-                {"type": "sources", "content": []}
+                {"type": "sources", "content": []},
             ]
             mock_rag.return_value = rag
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 body = []
@@ -1453,11 +1480,12 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+        ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
@@ -1472,13 +1500,13 @@ class TestChatsRoutes:
             mock_session = Mock()
             mock_session_local.return_value = mock_session
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 # Read first chunk then close to trigger GeneratorExit
@@ -1507,14 +1535,16 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        with patch('src.api.routes.chats.ChatService') as mock_chat_service, \
-             patch('src.api.routes.chats.RAGPipeline') as mock_rag, \
-             patch('src.api.routes.chats.InstantResponseService') as mock_instant, \
-             patch('src.api.routes.chats.SessionLocal') as mock_session_local:
-
+        with (
+            patch("src.api.routes.chats.ChatService") as mock_chat_service,
+            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+        ):
             chat_service = Mock()
             # Fail on calls inside the except block
             call_count = [0]
+
             def side_effect(*args, **kwargs):
                 call_count[0] += 1
                 if call_count[0] >= 2:  # Inside except block
@@ -1538,13 +1568,13 @@ class TestChatsRoutes:
             mock_session = Mock()
             mock_session_local.return_value = mock_session
 
-            with patch('src.api.routes.chats.schedule_title_generation'):
+            with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
                     chat_id=chat.id,
                     message_data=message_data,
                     db=Mock(),
                     current_user=current_user,
-                    chat_repo=chat_repo
+                    chat_repo=chat_repo,
                 )
 
                 body = []

@@ -18,13 +18,15 @@ class IngestionJobRepository:
         user_id: UUID,
         chat_type_id: UUID | None = None,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> list[IngestionJob]:
         """
         Get ingestion jobs for chat types owned by the user.
         """
-        query = self.db.query(IngestionJob).select_from(IngestionJob).join(
-            ChatType, IngestionJob.chat_type_id == ChatType.id
+        query = (
+            self.db.query(IngestionJob)
+            .select_from(IngestionJob)
+            .join(ChatType, IngestionJob.chat_type_id == ChatType.id)
         )
 
         query = query.filter(ChatType.owner_id == user_id)
@@ -32,7 +34,12 @@ class IngestionJobRepository:
         if chat_type_id is not None:
             query = query.filter(IngestionJob.chat_type_id == chat_type_id)
 
-        return query.order_by(IngestionJob.created_at.desc()).offset(skip).limit(limit).all()
+        return (
+            query.order_by(IngestionJob.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     def create(self, job: IngestionJob) -> IngestionJob:
         self.db.add(job)

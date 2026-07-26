@@ -9,6 +9,7 @@ from config.settings import settings
 
 class SourceFilter(logging.Filter):
     """Filter to add source tag to log records."""
+
     def filter(self, record):
         # Determine source based on logger name
         logger_name = record.name
@@ -26,6 +27,7 @@ class SourceFilter(logging.Filter):
 
         return True
 
+
 class ColoredFormatter(logging.Formatter):
     # Level colors
     grey = "\x1b[90m"
@@ -39,18 +41,18 @@ class ColoredFormatter(logging.Formatter):
     timestamp_color = "\x1b[90;20m"  # Dark grey
 
     # Source colors
-    web_color = "\x1b[36;20m"     # Cyan
-    dba_color = "\x1b[33;20m"     # Yellow
-    app_color = "\x1b[32;20m"     # Green
-    sql_color = "\x1b[35;20m"     # Magenta (Purple)
-    sys_color = "\x1b[37;20m"     # White
+    web_color = "\x1b[36;20m"  # Cyan
+    dba_color = "\x1b[33;20m"  # Yellow
+    app_color = "\x1b[32;20m"  # Green
+    sql_color = "\x1b[35;20m"  # Magenta (Purple)
+    sys_color = "\x1b[37;20m"  # White
 
     SOURCE_COLORS = {
         "WEB": web_color,
         "DBA": dba_color,
         "APP": app_color,
         "SQL": sql_color,
-        "SYS": sys_color
+        "SYS": sys_color,
     }
 
     FORMATS = {
@@ -58,7 +60,7 @@ class ColoredFormatter(logging.Formatter):
         logging.INFO: blue,
         logging.WARNING: orange,
         logging.ERROR: red,
-        logging.CRITICAL: blood_red
+        logging.CRITICAL: blood_red,
     }
 
     def __init__(self):
@@ -83,18 +85,20 @@ class ColoredFormatter(logging.Formatter):
         level_color = self.FORMATS.get(record.levelno, self.grey)
 
         # Get source color
-        source_color = self.SOURCE_COLORS.get(getattr(record, 'source', 'SYS'), self.sys_color)
+        source_color = self.SOURCE_COLORS.get(
+            getattr(record, "source", "SYS"), self.sys_color
+        )
 
         # Use source and level as-is without padding
-        source = getattr(record, 'source', 'SYS')
+        source = getattr(record, "source", "SYS")
 
         # Abbreviate level
         level_map = {
-            'DEBUG': 'DEBUG',
-            'INFO': 'INFO',
-            'WARNING': 'WARN',
-            'ERROR': 'ERROR',
-            'CRITICAL': 'CRIT'
+            "DEBUG": "DEBUG",
+            "INFO": "INFO",
+            "WARNING": "WARN",
+            "ERROR": "ERROR",
+            "CRITICAL": "CRIT",
         }
         level = level_map.get(record.levelname, record.levelname[:4])
 
@@ -138,15 +142,12 @@ def setup_logger():
 
     log_file_path = os.path.join(settings.LOG_DIR, "app.log")
     file_handler = RotatingFileHandler(
-        log_file_path,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding='utf-8'
+        log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
     file_handler.setLevel(console_level)
     file_formatter = UTCOffsetFormatter(
         "[%(asctime)s] [%(source)s] [%(levelname)s] [%(filename)s:%(lineno)d] - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     file_handler.setFormatter(file_formatter)
     file_handler.addFilter(SourceFilter())
@@ -159,5 +160,6 @@ def setup_logger():
 
     logger_name = getattr(settings, "PROJECT_NAME", "GitGudGuide")
     return logging.getLogger(logger_name)
+
 
 logger = setup_logger()

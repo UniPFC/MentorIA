@@ -14,9 +14,7 @@ class TestChatService:
         chat_service = ChatService(db_session)
 
         message = chat_service.save_message(
-            chat_id=sample_chat.id,
-            role=MessageRole.USER,
-            content="Hello, assistant!"
+            chat_id=sample_chat.id, role=MessageRole.USER, content="Hello, assistant!"
         )
 
         assert message.id is not None
@@ -28,9 +26,7 @@ class TestChatService:
         chat_service = ChatService(db_session)
 
         message = chat_service.save_message(
-            chat_id=sample_chat.id,
-            role=MessageRole.ASSISTANT,
-            content="Hello, user!"
+            chat_id=sample_chat.id, role=MessageRole.ASSISTANT, content="Hello, user!"
         )
 
         assert message.id is not None
@@ -45,7 +41,9 @@ class TestChatService:
         assert isinstance(history, list)
         assert len(history) == 0
 
-    def test_get_chat_history_with_messages(self, db_session: Session, sample_chat: Chat):
+    def test_get_chat_history_with_messages(
+        self, db_session: Session, sample_chat: Chat
+    ):
         chat_service = ChatService(db_session)
 
         chat_service.save_message(sample_chat.id, MessageRole.USER, "Message 1")
@@ -86,12 +84,13 @@ class TestChatService:
 
     def test_save_message_error_handling(self, db_session: Session):
         from unittest.mock import patch
+
         chat_service = ChatService(db_session)
 
-        with patch.object(db_session, 'commit', side_effect=Exception("Database error")):
+        with patch.object(
+            db_session, "commit", side_effect=Exception("Database error")
+        ):
             with pytest.raises(Exception, match="Database error"):
                 chat_service.save_message(
-                    chat_id=uuid4(),
-                    role=MessageRole.USER,
-                    content="Test"
+                    chat_id=uuid4(), role=MessageRole.USER, content="Test"
                 )

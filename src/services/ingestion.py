@@ -22,7 +22,9 @@ class ChunkIngestionService:
     Service for ingesting question-answer chunks into Qdrant.
     """
 
-    def __init__(self, embedding_engine: EmbeddingEngine, qdrant_manager: QdrantManager):
+    def __init__(
+        self, embedding_engine: EmbeddingEngine, qdrant_manager: QdrantManager
+    ):
         """
         Initialize ingestion service.
 
@@ -44,7 +46,7 @@ class ChunkIngestionService:
         Returns:
             Detected encoding (utf-8, latin-1, cp1252, etc.)
         """
-        encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+        encodings = ["utf-8", "latin-1", "iso-8859-1", "cp1252", "utf-16"]
 
         for encoding in encodings:
             try:
@@ -55,7 +57,7 @@ class ChunkIngestionService:
                 continue
 
         logger.warning("Could not detect encoding, defaulting to latin-1")
-        return 'latin-1'
+        return "latin-1"
 
     def _detect_csv_delimiter(self, file_content: bytes) -> str:
         """
@@ -70,30 +72,30 @@ class ChunkIngestionService:
         try:
             # Detect encoding first
             encoding = self._detect_encoding(file_content)
-            text_content = file_content.decode(encoding, errors='ignore')
-            first_line = text_content.split('\n')[0]
+            text_content = file_content.decode(encoding, errors="ignore")
+            first_line = text_content.split("\n")[0]
 
             # Count occurrences of common delimiters
-            comma_count = first_line.count(',')
-            semicolon_count = first_line.count(';')
+            comma_count = first_line.count(",")
+            semicolon_count = first_line.count(";")
 
             # Return the most frequent delimiter, default to comma
             if semicolon_count > comma_count:
                 logger.debug("Detected CSV delimiter: semicolon (;)")
-                return ';'
+                return ";"
             else:
                 logger.debug("Detected CSV delimiter: comma (,)")
-                return ','
+                return ","
         except Exception as e:
             logger.warning(f"Failed to detect CSV delimiter, defaulting to comma: {e}")
-            return ','
+            return ","
 
     def parse_spreadsheet(
         self,
         file_content: bytes,
         filename: str,
         question_col: str = "question",
-        answer_col: str = "answer"
+        answer_col: str = "answer",
     ) -> list[dict[str, Any]]:
         """
         Parse spreadsheet file into chunks.
@@ -109,18 +111,22 @@ class ChunkIngestionService:
         """
         try:
             # Detect file type and read
-            if filename.endswith('.csv'):
+            if filename.endswith(".csv"):
                 delimiter = self._detect_csv_delimiter(file_content)
                 encoding = self._detect_encoding(file_content)
-                df = pd.read_csv(BytesIO(file_content), delimiter=delimiter, encoding=encoding)
-            elif filename.endswith(('.xlsx', '.xls')):
+                df = pd.read_csv(
+                    BytesIO(file_content), delimiter=delimiter, encoding=encoding
+                )
+            elif filename.endswith((".xlsx", ".xls")):
                 df = pd.read_excel(BytesIO(file_content))
             else:
                 raise ValueError(f"Unsupported file format: {filename}")
 
             # Validate columns
             if question_col not in df.columns or answer_col not in df.columns:
-                raise ValueError(f"Required columns '{question_col}' and '{answer_col}' not found in file")
+                raise ValueError(
+                    f"Required columns '{question_col}' and '{answer_col}' not found in file"
+                )
 
             # Parse chunks
             chunks = []
@@ -128,15 +134,18 @@ class ChunkIngestionService:
                 question = str(row[question_col]).strip()
                 answer = str(row[answer_col]).strip()
 
-                if question and answer and question != 'nan' and answer != 'nan':
-                    chunks.append({
-                        "question": question,
-                        "answer": answer,
-                        "metadata": {
-                            "source_file": filename,
-                            "row_number": int(idx) + 2  # +2 for header and 0-indexing
+                if question and answer and question != "nan" and answer != "nan":
+                    chunks.append(
+                        {
+                            "question": question,
+                            "answer": answer,
+                            "metadata": {
+                                "source_file": filename,
+                                "row_number": int(idx)
+                                + 2,  # +2 for header and 0-indexing
+                            },
                         }
-                    })
+                    )
 
             logger.info(f"Parsed {len(chunks)} chunks from {filename}")
             return chunks
@@ -151,7 +160,7 @@ class ChunkIngestionService:
         chunks: list[dict[str, Any]],
         db_session: Any,
         batch_size: int = 32,
-        on_progress: Callable[[int], None] | None = None
+        on_progress: Callable[[int], None] | None = None,
     ) -> tuple[list[str], int]:
         """
         Ingest chunks into Qdrant with embeddings.
@@ -178,17 +187,17 @@ class ChunkIngestionService:
             all_embeddings = []
             total_batches = (len(texts) - 1) // batch_size + 1
             for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i + batch_size]
+                batch_texts = texts[i : i + batch_size]
                 batch_embeddings = self.embedding_engine.embed(batch_texts)
                 all_embeddings.extend(batch_embeddings)
                 current_batch = i // batch_size + 1
-                logger.info(f"[EMBEDDING] Batch {current_batch}/{total_batches} ({len(all_embeddings)}/{len(texts)} chunks embedded)")
+                logger.info(
+                    f"[EMBEDDING] Batch {current_batch}/{total_batches} ({len(all_embeddings)}/{len(texts)} chunks embedded)"
+                )
 
             # Insert into Qdrant
             point_ids = self.qdrant_manager.insert_chunks(
-                chat_type_id=chat_type_id,
-                chunks=chunks,
-                embeddings=all_embeddings
+                chat_type_id=chat_type_id, chunks=chunks, embeddings=all_embeddings
             )
 
             # Save metadata to database with progress tracking
@@ -201,7 +210,7 @@ class ChunkIngestionService:
                     qdrant_point_id=point_id,
                     source_file=metadata.get("source_file"),
                     row_number=metadata.get("row_number"),
-                    chunk_metadata=json.dumps(metadata)
+                    chunk_metadata=json.dumps(metadata),
                 )
                 db_session.add(knowledge_chunk)
 
@@ -217,11 +226,15 @@ class ChunkIngestionService:
             # Final commit if not already done
             db_session.commit()
 
-            logger.info(f"Successfully ingested {len(point_ids)} chunks for chat_type_id={chat_type_id}")
+            logger.info(
+                f"Successfully ingested {len(point_ids)} chunks for chat_type_id={chat_type_id}"
+            )
             return point_ids, len(point_ids)
 
         except Exception as e:
-            logger.error(f"Failed to ingest chunks for chat_type_id={chat_type_id}: {e}")
+            logger.error(
+                f"Failed to ingest chunks for chat_type_id={chat_type_id}: {e}"
+            )
             raise
 
     def ingest_from_file(
@@ -231,7 +244,7 @@ class ChunkIngestionService:
         filename: str,
         db_session: Any,
         question_col: str = "question",
-        answer_col: str = "answer"
+        answer_col: str = "answer",
     ) -> tuple[list[str], int]:
         """
         Complete ingestion pipeline: parse file → embed → store.
@@ -247,10 +260,14 @@ class ChunkIngestionService:
         Returns:
             Tuple of (point_ids, total_ingested)
         """
-        logger.info(f"Starting ingestion pipeline for chat_type_id={chat_type_id}, file={filename}")
+        logger.info(
+            f"Starting ingestion pipeline for chat_type_id={chat_type_id}, file={filename}"
+        )
 
         # Parse spreadsheet
-        chunks = self.parse_spreadsheet(file_content, filename, question_col, answer_col)
+        chunks = self.parse_spreadsheet(
+            file_content, filename, question_col, answer_col
+        )
 
         # Ingest chunks
         point_ids, total = self.ingest_chunks(chat_type_id, chunks, db_session)

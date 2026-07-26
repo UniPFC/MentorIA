@@ -36,13 +36,13 @@ class TestHFRerankProvider:
 
     def test_rerank_success(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
         mock_tokenizer.pad_token = "[PAD]"
 
         mock_encoded = {
-            'input_ids': torch.tensor([[1, 2, 3], [4, 5, 6]]),
-            'attention_mask': torch.tensor([[1, 1, 1], [1, 1, 1]])
+            "input_ids": torch.tensor([[1, 2, 3], [4, 5, 6]]),
+            "attention_mask": torch.tensor([[1, 1, 1], [1, 1, 1]]),
         }
         mock_tokenizer.return_value.to.return_value = mock_encoded
 
@@ -61,15 +61,15 @@ class TestHFRerankProvider:
 
     def test_rerank_with_batch_size(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
         mock_tokenizer.pad_token = "[PAD]"
 
         def mock_tokenizer_side_effect(*args, **kwargs):
             mock_result = MagicMock()
             mock_result.to.return_value = {
-                'input_ids': torch.tensor([[1, 2]]),
-                'attention_mask': torch.tensor([[1, 1]])
+                "input_ids": torch.tensor([[1, 2]]),
+                "attention_mask": torch.tensor([[1, 1]]),
             }
             return mock_result
 
@@ -91,13 +91,13 @@ class TestHFRerankProvider:
 
     def test_rerank_with_max_length(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
         mock_tokenizer.pad_token = "[PAD]"
 
         mock_encoded = {
-            'input_ids': torch.tensor([[1, 2, 3]]),
-            'attention_mask': torch.tensor([[1, 1, 1]])
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
         }
         mock_tokenizer.return_value.to.return_value = mock_encoded
 
@@ -109,7 +109,7 @@ class TestHFRerankProvider:
         result = provider.rerank("query", ["doc1"], max_length=512)
 
         call_kwargs = mock_tokenizer.call_args[1]
-        assert call_kwargs['max_length'] == 512
+        assert call_kwargs["max_length"] == 512
 
     def test_rerank_empty_documents(self):
         mock_model = MagicMock()
@@ -123,13 +123,13 @@ class TestHFRerankProvider:
 
     def test_rerank_logits_2d_single_column(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
         mock_tokenizer.pad_token = "[PAD]"
 
         mock_encoded = {
-            'input_ids': torch.tensor([[1, 2]]),
-            'attention_mask': torch.tensor([[1, 1]])
+            "input_ids": torch.tensor([[1, 2]]),
+            "attention_mask": torch.tensor([[1, 1]]),
         }
         mock_tokenizer.return_value.to.return_value = mock_encoded
 
@@ -145,13 +145,13 @@ class TestHFRerankProvider:
 
     def test_rerank_logits_2d_multi_column(self):
         mock_model = MagicMock()
-        mock_model.device = 'cpu'
+        mock_model.device = "cpu"
         mock_tokenizer = MagicMock()
         mock_tokenizer.pad_token = "[PAD]"
 
         mock_encoded = {
-            'input_ids': torch.tensor([[1, 2]]),
-            'attention_mask': torch.tensor([[1, 1]])
+            "input_ids": torch.tensor([[1, 2]]),
+            "attention_mask": torch.tensor([[1, 1]]),
         }
         mock_tokenizer.return_value.to.return_value = mock_encoded
 

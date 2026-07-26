@@ -25,14 +25,16 @@ class TestChatTypeRepositoryExtended:
             email="test@example.com",
             password_hash="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqYj5rHQZe",
             is_active=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(user)
         db_session.commit()
         db_session.refresh(user)
         return user
 
-    def test_get_by_id_with_relations(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_get_by_id_with_relations(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test get_by_id with loaded relations"""
         # Create chat type
         chat_type = ChatType(
@@ -42,7 +44,7 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="test_collection",
             is_public=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -61,7 +63,9 @@ class TestChatTypeRepositoryExtended:
         found_chat_type = chat_type_repo.get_by_id(non_existent_id)
         assert found_chat_type is None
 
-    def test_get_public_chat_types(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_get_public_chat_types(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test get_public_chat_types using search method"""
         # Create public and private chat types
         public_chat_type = ChatType(
@@ -71,7 +75,7 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="public_collection",
             is_public=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         private_chat_type = ChatType(
             id=uuid4(),
@@ -80,7 +84,7 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="private_collection",
             is_public=False,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([public_chat_type, private_chat_type])
         db_session.commit()
@@ -91,7 +95,9 @@ class TestChatTypeRepositoryExtended:
         assert public_chat_types[0].name == "Public Chat Type"
         assert public_chat_types[0].is_public is True
 
-    def test_search_method(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_search_method(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test search method with various filters"""
         # Create chat types for testing
         public_chat_type = ChatType(
@@ -101,7 +107,7 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="public_collection",
             is_public=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         private_chat_type = ChatType(
             id=uuid4(),
@@ -110,7 +116,7 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="private_collection",
             is_public=False,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([public_chat_type, private_chat_type])
         db_session.commit()
@@ -131,7 +137,9 @@ class TestChatTypeRepositoryExtended:
         assert len(query_results) == 1
         assert query_results[0].name == "Public Chat Type"
 
-    def test_list_user_available(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_list_user_available(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test list_user_available method"""
         # Create chat types for user
         chat_type1 = ChatType(
@@ -141,7 +149,7 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="user_collection_1",
             is_public=False,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         chat_type2 = ChatType(
             id=uuid4(),
@@ -150,17 +158,21 @@ class TestChatTypeRepositoryExtended:
             owner_id=sample_user.id,
             collection_name="user_collection_2",
             is_public=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([chat_type1, chat_type2])
         db_session.commit()
 
         # Test list_user_available
-        user_chat_types, total = chat_type_repo.list_user_available(user_id=sample_user.id, favorited_ids=[])
+        user_chat_types, total = chat_type_repo.list_user_available(
+            user_id=sample_user.id, favorited_ids=[]
+        )
         assert len(user_chat_types) == 2
         assert total == 2
 
-    def test_list_by_ids(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_list_by_ids(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test list_by_ids method"""
         # Create chat types
         chat_type1 = ChatType(
@@ -169,7 +181,7 @@ class TestChatTypeRepositoryExtended:
             description="Description 1",
             owner_id=sample_user.id,
             collection_name="collection_1",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         chat_type2 = ChatType(
             id=uuid4(),
@@ -177,7 +189,7 @@ class TestChatTypeRepositoryExtended:
             description="Description 2",
             owner_id=sample_user.id,
             collection_name="collection_2",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add_all([chat_type1, chat_type2])
         db_session.commit()
@@ -197,7 +209,9 @@ class TestChatTypeRepositoryExtended:
         assert len(chat_types) == 0
         assert total == 0
 
-    def test_add_tags(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_add_tags(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test add_tags method"""
         # Create chat type
         chat_type = ChatType(
@@ -206,7 +220,7 @@ class TestChatTypeRepositoryExtended:
             description="Description",
             owner_id=sample_user.id,
             collection_name="tagged_collection",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(chat_type)
         db_session.commit()
@@ -221,7 +235,9 @@ class TestChatTypeRepositoryExtended:
         assert "tag2" in tags
         assert "tag3" in tags
 
-    def test_get_tags(self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User):
+    def test_get_tags(
+        self, chat_type_repo: ChatTypeRepository, db_session: Session, sample_user: User
+    ):
         """Test get_tags method"""
         # Create chat type with tags
         chat_type = ChatType(
@@ -230,7 +246,7 @@ class TestChatTypeRepositoryExtended:
             description="Description",
             owner_id=sample_user.id,
             collection_name="tagged_collection",
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db_session.add(chat_type)
         db_session.commit()

@@ -31,10 +31,7 @@ class QdrantManager:
     def __init__(self):
         """Initialize Qdrant client connection."""
         try:
-            self.client = QdrantClient(
-                url=settings.QDRANT_URL,
-                timeout=30.0
-            )
+            self.client = QdrantClient(url=settings.QDRANT_URL, timeout=30.0)
             logger.info(f"Connected to Qdrant at {settings.QDRANT_URL}")
         except Exception as e:
             logger.error(f"Failed to connect to Qdrant: {e}")
@@ -48,7 +45,7 @@ class QdrantManager:
         self,
         chat_type_id: UUID,
         vector_size: int = settings.EMBEDDING_DIMENSION,
-        distance: Distance = Distance.COSINE
+        distance: Distance = Distance.COSINE,
     ) -> bool:
         """
         Create a new collection for a ChatType.
@@ -73,12 +70,11 @@ class QdrantManager:
             # Create new collection
             self.client.create_collection(
                 collection_name=collection_name,
-                vectors_config=VectorParams(
-                    size=vector_size,
-                    distance=distance
-                )
+                vectors_config=VectorParams(size=vector_size, distance=distance),
             )
-            logger.info(f"Created collection '{collection_name}' with vector_size={vector_size}")
+            logger.info(
+                f"Created collection '{collection_name}' with vector_size={vector_size}"
+            )
             return True
 
         except Exception as e:
@@ -109,7 +105,7 @@ class QdrantManager:
         self,
         chat_type_id: UUID,
         chunks: list[dict[str, Any]],
-        embeddings: list[list[float]]
+        embeddings: list[list[float]],
     ) -> list[str]:
         """
         Insert chunks with embeddings into a collection.
@@ -125,7 +121,9 @@ class QdrantManager:
         collection_name = self.get_collection_name(chat_type_id)
 
         if len(chunks) != len(embeddings):
-            raise ValueError(f"Chunks count ({len(chunks)}) must match embeddings count ({len(embeddings)})")
+            raise ValueError(
+                f"Chunks count ({len(chunks)}) must match embeddings count ({len(embeddings)})"
+            )
 
         try:
             points = []
@@ -138,23 +136,18 @@ class QdrantManager:
                 payload = {
                     "question": chunk.get("question", ""),
                     "answer": chunk.get("answer", ""),
-                    "metadata": chunk.get("metadata", {})
+                    "metadata": chunk.get("metadata", {}),
                 }
 
                 points.append(
-                    PointStruct(
-                        id=point_id,
-                        vector=embedding,
-                        payload=payload
-                    )
+                    PointStruct(id=point_id, vector=embedding, payload=payload)
                 )
 
-            self.client.upsert(
-                collection_name=collection_name,
-                points=points
-            )
+            self.client.upsert(collection_name=collection_name, points=points)
 
-            logger.info(f"Inserted {len(points)} chunks into collection '{collection_name}'")
+            logger.info(
+                f"Inserted {len(points)} chunks into collection '{collection_name}'"
+            )
             return point_ids
 
         except Exception as e:
@@ -166,7 +159,7 @@ class QdrantManager:
         chat_type_id: UUID,
         query_embedding: list[float],
         limit: int = 10,
-        score_threshold: float | None = None
+        score_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search for similar chunks in a collection.
@@ -188,18 +181,20 @@ class QdrantManager:
                 collection_name=collection_name,
                 query=query_embedding,
                 limit=limit,
-                score_threshold=score_threshold
+                score_threshold=score_threshold,
             ).points
 
             chunks = []
             for result in results:
-                chunks.append({
-                    "id": result.id,
-                    "score": result.score,
-                    "question": result.payload.get("question", ""),
-                    "answer": result.payload.get("answer", ""),
-                    "metadata": result.payload.get("metadata", {})
-                })
+                chunks.append(
+                    {
+                        "id": result.id,
+                        "score": result.score,
+                        "question": result.payload.get("question", ""),
+                        "answer": result.payload.get("answer", ""),
+                        "metadata": result.payload.get("metadata", {}),
+                    }
+                )
 
             logger.info(f"Found {len(chunks)} chunks in collection '{collection_name}'")
             return chunks
@@ -226,7 +221,7 @@ class QdrantManager:
                 "name": collection_name,
                 "vectors_count": info.vectors_count,
                 "points_count": info.points_count,
-                "status": info.status
+                "status": info.status,
             }
         except Exception as e:
             logger.warning(f"Collection '{collection_name}' not found: {e}")

@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down API...")
 
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Multi-tenant RAG chat system with custom knowledge bases",
@@ -49,7 +50,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if settings.ENABLE_API_DOCS else None,
     redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
-    openapi_url="/openapi.json" if settings.ENABLE_API_DOCS else None
+    openapi_url="/openapi.json" if settings.ENABLE_API_DOCS else None,
 )
 
 # Adicionar middlewares de segurança (ordem importa!)
@@ -72,12 +73,14 @@ app.add_middleware(
     expose_headers=["X-STT-Enabled"],
 )
 
+
 # Middleware to add STT availability header
 @app.middleware("http")
 async def add_stt_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-STT-Enabled"] = str(settings.STT_ENABLED).lower()
     return response
+
 
 # Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
@@ -94,23 +97,20 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
         # Melhorar mensagens de validação de senha
         if field == "password" or field == "new_password":
-            if "at least 8 characters" in msg or "Senha deve ter no mínimo 8 caracteres" in msg:
+            if (
+                "at least 8 characters" in msg
+                or "Senha deve ter no mínimo 8 caracteres" in msg
+            ):
                 msg = "Senha deve ter no mínimo 8 caracteres."
             elif "String should have at least" in msg:
                 msg = "Senha deve ter no mínimo 8 caracteres."
 
-        errors.append({
-            "field": field,
-            "message": msg
-        })
+        errors.append({"field": field, "message": msg})
 
     return JSONResponse(
-        status_code=422,
-        content={
-            "detail": "Erro de validação",
-            "errors": errors
-        }
+        status_code=422, content={"detail": "Erro de validação", "errors": errors}
     )
+
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
@@ -123,13 +123,11 @@ app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 app.include_router(payments.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
 
+
 @app.get("/")
 def root():
-    return {
-        "message": "RAG Chat API",
-        "version": app.version,
-        "docs": "/docs"
-    }
+    return {"message": "RAG Chat API", "version": app.version, "docs": "/docs"}
+
 
 @app.get("/health")
 def health():

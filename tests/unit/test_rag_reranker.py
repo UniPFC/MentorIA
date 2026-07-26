@@ -33,7 +33,7 @@ class TestRerankerEngine:
             {"id": "1", "question": "Q1", "answer": "A1"},
             {"id": "2", "question": "Q2", "answer": "A2"},
             {"id": "3", "question": "Q3", "answer": "A3"},
-            {"id": "4", "question": "Q4", "answer": "A4"}
+            {"id": "4", "question": "Q4", "answer": "A4"},
         ]
 
         result = engine.rerank_chunks("test query", chunks, top_k=2, threshold=0.6)
@@ -56,7 +56,7 @@ class TestRerankerEngine:
             {"id": "1", "question": "Q1", "answer": "A1"},
             {"id": "2", "question": "Q2", "answer": "A2"},
             {"id": "3", "question": "Q3", "answer": "A3"},
-            {"id": "4", "question": "Q4", "answer": "A4"}
+            {"id": "4", "question": "Q4", "answer": "A4"},
         ]
 
         result = engine.rerank_chunks("test query", chunks, top_k=10, threshold=0.6)
@@ -72,7 +72,7 @@ class TestRerankerEngine:
             {"id": "1", "question": "Q1", "answer": "A1"},
             {"id": "2", "question": "Q2", "answer": "A2"},
             {"id": "3", "question": "Q3", "answer": "A3"},
-            {"id": "4", "question": "Q4", "answer": "A4"}
+            {"id": "4", "question": "Q4", "answer": "A4"},
         ]
 
         result = engine.rerank_chunks("test query", chunks, top_k=10, threshold=0.0)
@@ -92,8 +92,7 @@ class TestRerankerEngine:
         engine = RerankerEngine(mock_provider)
 
         chunks = [
-            {"id": str(i), "question": f"Q{i}", "answer": f"A{i}"}
-            for i in range(5)
+            {"id": str(i), "question": f"Q{i}", "answer": f"A{i}"} for i in range(5)
         ]
 
         result = engine.rerank_chunks("test query", chunks, top_k=3, threshold=0.0)
@@ -110,7 +109,7 @@ class TestRerankerEngine:
         chunks = [
             {"id": "1", "question": "Q1", "answer": "A1"},
             {"id": "2", "question": "Q2", "answer": "A2"},
-            {"id": "3", "question": "Q3", "answer": "A3"}
+            {"id": "3", "question": "Q3", "answer": "A3"},
         ]
 
         result = engine.rerank_chunks("test query", chunks, top_k=10, threshold=0.5)
@@ -121,9 +120,7 @@ class TestRerankerEngine:
         mock_provider.rerank.side_effect = Exception("Rerank error")
         engine = RerankerEngine(mock_provider)
 
-        chunks = [
-            {"id": "1", "question": "Q1", "answer": "A1"}
-        ]
+        chunks = [{"id": "1", "question": "Q1", "answer": "A1"}]
 
         with pytest.raises(Exception, match="Rerank error"):
             engine.rerank_chunks("test query", chunks)

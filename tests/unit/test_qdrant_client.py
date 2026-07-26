@@ -9,12 +9,12 @@ from shared.qdrant.client import QdrantManager
 @pytest.mark.unit
 class TestQdrantManager:
     def test_init_failure(self):
-        with patch('shared.qdrant.client.QdrantClient') as mock_qdrant_client:
+        with patch("shared.qdrant.client.QdrantClient") as mock_qdrant_client:
             mock_qdrant_client.side_effect = Exception("Connection refused")
             with pytest.raises(Exception, match="Connection refused"):
                 QdrantManager()
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_init(self, mock_qdrant_client):
         manager = QdrantManager()
         assert manager.client is not None
@@ -25,7 +25,7 @@ class TestQdrantManager:
         collection_name = manager.get_collection_name(chat_type_id)
         assert collection_name == f"chat_type_{chat_type_id}"
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_create_collection_new(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_client.get_collections.return_value.collections = []
@@ -39,7 +39,7 @@ class TestQdrantManager:
         assert result is True
         mock_client.create_collection.assert_called_once()
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_create_collection_exception(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_client.get_collections.side_effect = Exception("Qdrant error")
@@ -51,7 +51,7 @@ class TestQdrantManager:
         with pytest.raises(Exception, match="Qdrant error"):
             manager.create_collection(chat_type_id)
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_create_collection_exists(self, mock_qdrant_client):
         chat_type_id = uuid4()
         collection_name = f"chat_type_{chat_type_id}"
@@ -69,7 +69,7 @@ class TestQdrantManager:
         assert result is True
         mock_client.create_collection.assert_not_called()
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_delete_collection(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_qdrant_client.return_value = mock_client
@@ -82,7 +82,7 @@ class TestQdrantManager:
         assert result is True
         mock_client.delete_collection.assert_called_once()
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_delete_collection_exception(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_client.delete_collection.side_effect = Exception("Qdrant delete failed")
@@ -95,7 +95,7 @@ class TestQdrantManager:
 
         assert result is False
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_insert_chunks(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_qdrant_client.return_value = mock_client
@@ -105,7 +105,7 @@ class TestQdrantManager:
 
         chunks = [
             {"question": "Q1", "answer": "A1", "metadata": {}},
-            {"question": "Q2", "answer": "A2", "metadata": {}}
+            {"question": "Q2", "answer": "A2", "metadata": {}},
         ]
         embeddings = [[0.1] * 384, [0.2] * 384]
 
@@ -114,7 +114,7 @@ class TestQdrantManager:
         assert len(point_ids) == 2
         mock_client.upsert.assert_called_once()
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_insert_chunks_exception(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_client.upsert.side_effect = Exception("Qdrant insert failed")
@@ -129,7 +129,7 @@ class TestQdrantManager:
         with pytest.raises(Exception, match="Qdrant insert failed"):
             manager.insert_chunks(chat_type_id, chunks, embeddings)
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_insert_chunks_mismatch(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_qdrant_client.return_value = mock_client
@@ -143,7 +143,7 @@ class TestQdrantManager:
         with pytest.raises(ValueError, match="must match"):
             manager.insert_chunks(chat_type_id, chunks, embeddings)
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_search(self, mock_qdrant_client):
         mock_point = MagicMock()
         mock_point.id = "point_1"
@@ -151,7 +151,7 @@ class TestQdrantManager:
         mock_point.payload = {
             "question": "Test question",
             "answer": "Test answer",
-            "metadata": {"source": "test"}
+            "metadata": {"source": "test"},
         }
 
         mock_client = MagicMock()
@@ -169,7 +169,7 @@ class TestQdrantManager:
         assert results[0]["score"] == 0.95
         assert results[0]["question"] == "Test question"
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_search_exception(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_client.query_points.side_effect = Exception("Qdrant search failed")
@@ -182,7 +182,7 @@ class TestQdrantManager:
         with pytest.raises(Exception, match="Qdrant search failed"):
             manager.search(chat_type_id, query_embedding)
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_get_collection_info(self, mock_qdrant_client):
         mock_collection_info = MagicMock()
         mock_collection_info.vectors_count = 100
@@ -203,7 +203,7 @@ class TestQdrantManager:
         assert info["points_count"] == 100
         assert info["status"] == "green"
 
-    @patch('shared.qdrant.client.QdrantClient')
+    @patch("shared.qdrant.client.QdrantClient")
     def test_get_collection_info_not_found(self, mock_qdrant_client):
         mock_client = MagicMock()
         mock_client.get_collection.side_effect = Exception("Not found")

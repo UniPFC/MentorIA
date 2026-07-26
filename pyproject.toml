@@ -69,3 +69,6 @@ exclude = [
     "^alembic/",
     "^tests/"
 ]
+
+[dependency-groups]
+dev = []
