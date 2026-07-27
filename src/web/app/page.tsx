@@ -8,8 +8,8 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = authService.getToken();
-    router.push(token ? '/dashboard' : '/login');
+    const user = authService.getUser();
+    router.push(user ? '/dashboard' : '/login');
   }, [router]);
 
   return (

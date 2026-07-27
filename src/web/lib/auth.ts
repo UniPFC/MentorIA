@@ -9,13 +9,17 @@ export interface User {
   token_budget?: number;
   max_token_budget?: number;
   remaining_tokens?: number;
+  two_factor_enabled?: boolean;
+  last_2fa_reminder_at?: string;
 }
 
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
+  access_token?: string;
+  refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  requires_2fa?: boolean;
+  temp_token?: string;
 }
 
 export interface RegisterResponse {
@@ -37,6 +41,9 @@ export const authService = {
       });
 
       // O backend agora injeta os cookies HttpOnly (authToken, refreshToken) na resposta automaticamente
+      if (response.data.requires_2fa) {
+        return response.data;
+      }
 
       try {
         const userResponse = await api.get('/auth/me');
@@ -118,6 +125,42 @@ export const authService = {
     } finally {
       localStorage.removeItem('user');
     }
+  },
+
+  async login2FA(tempToken: string, code: string, rememberMe: boolean = false): Promise<LoginResponse> {
+    const response = await api.post<LoginResponse>('/auth/login/2fa', {
+      temp_token: tempToken,
+      code,
+      remember_me: rememberMe,
+    });
+    
+    try {
+      const userResponse = await api.get('/auth/me');
+      localStorage.setItem('user', JSON.stringify(userResponse.data));
+    } catch (e) {
+      console.error('Error fetching user data:', e);
+    }
+    return response.data;
+  },
+
+  async setup2FA() {
+    const response = await api.post('/auth/2fa/setup');
+    return response.data;
+  },
+
+  async enable2FA(secret: string, code: string) {
+    const response = await api.post('/auth/2fa/enable', { secret, code });
+    return response.data;
+  },
+
+  async disable2FA(code: string) {
+    const response = await api.post('/auth/2fa/disable', { code });
+    return response.data;
+  },
+
+  async dismiss2FAReminder() {
+    const response = await api.post('/auth/2fa/dismiss-reminder');
+    return response.data;
   },
 
   getToken(): string | null {

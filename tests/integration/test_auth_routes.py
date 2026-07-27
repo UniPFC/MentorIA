@@ -582,3 +582,178 @@ class TestAuthRoutes:
             headers={"Authorization": f"Bearer {sample_jwt_token}"},
         )
         assert response.status_code == 400
+
+    def test_login_requires_2fa(self, client, sample_user, db_session):
+        sample_user.two_factor_enabled = True
+        db_session.commit()
+
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": sample_user.email, "password": "password123"},
+        )
+        assert response.status_code == 202
+        data = response.json()
+        assert data["requires_2fa"] is True
+        assert "temp_token" in data
+
+    def test_login_2fa_success(self, client, sample_user, db_session):
+        sample_user.two_factor_enabled = True
+        import pyotp
+
+        secret = pyotp.random_base32()
+        sample_user.two_factor_secret = secret
+        db_session.commit()
+
+        from src.services.auth import auth_service
+
+        temp_token = auth_service.create_temp_2fa_token(sample_user)
+        code = pyotp.TOTP(secret).now()
+
+        response = client.post(
+            "/api/v1/auth/login/2fa",
+            json={"temp_token": temp_token, "code": code, "remember_me": True},
+        )
+        assert response.status_code == 200
+        assert "access_token" in response.json()
+
+    def test_login_2fa_invalid_temp_token(self, client):
+        response = client.post(
+            "/api/v1/auth/login/2fa",
+            json={"temp_token": "invalid_token", "code": "123456"},
+        )
+        assert response.status_code == 401
+
+    def test_login_2fa_not_enabled(self, client, sample_user, db_session):
+        sample_user.two_factor_enabled = False
+        db_session.commit()
+        from src.services.auth import auth_service
+
+        temp_token = auth_service.create_temp_2fa_token(sample_user)
+
+        response = client.post(
+            "/api/v1/auth/login/2fa", json={"temp_token": temp_token, "code": "123456"}
+        )
+        assert response.status_code == 400
+
+    def test_login_2fa_invalid_code(self, client, sample_user, db_session):
+        sample_user.two_factor_enabled = True
+        sample_user.two_factor_secret = "JBSWY3DPEHPK3PXP"
+        db_session.commit()
+        from src.services.auth import auth_service
+
+        temp_token = auth_service.create_temp_2fa_token(sample_user)
+
+        response = client.post(
+            "/api/v1/auth/login/2fa", json={"temp_token": temp_token, "code": "000000"}
+        )
+        assert response.status_code == 401
+
+    def test_setup_2fa(self, client, sample_jwt_token):
+        response = client.post(
+            "/api/v1/auth/2fa/setup",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "secret" in data
+        assert "qr_code_base64" in data
+
+    def test_enable_2fa_success(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.two_factor_enabled = False
+        db_session.commit()
+
+        import pyotp
+
+        secret = pyotp.random_base32()
+        code = pyotp.TOTP(secret).now()
+
+        response = client.post(
+            "/api/v1/auth/2fa/enable",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"secret": secret, "code": code},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_enable_2fa_already_enabled(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.two_factor_enabled = True
+        db_session.commit()
+
+        response = client.post(
+            "/api/v1/auth/2fa/enable",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"secret": "SECRET", "code": "123456"},
+        )
+        assert response.status_code == 400
+
+    def test_enable_2fa_invalid_code(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.two_factor_enabled = False
+        db_session.commit()
+
+        response = client.post(
+            "/api/v1/auth/2fa/enable",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"secret": "JBSWY3DPEHPK3PXP", "code": "000000"},
+        )
+        assert response.status_code == 400
+
+    def test_disable_2fa_success(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        import pyotp
+
+        secret = pyotp.random_base32()
+        sample_user.two_factor_enabled = True
+        sample_user.two_factor_secret = secret
+        db_session.commit()
+
+        code = pyotp.TOTP(secret).now()
+
+        response = client.post(
+            "/api/v1/auth/2fa/disable",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"code": code},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_disable_2fa_already_disabled(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.two_factor_enabled = False
+        db_session.commit()
+
+        response = client.post(
+            "/api/v1/auth/2fa/disable",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"code": "123456"},
+        )
+        assert response.status_code == 400
+
+    def test_disable_2fa_invalid_code(
+        self, client, sample_user, sample_jwt_token, db_session
+    ):
+        sample_user.two_factor_enabled = True
+        sample_user.two_factor_secret = "JBSWY3DPEHPK3PXP"
+        db_session.commit()
+
+        response = client.post(
+            "/api/v1/auth/2fa/disable",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"code": "000000"},
+        )
+        assert response.status_code == 400
+
+    def test_dismiss_2fa_reminder(self, client, sample_jwt_token):
+        response = client.post(
+            "/api/v1/auth/2fa/dismiss-reminder",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True

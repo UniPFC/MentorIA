@@ -1,10 +1,13 @@
 import base64
 import hashlib
+import io
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import bcrypt
+import pyotp
+import qrcode
 from jose import JWTError, jwt
 
 from config.logger import logger
@@ -264,6 +267,47 @@ class AuthService:
         except ValueError:
             logger.warning(f"Invalid UUID in token sub: {user_id}")
             return None
+
+    def generate_2fa_secret(self) -> str:
+        """Gera um novo secret base32 para 2FA"""
+        return pyotp.random_base32()
+
+    def get_2fa_uri(self, secret: str, username: str) -> str:
+        """Retorna a URI de provisionamento do TOTP"""
+        return pyotp.totp.TOTP(secret).provisioning_uri(
+            name=username, issuer_name="MentorIA"
+        )
+
+    def generate_qr_code_base64(self, uri: str) -> str:
+        """Gera uma imagem base64 do QR Code a partir da URI"""
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(uri)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{img_str}"
+
+    def verify_2fa_code(self, secret: str, code: str) -> bool:
+        """Verifica se o código TOTP fornecido é válido para o secret"""
+        if not secret or not code:
+            return False
+        totp = pyotp.TOTP(secret)
+        return totp.verify(code)
+
+    def create_temp_2fa_token(self, user: User) -> str:
+        """Cria um token temporário (5 minutos) indicando que o usuário passou pela senha mas precisa de 2FA"""
+        to_encode = {"sub": str(user.id), "username": user.username, "type": "temp_2fa"}
+        expire = datetime.now(UTC) + timedelta(minutes=5)
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+        return encoded_jwt
 
 
 # Instância global do serviço

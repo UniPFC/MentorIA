@@ -156,6 +156,8 @@ class UserResponse(BaseModel):
     token_budget: int | None = None
     max_token_budget: int | None = None
     remaining_tokens: int | None = None
+    two_factor_enabled: bool = False
+    last_2fa_reminder_at: datetime | None = None
 
 
 class LogoutResponse(BaseModel):
@@ -225,3 +227,25 @@ class PasswordResetConfirm(BaseModel):
 
 class VerifyEmailRequest(BaseModel):
     token: str = Field(..., description="Token de verificação recebido por email")
+
+
+class Login2FARequest(BaseModel):
+    temp_token: str = Field(
+        ..., description="Token temporário recebido no primeiro passo do login"
+    )
+    code: str = Field(..., description="Código TOTP de 6 dígitos")
+    remember_me: bool = Field(default=False, description="Manter conectado")
+
+
+class Setup2FAResponse(BaseModel):
+    secret: str = Field(..., description="Segredo TOTP temporário")
+    qr_code_base64: str = Field(..., description="Imagem do QR Code em base64")
+
+
+class Enable2FARequest(BaseModel):
+    secret: str = Field(..., description="Segredo TOTP temporário gerado no setup")
+    code: str = Field(..., description="Código TOTP de 6 dígitos para validação")
+
+
+class Disable2FARequest(BaseModel):
+    code: str = Field(..., description="Código TOTP atual para confirmar desativação")

@@ -34,6 +34,11 @@ class User(Base):
     level = Column(SQLEnum(UserLevel), nullable=False, default=UserLevel.LEVEL_01)
     token_budget = Column(Integer, nullable=True)
 
+    # 2FA
+    two_factor_secret = Column(String(32), nullable=True)
+    two_factor_enabled = Column(Boolean, default=False, nullable=False)
+    last_2fa_reminder_at = Column(DateTime(timezone=True), nullable=True)
+
     # Subscription fields (Pagar.me integration)
     pagarme_customer_id = Column(String(255), nullable=True, index=True)
     subscription_id = Column(String(255), nullable=True, index=True)

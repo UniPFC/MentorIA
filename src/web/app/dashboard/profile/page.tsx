@@ -8,6 +8,7 @@ import { Button, Input } from '@/components/ui';
 import Toast from '@/components/Toast';
 import BudgetProgressBar from '@/components/BudgetProgressBar';
 import MarkdownModal from '@/components/MarkdownModal';
+import TwoFactorAuthSettings from '@/components/TwoFactorAuthSettings';
 import api from '@/lib/api';
 import { authService } from '@/lib/auth';
 
@@ -320,6 +321,11 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+
+          {/* 2FA Settings */}
+          {user && (
+            <TwoFactorAuthSettings user={user} onUserUpdate={setUser} />
+          )}
 
           {/* Change Password */}
           <div className="card overflow-hidden animate-slide-up" style={{ animationDelay: '0.2s', animationFillMode: 'both' }}>

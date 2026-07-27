@@ -301,3 +301,41 @@ class TestAuthService:
         user = auth_service.get_current_user_from_token("some_token", mock_repo)
 
         assert user is None
+
+    def test_generate_2fa_secret(self, auth_service):
+        secret = auth_service.generate_2fa_secret()
+        assert isinstance(secret, str)
+        assert len(secret) > 0
+
+    def test_get_2fa_uri(self, auth_service):
+        uri = auth_service.get_2fa_uri("JBSWY3DPEHPK3PXP", "testuser")
+        assert isinstance(uri, str)
+        assert uri.startswith("otpauth://totp/")
+        assert "MentorIA" in uri
+        assert "testuser" in uri
+
+    def test_generate_qr_code_base64(self, auth_service):
+        qr_b64 = auth_service.generate_qr_code_base64("otpauth://totp/test")
+        assert isinstance(qr_b64, str)
+        assert qr_b64.startswith("data:image/png;base64,")
+
+    def test_verify_2fa_code(self, auth_service):
+        import pyotp
+
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        code = totp.now()
+
+        assert auth_service.verify_2fa_code(secret, code) is True
+        assert auth_service.verify_2fa_code(secret, "000000") is False
+        assert auth_service.verify_2fa_code("", code) is False
+        assert auth_service.verify_2fa_code(secret, "") is False
+
+    def test_create_temp_2fa_token(self, auth_service, sample_user):
+        token = auth_service.create_temp_2fa_token(sample_user)
+        assert isinstance(token, str)
+
+        payload = auth_service.verify_token(token, "temp_2fa")
+        assert payload is not None
+        assert payload["sub"] == str(sample_user.id)
+        assert payload["type"] == "temp_2fa"

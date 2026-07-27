@@ -1,8 +1,20 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import LoginForm from '@/components/LoginForm';
+import { authService } from '@/lib/auth';
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const user = authService.getUser();
+    if (user) {
+      router.push('/dashboard');
+    }
+  }, [router]);
+
   return (
     <div className="min-h-screen flex bg-gray-50 dark:bg-gray-950">
       {/* Left brand panel */}

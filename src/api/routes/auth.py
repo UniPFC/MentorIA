@@ -1,6 +1,9 @@
+import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -10,9 +13,13 @@ from shared.database.models.user import User, UserLevel
 from shared.database.session import get_db
 from src.api.dependencies import get_current_active_user, get_user_repo, security
 from src.api.schemas.auth import (
+    Disable2FARequest,
+    Enable2FARequest,
+    Login2FARequest,
     LogoutResponse,
     PasswordResetConfirm,
     PasswordResetRequest,
+    Setup2FAResponse,
     Token,
     TokenRefresh,
     TokenVerifyResponse,
@@ -88,7 +95,7 @@ async def login(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-):
+) -> Token | JSONResponse:
     """
     Autentica usuário e retorna tokens JWT
     """
@@ -206,7 +213,16 @@ async def login(
     user.last_login = datetime.now(UTC)
     user_repo.update(user)
 
+    # Verificar se o 2FA está habilitado
+    if getattr(user, "two_factor_enabled", False):
+        temp_token = auth_service.create_temp_2fa_token(user)
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"requires_2fa": True, "temp_token": temp_token},
+        )
+
     tokens = auth_service.create_user_tokens(user, user_repo)
+
     logger.info(f"User logged in successfully: {user.username} from {client_ip}")
 
     # Limpar cache antigo periodicamente
@@ -214,6 +230,9 @@ async def login(
 
     secure_cookie = settings.SECURE_COOKIES
     max_age_auth = tokens["expires_in"] if user_credentials.remember_me else None
+    expires_auth = (
+        datetime.now(UTC) + timedelta(seconds=max_age_auth) if max_age_auth else None
+    )
 
     response.set_cookie(
         key="authToken",
@@ -223,9 +242,15 @@ async def login(
         samesite="lax",
         path="/",
         max_age=max_age_auth,
+        expires=expires_auth,
     )
     if "refresh_token" in tokens and tokens["refresh_token"]:
         max_age_refresh = 30 * 24 * 60 * 60 if user_credentials.remember_me else None
+        expires_refresh = (
+            datetime.now(UTC) + timedelta(seconds=max_age_refresh)
+            if max_age_refresh
+            else None
+        )
         response.set_cookie(
             key="refreshToken",
             value=tokens["refresh_token"],
@@ -234,9 +259,10 @@ async def login(
             samesite="lax",
             path="/",
             max_age=max_age_refresh,
+            expires=expires_refresh,
         )
 
-    return tokens
+    return Token(**tokens)
 
 
 def _get_client_ip(request: Request) -> str:
@@ -294,6 +320,8 @@ async def refresh_token(
     logger.info("Access token refreshed successfully")
 
     secure_cookie = settings.SECURE_COOKIES
+    expires_auth = datetime.now(UTC) + timedelta(seconds=new_tokens["expires_in"])
+
     response.set_cookie(
         key="authToken",
         value=new_tokens["access_token"],
@@ -302,8 +330,11 @@ async def refresh_token(
         samesite="lax",
         path="/",
         max_age=new_tokens["expires_in"],
+        expires=expires_auth,
     )
     if "refresh_token" in new_tokens and new_tokens["refresh_token"]:
+        refresh_max_age = 30 * 24 * 60 * 60
+        expires_refresh = datetime.now(UTC) + timedelta(seconds=refresh_max_age)
         response.set_cookie(
             key="refreshToken",
             value=new_tokens["refresh_token"],
@@ -311,7 +342,8 @@ async def refresh_token(
             secure=secure_cookie,
             samesite="lax",
             path="/",
-            max_age=30 * 24 * 60 * 60,  # 30 days
+            max_age=refresh_max_age,  # 30 days
+            expires=expires_refresh,
         )
 
     return {
@@ -533,3 +565,179 @@ async def send_verification_email(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Falha ao enviar email. Tente novamente mais tarde.",
         )
+
+
+@router.post("/login/2fa", response_model=Token)
+async def login_2fa(
+    request_data: Login2FARequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> Token:
+    """
+    Valida o código 2FA e completa o login
+    """
+    user_repo = UserRepository(db)
+
+    # 1. Verificar o temp_token
+    payload = auth_service.verify_token(request_data.temp_token, "temp_2fa")
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token temporário inválido ou expirado. Faça login novamente.",
+        )
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token temporário inválido ou expirado. Faça login novamente.",
+        )
+
+    user = user_repo.get_by_id(user_id)
+    if not user or not getattr(user, "two_factor_enabled", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA não está habilitado para este usuário.",
+        )
+
+    # 2. Verificar o código 2FA
+    if not auth_service.verify_2fa_code(user.two_factor_secret, request_data.code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Código 2FA inválido."
+        )
+
+    # 3. Login bem-sucedido
+    client_ip = _get_client_ip(request) or "unknown"
+    user.last_login = datetime.now(UTC)
+    user_repo.update(user)
+
+    tokens = auth_service.create_user_tokens(user, user_repo)
+    logger.info(
+        f"User logged in successfully with 2FA: {user.username} from {client_ip}"
+    )
+
+    secure_cookie = settings.SECURE_COOKIES
+    max_age_auth = tokens["expires_in"] if request_data.remember_me else None
+    expires_auth = (
+        datetime.now(UTC) + timedelta(seconds=max_age_auth) if max_age_auth else None
+    )
+
+    response.set_cookie(
+        key="authToken",
+        value=tokens["access_token"],
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        path="/",
+        max_age=max_age_auth,
+        expires=expires_auth,
+    )
+    if "refresh_token" in tokens and tokens["refresh_token"]:
+        max_age_refresh = 30 * 24 * 60 * 60 if request_data.remember_me else None
+        expires_refresh = (
+            datetime.now(UTC) + timedelta(seconds=max_age_refresh)
+            if max_age_refresh
+            else None
+        )
+        response.set_cookie(
+            key="refreshToken",
+            value=tokens["refresh_token"],
+            httponly=True,
+            secure=secure_cookie,
+            samesite="lax",
+            path="/",
+            max_age=max_age_refresh,
+            expires=expires_refresh,
+        )
+
+    return Token(**tokens)
+
+
+@router.post("/2fa/setup", response_model=Setup2FAResponse)
+async def setup_2fa(
+    current_user: User = Depends(get_current_active_user),
+) -> Setup2FAResponse:
+    """
+    Gera um novo segredo 2FA e retorna o QR Code (não salva ainda)
+    """
+    secret = auth_service.generate_2fa_secret()
+    uri = auth_service.get_2fa_uri(secret, current_user.email)
+    qr_code_base64 = auth_service.generate_qr_code_base64(uri)
+
+    return Setup2FAResponse(secret=secret, qr_code_base64=qr_code_base64)
+
+
+@router.post("/2fa/enable")
+async def enable_2fa(
+    request: Enable2FARequest,
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repo),
+) -> dict[str, Any]:
+    """
+    Valida o código de teste e habilita o 2FA para o usuário
+    """
+    if getattr(current_user, "two_factor_enabled", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="2FA já está habilitado."
+        )
+
+    if not auth_service.verify_2fa_code(request.secret, request.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Código 2FA inválido. Tente novamente.",
+        )
+
+    current_user.two_factor_secret = request.secret
+    current_user.two_factor_enabled = True
+    user_repo.update(current_user)
+
+    logger.info(f"2FA enabled for user: {current_user.username}")
+    return {
+        "message": "Autenticação em duas etapas habilitada com sucesso.",
+        "success": True,
+    }
+
+
+@router.post("/2fa/disable")
+async def disable_2fa(
+    request: Disable2FARequest,
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repo),
+) -> dict[str, Any]:
+    """
+    Desabilita o 2FA mediante confirmação do código atual
+    """
+    if not getattr(current_user, "two_factor_enabled", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="2FA já está desabilitado."
+        )
+
+    if not auth_service.verify_2fa_code(current_user.two_factor_secret, request.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Código 2FA inválido."
+        )
+
+    current_user.two_factor_secret = None
+    current_user.two_factor_enabled = False
+    user_repo.update(current_user)
+
+    logger.info(f"2FA disabled for user: {current_user.username}")
+    return {
+        "message": "Autenticação em duas etapas desabilitada com sucesso.",
+        "success": True,
+    }
+
+
+@router.post("/2fa/dismiss-reminder")
+async def dismiss_2fa_reminder(
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repo),
+) -> dict[str, Any]:
+    """
+    Atualiza a data do último lembrete de 2FA
+    """
+    current_user.last_2fa_reminder_at = datetime.now(UTC)
+    user_repo.update(current_user)
+
+    return {"message": "Lembrete adiado com sucesso.", "success": True}
