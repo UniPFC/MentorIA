@@ -44,7 +44,22 @@ def analyze_and_clean(file_path, clean_loose_letters=False):
         if "(cid:" in answer_text.lower() or "(cid:" in question_text.lower():
             issues.append("Contém caracteres (cid:...)")
 
-        # 3. Letra solta no final da resposta
+        # 3. Espaçamento anormal ou lixo de OCR (múltiplos espaços)
+        if re.search(r" {5,}", answer_text) or re.search(r" {5,}", question_text):
+            issues.append("Espaçamento anormal (possível lixo de extração PDF)")
+
+        # 4. Caracteres estranhos ("quadrados", unprintable, replacement character, PUA, ou caracteres de controle do Excel _x0000_)
+        weird_chars_pattern = (
+            r"[\uFFFD\uE000-\uF8FF\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|_x[0-9a-fA-F]{4}_"
+        )
+        if re.search(weird_chars_pattern, answer_text) or re.search(
+            weird_chars_pattern, question_text
+        ):
+            issues.append(
+                "Contém caracteres inválidos/estranhos (quadrados ou lixo de codificação)"
+            )
+
+        # 6. Letra solta no final da resposta
         if re.search(r"\s[A-Ea-e]\.?\s*$", answer_text):
             issues.append("Letra de alternativa solta no final da resposta")
             if clean_loose_letters:
