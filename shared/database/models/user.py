@@ -39,6 +39,9 @@ class User(Base):
     two_factor_enabled = Column(Boolean, default=False, nullable=False)
     last_2fa_reminder_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Legal
+    accepted_terms_version = Column(String(50), nullable=True)
+
     # Subscription fields (Pagar.me integration)
     pagarme_customer_id = Column(String(255), nullable=True, index=True)
     subscription_id = Column(String(255), nullable=True, index=True)

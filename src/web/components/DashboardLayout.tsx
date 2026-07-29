@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertCircle, ShieldAlert, X } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Sidebar from '@/components/Sidebar';
+import TermsBlockerModal from '@/components/TermsBlockerModal';
 import { authService } from '@/lib/auth';
 import api from '@/lib/api';
 
@@ -124,6 +125,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </div>
       </div>
+      <TermsBlockerModal 
+        isOpen={user?.needs_terms_acceptance === true} 
+        onAccepted={() => {
+          if (user) {
+            const updated = { ...user, needs_terms_acceptance: false };
+            setUser(updated);
+          }
+        }} 
+      />
     </ProtectedRoute>
   );
 }

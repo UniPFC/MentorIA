@@ -11,7 +11,12 @@ from config.logger import logger
 from config.settings import settings
 from shared.database.models.user import User, UserLevel
 from shared.database.session import get_db
-from src.api.dependencies import get_current_active_user, get_user_repo, security
+from src.api.dependencies import (
+    get_current_active_user,
+    get_current_active_user_no_terms_check,
+    get_user_repo,
+    security,
+)
 from src.api.schemas.auth import (
     Disable2FARequest,
     Enable2FARequest,
@@ -70,6 +75,7 @@ async def register_user(
         password_hash=hashed_password,
         level=UserLevel.LEVEL_01,
         token_budget=settings.TOKEN_BUDGET_LEVEL_01,
+        accepted_terms_version=settings.TERMS_VERSION,
     )
 
     user_repo.create(new_user)
@@ -359,7 +365,7 @@ async def logout(
     request: Request,
     response: Response,
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user_no_terms_check),
     user_repo: UserRepository = Depends(get_user_repo),
 ):
     """
@@ -394,7 +400,9 @@ async def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
+async def get_current_user_info(
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+):
     """
     Obtém informações do usuário atual incluindo budget de tokens
     """
@@ -402,7 +410,9 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
 
 
 @router.post("/verify-token", response_model=TokenVerifyResponse)
-async def verify_token(current_user: User = Depends(get_current_active_user)):
+async def verify_token(
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+):
     """
     Verifica se o token é válido
     """
@@ -411,6 +421,19 @@ async def verify_token(current_user: User = Depends(get_current_active_user)):
         "user_id": current_user.id,
         "username": current_user.username,
     }
+
+
+@router.post("/accept-terms")
+async def accept_terms(
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+    user_repo: UserRepository = Depends(get_user_repo),
+):
+    """
+    Aceita a versão atual dos termos de uso.
+    """
+    current_user.accepted_terms_version = settings.TERMS_VERSION
+    user_repo.db.commit()
+    return {"success": True, "accepted_version": settings.TERMS_VERSION}
 
 
 @router.post("/forgot-password")

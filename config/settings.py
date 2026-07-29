@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Project Configuration
     PROJECT_NAME: str = "MentorIA"
+    TERMS_VERSION: str = "1.1"
     LOG_LEVEL: str
 
     # Directories

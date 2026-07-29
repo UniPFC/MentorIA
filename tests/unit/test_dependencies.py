@@ -131,15 +131,31 @@ class TestDependencies:
             mock_auth.get_current_user_from_token.assert_called_once()
 
     def test_get_current_active_user(self):
-        """Testa obtenção de usuário ativo"""
+        """Testa obtenção de usuário ativo com termos aceitos"""
+        from config.settings import settings
         from src.api.dependencies import get_current_active_user
 
         mock_user = Mock()
         mock_user.is_active = True
+        mock_user.accepted_terms_version = settings.TERMS_VERSION
 
         result = get_current_active_user(mock_user)
 
         assert result == mock_user
+
+    def test_get_current_active_user_pending_terms(self):
+        """Testa que usuário sem termos atualizados é bloqueado"""
+        from src.api.dependencies import get_current_active_user
+
+        mock_user = Mock()
+        mock_user.is_active = True
+        mock_user.accepted_terms_version = "old_version"
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_active_user(mock_user)
+
+        assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+        assert exc_info.value.headers.get("X-Terms-Pending") == "true"
 
     def test_get_optional_current_user_no_credentials(self):
         """Testa usuário opcional sem credenciais"""

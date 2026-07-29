@@ -1,7 +1,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_validator,
+)
 from zxcvbn import zxcvbn
 
 from shared.database.models.user import UserLevel
@@ -158,6 +165,14 @@ class UserResponse(BaseModel):
     remaining_tokens: int | None = None
     two_factor_enabled: bool = False
     last_2fa_reminder_at: datetime | None = None
+    accepted_terms_version: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def needs_terms_acceptance(self) -> bool:
+        from config.settings import settings
+
+        return self.accepted_terms_version != settings.TERMS_VERSION
 
 
 class LogoutResponse(BaseModel):

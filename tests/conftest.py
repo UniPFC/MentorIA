@@ -249,6 +249,10 @@ def client(db_session):
     from fastapi.testclient import TestClient
 
     from shared.database.session import get_db
+    from src.api.dependencies import (
+        get_current_active_user,
+        get_current_active_user_no_terms_check,
+    )
     from src.api.main import app
 
     # Override the database dependency
@@ -259,6 +263,9 @@ def client(db_session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_active_user] = (
+        get_current_active_user_no_terms_check
+    )
 
     # Patch lifespan hooks (run_migrations and seed_default_knowledge) while starting the client
     with (

@@ -79,11 +79,30 @@ def get_current_user(
         raise credentials_exception
 
 
-def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+def get_current_active_user_no_terms_check(
+    current_user: User = Depends(get_current_user),
+) -> User:
     """
-    Obtém o usuário atual ativo
-    (pode ser expandido para verificar status, etc.)
+    Obtém o usuário atual ativo sem checar termos de uso.
+    (usado para rotas de auth/me e accept-terms)
     """
+    return current_user
+
+
+def get_current_active_user(
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+) -> User:
+    """
+    Obtém o usuário atual ativo e bloqueia acesso se houver termos pendentes
+    """
+    from config.settings import settings
+
+    if current_user.accepted_terms_version != settings.TERMS_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você precisa aceitar os novos Termos de Uso.",
+            headers={"X-Terms-Pending": "true"},
+        )
     return current_user
 
 

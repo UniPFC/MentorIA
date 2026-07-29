@@ -11,6 +11,8 @@ export interface User {
   remaining_tokens?: number;
   two_factor_enabled?: boolean;
   last_2fa_reminder_at?: string;
+  accepted_terms_version?: string;
+  needs_terms_acceptance?: boolean;
 }
 
 export interface LoginResponse {
@@ -166,6 +168,21 @@ export const authService = {
   getToken(): string | null {
     // Tokens não são mais acessíveis pelo Javascript (HttpOnly)
     return null;
+  },
+
+  getTempToken(): string | null {
+    return localStorage.getItem('temp_token');
+  },
+  
+  async acceptTerms(): Promise<void> {
+    try {
+      await api.post('/auth/accept-terms');
+      const userResponse = await api.get('/auth/me');
+      localStorage.setItem('user', JSON.stringify(userResponse.data));
+    } catch (error) {
+      console.error('Error accepting terms:', error);
+      throw error;
+    }
   },
 
   getUser(): User | null {
