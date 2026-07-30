@@ -44,10 +44,11 @@ class ChatResponse(BaseModel):
 
     id: UUID
     user_id: UUID
-    chat_type_id: UUID
+    chat_type_id: UUID | None = None
     title: str
     llm_model: str | None = None
     llm_provider: str | None = None
+    is_read_only: bool = False
     created_at: datetime
     updated_at: datetime
 

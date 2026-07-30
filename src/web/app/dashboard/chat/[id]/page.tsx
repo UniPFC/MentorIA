@@ -31,16 +31,17 @@ interface Message {
 interface ChatData {
   id: string;
   title: string;
-  chat_type_id: string;
+  chat_type_id: string | null;
   messages: Message[];
   llm_model?: string;
   llm_provider?: string;
+  is_read_only?: boolean;
 }
 
 interface ChatListItem {
   id: string;
   title: string;
-  chat_type_id: string;
+  chat_type_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -83,6 +84,8 @@ export default function ChatPage() {
       setSttEnabled(enabled);
     });
   }, [chatId]);
+
+  const isReadOnly = chat?.is_read_only || chat?.chat_type_id === null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -707,6 +710,16 @@ export default function ChatPage() {
 
           {/* Input area */}
           <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200/60 dark:border-gray-800/60 px-4 md:px-6 py-4 shrink-0">
+            {isReadOnly && (
+              <div className="max-w-3xl mx-auto mb-4 px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/20 rounded-xl flex items-center gap-3">
+                <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                  A base de conhecimento deste chat foi excluída pelo criador original. O chat agora é apenas para leitura.
+                </p>
+              </div>
+            )}
             <form onSubmit={sendMessage} className="max-w-3xl mx-auto">
               <div className="flex items-end gap-2 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200/80 dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 focus-within:border-brand-500 dark:focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-500/20 dark:focus-within:ring-brand-400/20 transition-all duration-200 px-4 py-2.5">
                 {/* Audio recorder on the left */}
@@ -715,7 +728,7 @@ export default function ChatPage() {
                     // Send message immediately with transcribed text
                     sendMessageInternal(text);
                   }}
-                  disabled={user?.email_verified === false || !sttEnabled || sending || loading}
+                  disabled={user?.email_verified === false || !sttEnabled || sending || loading || isReadOnly}
                   onRecordingStateChange={setIsAudioRecording}
                   onTranscribingStateChange={setIsAudioTranscribing}
                 />
@@ -725,10 +738,10 @@ export default function ChatPage() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={user?.email_verified === false ? "Verifique seu email para enviar mensagens" : "Digite sua mensagem..."}
+                  placeholder={isReadOnly ? "Chat somente leitura" : user?.email_verified === false ? "Verifique seu email para enviar mensagens" : "Digite sua mensagem..."}
                   rows={1}
                   className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:ring-offset-0 appearance-none resize-none text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 max-h-32 py-1.5 leading-relaxed disabled:opacity-50"
-                  disabled={user?.email_verified === false || sending || loading || isAudioRecording || isAudioTranscribing}
+                  disabled={user?.email_verified === false || sending || loading || isAudioRecording || isAudioTranscribing || isReadOnly}
                   style={{ minHeight: '36px' }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
@@ -788,7 +801,7 @@ export default function ChatPage() {
 
                 <button
                   type="submit"
-                  disabled={!input.trim() || sending || loading || isAudioRecording || isAudioTranscribing}
+                  disabled={!input.trim() || sending || loading || isAudioRecording || isAudioTranscribing || isReadOnly}
                   className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 hover:from-brand-500 hover:to-brand-600 disabled:from-gray-300 disabled:to-gray-300 dark:disabled:from-gray-600 dark:disabled:to-gray-700 text-white flex items-center justify-center transition-all duration-200 disabled:cursor-not-allowed active:scale-[0.93] shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 disabled:shadow-none"
                 >
                   {sending ? (

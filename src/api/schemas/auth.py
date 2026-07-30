@@ -172,7 +172,13 @@ class UserResponse(BaseModel):
     def needs_terms_acceptance(self) -> bool:
         from config.settings import settings
 
+        if self.accepted_terms_version is None:
+            return True
         return self.accepted_terms_version != settings.TERMS_VERSION
+
+
+class AccountDeletionRequest(BaseModel):
+    token: str
 
 
 class LogoutResponse(BaseModel):

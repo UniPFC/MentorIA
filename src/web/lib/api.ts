@@ -19,6 +19,11 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Ignore 401s for auth routes to prevent infinite reloads on wrong passwords
+      if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh')) {
+        return Promise.reject(error);
+      }
+      
       originalRequest._retry = true;
 
       try {

@@ -14,7 +14,8 @@ import api from '@/lib/api';
 interface Chat {
   id: string;
   title: string;
-  chat_type_id: string;
+  chat_type_id: string | null;
+  is_read_only?: boolean;
   llm_model?: string | null;
   llm_provider?: string | null;
   created_at: string;
@@ -265,6 +266,9 @@ function ChatsPageContent() {
                     </h3>
                     <div className="flex items-center gap-3 mt-1">
                       <Badge variant="info">{getChatTypeName(chat.chat_type_id)}</Badge>
+                      {chat.is_read_only && (
+                        <Badge variant="warning" dot>Somente Leitura</Badge>
+                      )}
                       {chat.llm_model && (
                         <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
                           {chat.llm_model}

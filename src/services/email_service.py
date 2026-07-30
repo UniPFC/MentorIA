@@ -161,6 +161,35 @@ class EmailService:
             to_email, "Bem-vindo ao MentorIA - Verifique seu Email", html_body
         )
 
+    def send_account_deletion_email(
+        self, to_email: str, username: str, token: str
+    ) -> bool:
+        """Envia email com o token para exclusão de conta"""
+        delete_link = f"{self.frontend_url}/delete-account?token={token}"
+
+        content = f"""
+        <h2>Solicitação de Exclusão de Conta</h2>
+        <p>Olá, <strong>{username}</strong>!</p>
+        <p>Recebemos uma solicitação para excluir sua conta no MentorIA de forma permanente.</p>
+        <div class="alert" style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <p style="color: #991b1b; margin: 0;"><strong>Atenção:</strong> Esta ação é irreversível. Todos os seus dados pessoais e bases de conhecimento criadas serão apagados.</p>
+        </div>
+        <p>Se você tem certeza que deseja excluir sua conta, clique no botão abaixo para confirmar:</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{delete_link}" class="button" style="background-color: #ef4444; color: white;">Confirmar Exclusão de Conta</a>
+        </div>
+        <p><strong>Importante:</strong></p>
+        <ul>
+            <li>Este link expira em 1 hora.</li>
+            <li>Se você não solicitou esta exclusão, por favor ignore este email e sua conta permanecerá segura.</li>
+        </ul>
+        """
+
+        html_body = self._render_template("Exclusão de Conta", content)
+        return self._send_email(
+            to_email, "Confirmação de Exclusão de Conta - MentorIA", html_body
+        )
+
 
 # Instância global do serviço
 email_service = EmailService()

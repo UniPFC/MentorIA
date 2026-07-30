@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from shared.database.models.chat import Chat
 
@@ -10,7 +10,12 @@ class ChatRepository:
         self.db = db
 
     def get_by_id(self, chat_id: UUID) -> Chat | None:
-        return self.db.query(Chat).filter(Chat.id == chat_id).first()
+        return (
+            self.db.query(Chat)
+            .options(joinedload(Chat.chat_type))
+            .filter(Chat.id == chat_id)
+            .first()
+        )
 
     def get_by_user(
         self,
@@ -19,7 +24,11 @@ class ChatRepository:
         skip: int = 0,
         limit: int = 100,
     ) -> list[Chat]:
-        query = self.db.query(Chat).filter(Chat.user_id == user_id)
+        query = (
+            self.db.query(Chat)
+            .options(joinedload(Chat.chat_type))
+            .filter(Chat.user_id == user_id)
+        )
 
         if chat_type_id is not None:
             query = query.filter(Chat.chat_type_id == chat_type_id)

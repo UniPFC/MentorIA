@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { MessageSquare, FolderOpen, Upload, ChevronRight, Plus, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui';
 import api from '@/lib/api';
 
 export default function DashboardContent() {
@@ -159,7 +160,12 @@ export default function DashboardContent() {
                 <Link key={chat.id} href={`/dashboard/chat/${chat.id}`} className="block px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 group">
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{chat.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{chat.title}</h3>
+                        {chat.is_read_only && (
+                          <Badge variant="warning" dot>Somente Leitura</Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {formatDate(chat.created_at)}
                       </p>

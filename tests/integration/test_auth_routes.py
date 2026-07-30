@@ -757,3 +757,145 @@ class TestAuthRoutes:
         )
         assert response.status_code == 200
         assert response.json()["success"] is True
+
+    def test_accept_terms(self, client, sample_jwt_token, db_session, sample_user):
+        response = client.post(
+            "/api/v1/auth/accept-terms",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        db_session.refresh(sample_user)
+        assert sample_user.accepted_terms_version is not None
+
+    def test_login_2fa_invalid_uuid(self, client):
+        from datetime import timedelta
+
+        from src.services.auth import auth_service
+
+        temp_token = auth_service.create_access_token(
+            data={"sub": "not-a-uuid", "type": "temp_2fa"},
+            expires_delta=timedelta(minutes=5),
+        )
+        response = client.post(
+            "/api/v1/auth/login/2fa", json={"temp_token": temp_token, "code": "123456"}
+        )
+        assert response.status_code == 401
+        assert "inválido ou expirado" in response.json()["detail"]
+
+    def test_request_deletion(self, client, sample_jwt_token):
+        from unittest.mock import patch
+
+        with patch(
+            "src.api.routes.auth.email_service.send_account_deletion_email",
+            return_value=True,
+        ):
+            response = client.post(
+                "/api/v1/auth/request-account-deletion",
+                headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_request_deletion_email_fails(self, client, sample_jwt_token):
+        from unittest.mock import patch
+
+        with patch(
+            "src.api.routes.auth.email_service.send_account_deletion_email",
+            return_value=False,
+        ):
+            response = client.post(
+                "/api/v1/auth/request-account-deletion",
+                headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            )
+        assert response.status_code == 500
+
+    def test_delete_account_success(
+        self, client, sample_jwt_token, db_session, sample_user
+    ):
+        from datetime import UTC, datetime, timedelta
+
+        from src.repositories.user import UserRepository
+
+        user_repo = UserRepository(db_session)
+        user_repo.create_token(
+            user_id=sample_user.id,
+            token="delete-token-123",
+            token_type="account_deletion",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        db_session.commit()
+        response = client.request(
+            "DELETE",
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"token": "delete-token-123"},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        # Verify user is deleted
+        assert user_repo.get_by_id(sample_user.id) is None
+
+    def test_delete_account_invalid_token(self, client, sample_jwt_token):
+        response = client.request(
+            "DELETE",
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"token": "invalid-token"},
+        )
+        assert response.status_code == 400
+
+    def test_delete_account_expired_token(
+        self, client, sample_jwt_token, db_session, sample_user
+    ):
+        from datetime import UTC, datetime, timedelta
+
+        from src.repositories.user import UserRepository
+
+        user_repo = UserRepository(db_session)
+        user_repo.create_token(
+            user_id=sample_user.id,
+            token="expired-delete-token",
+            token_type="account_deletion",
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+        db_session.commit()
+        response = client.request(
+            "DELETE",
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+            json={"token": "expired-delete-token"},
+        )
+        assert response.status_code == 400
+        assert "expirado" in response.json()["detail"].lower()
+
+    def test_export_data(
+        self,
+        client,
+        sample_jwt_token,
+        db_session,
+        sample_user,
+        sample_chat,
+        sample_chat_type,
+        sample_message,
+    ):
+        # We assume sample_chat and sample_chat_type belong to sample_user or we assign them
+        sample_chat.user_id = sample_user.id
+        sample_chat_type.user_id = sample_user.id
+        db_session.add(sample_chat)
+        db_session.add(sample_chat_type)
+        db_session.commit()
+
+        response = client.get(
+            "/api/v1/auth/me/export",
+            headers={"Authorization": f"Bearer {sample_jwt_token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "user_info" in data
+        assert data["user_info"]["email"] == sample_user.email
+        assert "chats" in data
+        assert len(data["chats"]) >= 1
+        assert "chat_types_created" in data
+        assert len(data["chat_types_created"]) >= 1

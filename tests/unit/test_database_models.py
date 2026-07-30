@@ -86,7 +86,7 @@ class TestChatTypeModel:
         assert chat_type.owner_id == sample_user.id
         assert chat_type.collection_name == f"chat_type_{chat_type_id}"
 
-    def test_chat_type_cascade_delete(
+    def test_chat_type_delete_sets_chat_type_id_to_null(
         self, db_session: Session, sample_user: User, sample_chat_type: ChatType
     ):
         chat = Chat(
@@ -102,7 +102,8 @@ class TestChatTypeModel:
         db_session.commit()
 
         deleted_chat = db_session.query(Chat).filter(Chat.id == chat.id).first()
-        assert deleted_chat is None
+        assert deleted_chat is not None
+        assert deleted_chat.chat_type_id is None
 
 
 @pytest.mark.unit

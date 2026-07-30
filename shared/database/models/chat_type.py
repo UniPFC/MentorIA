@@ -25,9 +25,7 @@ class ChatType(Base):
 
     # Relationships
     owner = relationship("User", back_populates="chat_types")
-    chats = relationship(
-        "Chat", back_populates="chat_type", cascade="all, delete-orphan"
-    )
+    chats = relationship("Chat", back_populates="chat_type")
     knowledge_chunks = relationship(
         "KnowledgeChunk", back_populates="chat_type", cascade="all, delete-orphan"
     )

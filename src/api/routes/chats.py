@@ -353,6 +353,12 @@ async def send_message(
             verify_chat_ownership, chat_id, current_user.id, chat_repo
         )
 
+        if chat.is_read_only:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Esta base de conhecimento tornou-se privada ou foi excluída. Este chat agora é Somente Leitura.",
+            )
+
         # Initialize Service
         chat_service = ChatService(db)
 
@@ -511,6 +517,12 @@ async def send_message_stream(
     chat = await asyncio.to_thread(
         verify_chat_ownership, chat_id, current_user.id, chat_repo
     )
+
+    if chat.chat_type_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta base de conhecimento foi excluída pelo criador original. Este chat agora é Somente Leitura.",
+        )
 
     # Initialize Service
     chat_service = ChatService(db)

@@ -19,8 +19,8 @@ class Chat(Base):
     )
     chat_type_id = Column(
         Uuid(as_uuid=True),
-        ForeignKey("chat_types.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("chat_types.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     title = Column(String(200), nullable=False)
@@ -44,6 +44,15 @@ class Chat(Base):
         cascade="all, delete-orphan",
         order_by="Message.created_at",
     )
+
+    @property
+    def is_read_only(self) -> bool:
+        if self.chat_type_id is None:
+            return True
+        if self.chat_type is not None:
+            if not self.chat_type.is_public and self.chat_type.owner_id != self.user_id:
+                return True
+        return False
 
     def __repr__(self):
         return f"<Chat(id={self.id}, title='{self.title}', user_id={self.user_id}, chat_type_id={self.chat_type_id})>"

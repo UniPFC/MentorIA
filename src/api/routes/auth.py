@@ -18,6 +18,7 @@ from src.api.dependencies import (
     security,
 )
 from src.api.schemas.auth import (
+    AccountDeletionRequest,
     Disable2FARequest,
     Enable2FARequest,
     Login2FARequest,
@@ -764,3 +765,159 @@ async def dismiss_2fa_reminder(
     user_repo.update(current_user)
 
     return {"message": "Lembrete adiado com sucesso.", "success": True}
+
+
+@router.post("/request-account-deletion", status_code=status.HTTP_200_OK)
+async def request_account_deletion(
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+    user_repo: UserRepository = Depends(get_user_repo),
+):
+    """
+    Gera um token e envia um e-mail com as instruções para excluir a conta.
+    """
+    # Gerar token seguro
+    deletion_token = email_service.generate_reset_token()
+    expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+    # Salvar token no banco
+    user_repo.create_token(
+        user_id=current_user.id,
+        token=deletion_token,
+        token_type="account_deletion",
+        expires_at=expires_at,
+    )
+
+    # Enviar e-mail
+    email_sent = email_service.send_account_deletion_email(
+        current_user.email, current_user.username, deletion_token
+    )
+
+    if email_sent:
+        logger.info(f"Account deletion email sent to user: {current_user.username}")
+        return {
+            "message": "E-mail de exclusão de conta enviado com sucesso",
+            "success": True,
+        }
+    else:
+        logger.error(
+            f"Failed to send account deletion email to user: {current_user.username}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao enviar e-mail. Tente novamente mais tarde.",
+        )
+
+
+@router.delete("/me", status_code=status.HTTP_200_OK)
+async def delete_current_user(
+    request_data: AccountDeletionRequest,
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+    user_repo: UserRepository = Depends(get_user_repo),
+):
+    """
+    Exclui a conta do usuário atual validando o token de exclusão.
+    """
+    # 1. Validar token
+    token_obj = user_repo.get_token(request_data.token)
+    if (
+        not token_obj
+        or token_obj.user_id != current_user.id
+        or token_obj.token_type != "account_deletion"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado"
+        )
+    if token_obj.expires_at <= datetime.now(UTC):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Token expirado"
+        )
+
+    # 2. Invalidar token
+    user_repo.invalidate_token(request_data.token)
+
+    # 3. Limpar cookies de sessão
+    response.delete_cookie(
+        key="authToken", httponly=True, samesite="lax", secure=settings.SECURE_COOKIES
+    )
+    response.delete_cookie(
+        key="refreshToken",
+        httponly=True,
+        samesite="lax",
+        secure=settings.SECURE_COOKIES,
+    )
+
+    # 2. Excluir usuário do banco
+    user_repo.delete(current_user)
+
+    logger.info(f"User account deleted: {current_user.username}")
+    return {"message": "Conta excluída com sucesso", "success": True}
+
+
+@router.get("/me/export", status_code=status.HTTP_200_OK)
+async def export_current_user_data(
+    current_user: User = Depends(get_current_active_user_no_terms_check),
+):
+    """
+    Exporta os dados pessoais do usuário em formato JSON (Portabilidade LGPD).
+    """
+    data: dict[str, Any] = {
+        "user_info": {
+            "id": str(current_user.id),
+            "username": current_user.username,
+            "email": current_user.email,
+            "created_at": current_user.created_at.isoformat()
+            if current_user.created_at
+            else None,
+            "last_login": current_user.last_login.isoformat()
+            if current_user.last_login
+            else None,
+            "level": current_user.level.value,
+            "terms_accepted_version": current_user.accepted_terms_version,
+            "two_factor_enabled": current_user.two_factor_enabled,
+        },
+        "chats": [],
+        "chat_types_created": [],
+    }
+
+    # Serializar chats do usuário
+    for chat in current_user.chats:
+        chat_data = {
+            "id": str(chat.id),
+            "title": chat.title,
+            "created_at": chat.created_at.isoformat() if chat.created_at else None,
+            "messages_count": len(chat.messages),
+            "chat_type_id": str(chat.chat_type_id) if chat.chat_type_id else None,
+            "messages": [
+                {
+                    "id": str(msg.id),
+                    "role": msg.role,
+                    "content": msg.content,
+                    "created_at": msg.created_at.isoformat()
+                    if msg.created_at
+                    else None,
+                }
+                for msg in chat.messages
+            ],
+        }
+        data["chats"].append(chat_data)
+
+    # Serializar bases de conhecimento criadas
+    for ct in current_user.chat_types:
+        ct_data = {
+            "id": str(ct.id),
+            "name": ct.name,
+            "description": ct.description,
+            "created_at": ct.created_at.isoformat() if ct.created_at else None,
+            "is_public": ct.is_public,
+            "tags": [tag.tag for tag in ct.tags],
+        }
+        data["chat_types_created"].append(ct_data)
+
+    return JSONResponse(
+        content=data,
+        headers={
+            "Content-Disposition": f"attachment; filename=export_dados_{current_user.username}.json"
+        },
+    )

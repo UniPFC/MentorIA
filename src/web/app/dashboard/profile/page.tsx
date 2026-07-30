@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
-import { User, Mail, Lock, Eye, EyeOff, Save, Shield, Zap, Crown, TrendingUp, CheckCircle, AlertCircle, Send } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, Save, Shield, Zap, Crown, TrendingUp, CheckCircle, AlertCircle, Send, Download, Trash2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button, Input } from '@/components/ui';
 import Toast from '@/components/Toast';
@@ -33,6 +33,11 @@ export default function ProfilePage() {
   // Modal states for legal docs
   const [modalOpen, setModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState({ title: '', url: '' });
+
+  // Data Management states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEmailSent, setShowEmailSent] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -123,6 +128,36 @@ export default function ProfilePage() {
       setToast({ message: msg, type: 'error' });
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      const res = await api.get('/auth/me/export');
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", `export_dados_${user?.username || 'usuario'}.json`);
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+      setToast({ message: 'Dados exportados com sucesso!', type: 'success' });
+    } catch (err) {
+      setToast({ message: 'Erro ao exportar dados', type: 'error' });
+    }
+  };
+
+  const handleRequestAccountDeletion = async () => {
+    setDeleteLoading(true);
+    try {
+      await api.post('/auth/request-account-deletion');
+      setShowDeleteConfirm(false);
+      setShowEmailSent(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Erro ao solicitar exclusão';
+      setToast({ message: msg, type: 'error' });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -408,6 +443,95 @@ export default function ProfilePage() {
                 Ler Política de Privacidade
               </Button>
             </div>
+          </div>
+
+          {/* Data Management (LGPD) */}
+          <div className="card overflow-hidden animate-slide-up border-red-200 dark:border-red-900/30" style={{ animationDelay: '0.3s', animationFillMode: 'both' }}>
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Gestão de Dados & Privacidade</h2>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Exportar Meus Dados</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Baixe uma cópia de todos os seus dados pessoais, históricos de chat e configurações em formato JSON.</p>
+                </div>
+                <Button variant="secondary" onClick={handleExportData} className="shrink-0">
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar Dados
+                </Button>
+              </div>
+              
+              <div className="h-px bg-gray-100 dark:bg-gray-800 w-full" />
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-red-600 dark:text-red-400 text-sm">Excluir Minha Conta</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A exclusão da conta é permanente. Todos os seus dados pessoais e bases de conhecimento serão apagados.</p>
+                </div>
+                <Button 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="shrink-0 bg-red-500 hover:bg-red-600 text-white border-none"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir Conta
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-2xl scale-in-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center mb-4 mx-auto">
+              <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white text-center mb-2">Excluir Conta Definitivamente?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+              Para garantir sua segurança, enviaremos um e-mail com as instruções e o link para confirmar a exclusão permanente da sua conta. Deseja prosseguir?
+            </p>
+            <div className="flex gap-3">
+              <Button 
+                variant="secondary" 
+                className="flex-1"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white border-none"
+                onClick={handleRequestAccountDeletion}
+                loading={deleteLoading}
+              >
+                Sim, Enviar E-mail
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Sent Modal */}
+      {showEmailSent && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-2xl scale-in-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mb-4 mx-auto">
+              <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white text-center mb-2">E-mail Enviado!</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+              Verifique sua caixa de entrada (e a pasta de spam). Enviamos um link seguro para você concluir o processo de exclusão da sua conta.
+            </p>
+            <Button 
+              className="w-full"
+              onClick={() => setShowEmailSent(false)}
+            >
+              Entendi
+            </Button>
           </div>
         </div>
       )}
