@@ -1,50 +1,71 @@
-# MentorIA- Projeto Final de Curso I
+# MentorIA - Projeto Final de Curso II
 
 ## Visão Geral
 
-Este projeto consiste no desenvolvimento de uma aplicação de **RAG (Retrieval-Augmented Generation)** robusta e escalável, integrada a um sistema de chat inteligente. O sistema permite a ingestão de documentos, processamento vetorial e interação via chat contextualizado, utilizando modelos de Inteligência Artificial para gerar respostas precisas baseadas no conhecimento fornecido.
+Este projeto é a evolução e consolidação do desenvolvimento de uma aplicação avançada de **RAG (Retrieval-Augmented Generation)** integrada a um ecossistema de SaaS (Software as a Service) completo. O sistema permite a ingestão automatizada de bases de conhecimento personalizadas, processamento vetorial semântico e interação via chat inteligente.
 
-O projeto faz parte do **Projeto Final de Curso (PFC)** e encontra-se na **Fase 01 (7º Período)**, focada na consolidação e integração entre Frontend, Backend e Camada de Dados.
+Este projeto representa o **Projeto Final de Curso II (PFC II)**, culminando no fechamento de todo o escopo arquitetural, segurança, compliance de dados e integração de microsserviços.
 
-## Funcionalidades Principais
+## Funcionalidades Principais (Features)
 
-- **Autenticação e Segurança:** Sistema de login seguro com JWT (JSON Web Tokens).
-- **Chat Inteligente (RAG):** Interface de chat que permite perguntas em linguagem natural, com respostas fundamentadas em documentos carregados.
-- **Gestão de Documentos:** Upload e processamento de arquivos para base de conhecimento.
-- **Histórico de Conversas:** Persistência de chats e mensagens.
-- **Interface Responsiva:** Frontend moderno e responsivo (SPA).
+A plataforma MentorIA cresceu exponencialmente em escopo para oferecer uma experiência de produto madura e pronta para produção:
+
+### 1. IA e RAG (Retrieval-Augmented Generation)
+- **Integração Agnóstica de LLMs:** Suporte multi-provedor (OpenAI, HuggingFace/Local LLMs, Gemini, Anthropic), permitindo flexibilidade de custos e privacidade.
+- **Processamento Vetorial Híbrido:** Utiliza o **Qdrant** para armazenamento de embeddings de alta dimensionalidade, oferecendo buscas semânticas rápidas.
+- **Auto-Ingestão de Dados:** Sistema que lê planilhas (XLSX, CSV) da pasta `data/`, converte para embeddings e auto-provisiona Bases de Conhecimento Públicas na inicialização do servidor.
+
+### 2. Autenticação e Segurança Avançada
+- **Autenticação JWT Robusta:** Controle de sessão, revogação de tokens e limitação de taxa (Rate Limiting) nativos.
+- **2FA (Autenticação de Dois Fatores):** Segurança extra para os usuários ativarem no painel via autenticadores (Google Authenticator, Authy).
+- **Detecção de Anomalias:** Bloqueio de IPs por excesso de tentativas falhas de login (Brute Force Protection) e requisitos de força de senha.
+
+### 3. Monetização e Gateway de Pagamentos
+- **Integração Completa Pagar.me v5:** Fluxo de assinaturas (Plans/Subscriptions) escalonado por níveis de uso (Level 01, 02, 03).
+- **Checkout Seguro:** A aplicação gera o link de hosted checkout e processa os webhooks do Pagar.me, garantindo que nenhum dado sensível de cartão toque nossos servidores (PCI Compliance Indireto).
+
+### 4. Conformidade Legal (LGPD) e Privacidade
+- **Cookie Banner Nativo:** Gestão de consentimento transparente de cookies (somente essenciais no momento).
+- **Portabilidade de Dados (Exportação):** Funcionalidade que permite ao usuário baixar instantaneamente todo o seu perfil, histórico de conversas e definições de bases de conhecimento em JSON.
+- **Direito ao Esquecimento:** Funcionalidade real de exclusão de conta via painel (com token enviado ao e-mail para confirmação), disparando uma deleção em cascata (CASCADE) no PostgreSQL e no Qdrant.
+- **Chats Somente Leitura:** Segurança a nível de backend que congela automaticamente a interação de conversas caso a Base de Conhecimento vinculada sofra restrições ou exclusões.
+
+### 5. Interface de Usuário (Frontend)
+- **Painel de Controle SPA (Single Page Application):** Desenvolvido inteiramente focado na responsividade e experiência moderna.
+- **Modo Noturno (Dark Mode):** Alternância automática/manual perfeitamente integrada aos componentes.
+
+---
 
 ## Arquitetura do Sistema
 
 O sistema utiliza uma arquitetura de **Microsserviços Containerizados**, orquestrados via Docker Compose:
 
-1. **Frontend (Web):** SPA desenvolvida em HTML5, CSS3 e JavaScript (Vanilla), servida via Nginx.
-2. **Backend (API):** API RESTful desenvolvida com **FastAPI (Python)**.
-3. **Banco de Dados Relacional:** **PostgreSQL** para dados estruturados (usuários, chats, histórico).
-4. **Banco de Dados Vetorial:** **Qdrant** para armazenamento de embeddings e busca semântica.
+1. **Frontend (Web):** SPA desenvolvida em HTML5, CSS3, e TypeScript/JavaScript, servida nativamente ou em Next.js.
+2. **Backend (API):** API RESTful assíncrona, orientada a eventos e desenvolvida com **FastAPI (Python 3.12)**.
+3. **Banco de Dados Relacional:** **PostgreSQL 15** para armazenamento persistente e complexo (usuários, hierarquia de chats, histórico de pagamentos).
+4. **Banco de Dados Vetorial:** **Qdrant** responsável pela pesquisa semântica da IA.
 
 ```mermaid
 graph TD
-    User["Usuário"] --> Web["Frontend (Nginx)"]
+    User["Usuário"] --> Web["Frontend"]
     Web --> API["Backend (FastAPI)"]
-    API --> DB["PostgreSQL"]
-    API --> VectorDB["Qdrant"]
+    API --> DB["PostgreSQL (Relacional)"]
+    API --> VectorDB["Qdrant (Vetorial)"]
+    API <--> ExternalAI["Provedores LLM (OpenAI/HuggingFace)"]
+    API <--> PaymentGateway["Pagar.me Webhooks"]
 ```
 
-## Tecnologias Utilizadas
-
-- **Backend:** Python 3.12, FastAPI, SQLAlchemy, Alembic, LangChain/LlamaIndex (integração RAG).
-- **Frontend:** HTML5, CSS3, JavaScript, Nginx.
-- **Infraestrutura:** Docker, Docker Compose.
-- **IA/ML:** PyTorch, Transformers, Qdrant Client.
-- **Banco de Dados:** PostgreSQL 15, Qdrant.
+---
 
 ## Pré-requisitos
 
 - [Docker](https://www.docker.com/get-started) e Docker Compose instalados.
-- Git instalado.
+- Git instalado na sua máquina.
+- Chaves de API das integrações que você desejar ativar (ex: `OPENAI_API_KEY`, `PAGARME_API_KEY`).
 
-## Como Executar o Projeto
+---
+
+## Como Executar o Projeto Localmente
 
 1. **Clone o repositório:**
 
@@ -52,62 +73,75 @@ graph TD
    git clone <URL_DO_REPOSITORIO>
    cd MentorIA
    ```
+
 2. **Configure as variáveis de ambiente:**
-   Crie um arquivo `.env` na raiz do projeto (baseado no `.env.example`, se disponível) e configure as credenciais necessárias (chaves de API de LLMs, senhas de banco, etc.).
-3. **Inicie os contêineres:**
+   Duplique o arquivo `.env.example` e renomeie-o para `.env`. Preencha as chaves de API necessárias (como LLM e Pagar.me).
+
+3. **Inicie a infraestrutura Docker:**
 
    ```bash
    docker-compose up --build -d
    ```
-4. **Acesse a aplicação:**
 
-   - Frontend: `http://localhost:3000` (ou porta configurada).
-   - API Docs (Swagger): `http://localhost:8000/docs`.
+4. **Acesse a plataforma:**
 
-## Qualidade de Código (Pre-commit)
+   - **Frontend App:** [http://localhost:3000](http://localhost:3000)
+   - **Documentação da API (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
 
-Este projeto utiliza ferramentas de linting, formatação e checagem de tipos estática para manter o código impecável. É **obrigatório** instalar os hooks de pre-commit antes de contribuir com o código.
-
-### Como configurar:
-No terminal (na raiz do projeto), execute o script de instalação para engatar as validações no seu Git local:
-
-```bash
-# Se você estiver no Windows (PowerShell)
-.\setup_precommit.ps1
-```
-
-*(Esse script instalará o pre-commit usando o `uv` e configurará as verificações de arquivos e mensagens de commit).*
-
-### O que o pre-commit faz?
-Toda vez que você der um `git commit`, ele rodará automaticamente:
-- **Ruff:** O Linter procurará por código sem uso e formatará tudo no padrão.
-- **Mypy:** O Type Checker validará a tipagem forte do Python.
-- **Segurança & Validações Extras:** Verificará sintaxe de `.json` e `.yaml`, impedirá o envio acidental de chaves de API, bloqueará merges mal resolvidos e validará se sua mensagem de commit segue o padrão do [Conventional Commits](https://www.conventionalcommits.org/) (ex: `feat: add login`, `fix: bug on auth`).
+---
 
 ## Configurações de Ambiente (.env)
 
 O arquivo `.env` contém configurações vitais para rodar o sistema localmente ou em produção. Algumas das variáveis de destaque para controle de segurança e testes incluem:
 
-- **DEV_MODE (`True`/`False`):** Controla o modo de desenvolvimento global. Ativar isso não mexe na segurança diretamente, mas serve como indicativo geral.
-- **SECURE_COOKIES (`True`/`False`):** Se `True`, todos os cookies de autenticação ganharão a flag `Secure` e exigirão conexão HTTPS para funcionarem. Em ambiente local com HTTP padrão, deixe como `False` para os cookies funcionarem.
-- **AUTO_RUN_SEEDER (`True`/`False`):** Se `True`, popula automaticamente o banco de dados e vetores de embeddings (Qdrant) ao iniciar o backend. Deixe `False` para um startup mais veloz se o banco já estiver populado.
-- **ENABLE_API_DOCS (`True`/`False`):** Ativa ou desativa a documentação do FastAPI (Swagger/ReDoc) na rota `/docs`.
-- **FORCE_HTTPS (`True`/`False`):** Se `True`, o middleware forçará um redirecionamento 301 de HTTP para HTTPS em todas as requisições e adicionará o cabeçalho HSTS.
-- **SKIP_PAYMENT (`True`/`False`):** Permite simular a conclusão instantânea de compras de assinatura ou recarga de créditos (ideal para testes de UI) sem passar pela validação real de um gateway.
+- **DEV_MODE (`True`/`False`):** Controla o modo de desenvolvimento global. Ativar isso não mexe na segurança diretamente, mas serve como indicativo geral de debug.
+- **SECURE_COOKIES (`True`/`False`):** Se `True`, todos os cookies de autenticação ganharão a flag `Secure` e exigirão conexão HTTPS para funcionarem. Em ambiente local sem certificado (HTTP), deixe como `False` para conseguir fazer login.
+- **AUTO_RUN_SEEDER (`True`/`False`):** Se `True`, o backend engatilhará a ingestão automática das planilhas que estiverem na pasta `data/` logo após inicializar. Deixe `False` para economizar tempo no boot se o banco já estiver populado.
+- **ENABLE_API_DOCS (`True`/`False`):** Ativa ou desativa as documentações interativas do FastAPI (Swagger/ReDoc). Em produção estrita, costuma-se manter `False`.
+- **FORCE_HTTPS (`True`/`False`):** Se `True`, injeta um middleware no FastAPI forçando redirecionamento 301 de conexões HTTP para HTTPS e adicionando os cabeçalhos de segurança (HSTS).
+- **SKIP_PAYMENT (`True`/`False`):** Utilidade maravilhosa para desenvolvimento: permite simular a conclusão instantânea de compras/assinaturas direto pelo painel, validando os webhooks locais sem bater no Gateway Pagar.me.
 
-## Estrutura do Repositório
+---
 
-- `/src/api`: Código fonte do Backend (FastAPI).
-- `/src/web`: Código fonte do Frontend (HTML/JS/CSS).
-- `/shared`: Códigos compartilhados (Modelos de banco, etc.).
-- `/alembic`: Migrações de banco de dados.
-- `/config`: Configurações globais e logs.
-- `/docs`: Documentação do projeto.
+## Ingestão de Dados e Limpeza (Pasta `data/`)
+
+O MentorIA já conta com um injetor automático poderoso de dados na pasta `data/`. Para subir novas bases de conhecimento públicas:
+1. Jogue uma planilha `.xlsx` (com colunas de pergunta/resposta) dentro do diretório `data/`.
+2. Habilite `AUTO_RUN_SEEDER=True` no seu `.env`.
+3. Reinicie os contêineres e a API auto-ingerirá esses dados.
+
+> **Dica Pro:** Para arquivos gerados a partir de extrações cruas (PDFs convertidos), utilize a ferramenta nativa de diagnóstico e limpeza do projeto para sanitizar os dados **antes** da ingestão:
+> ```bash
+> python data/analyze_spreadsheet.py "data/MEU_ARQUIVO.xlsx" --clean
+> ```
+> *(Veja mais instruções em `data/README.md`)*
+
+---
+
+## Qualidade de Código (Pre-commit & Testes)
+
+Este projeto adota padrões extremamente rígidos de qualidade de software. É **obrigatório** instalar os hooks locais se for modificar o código.
+
+### Como configurar os hooks locais:
+```bash
+# No Windows PowerShell:
+.\setup_precommit.ps1
+```
+
+O ambiente executa de forma implacável:
+- **Ruff:** Formatação unificada, remoção de imports não utilizados e linting rigoroso.
+- **Mypy:** Checagem de tipagem estática (Type Hints) previnindo ambiguidades em tempo de execução.
+- **Conventional Commits:** Todas as mensagens de commit devem seguir o padrão (ex: `feat: ...`, `fix: ...`, `docs: ...`).
+- **Pytest:** Cobertura de testes automatizados e integração contínua (Integration/Unit Testing).
+
+---
 
 ## Autores
 
-**Equipe Techstein**
-Projeto desenvolvido para a disciplina de Projeto Final de Curso.
+- **Felipe Rocha Martins** - [GitHub](https://github.com/FelipeRochaMartins)
+- **Gabriel Weidlich Santos** - [GitHub](https://github.com/GabrielWeidlich)
+- **Adriel Fernandes Campos** - [GitHub](https://github.com/AdrielCampos134)
+- **Hugo Gabriel Cunha Alves** - [GitHub](https://github.com/HugoTGabriel)
 
 ## Badges
 

@@ -1,31 +1,55 @@
 # Auto-Ingestion Data Folder
 
-Any spreadsheet files placed in this folder will be automatically detected by the API on startup.
-Each file will become a **Public Chat Type** available to all users.
+Qualquer arquivo de planilha (.xlsx, .csv) adicionado a esta pasta será detectado automaticamente pela API no momento da inicialização.
+Cada arquivo se tornará um **Public Chat Type** (Base de Conhecimento Pública) disponível para todos os usuários.
 
-## How it works
+## Como funciona
 
-1.  **File Naming**: The file name determines the Chat Type name and description.
-    *   **Format**: `Title --- Description.xlsx`
-    *   **Example**: `Finance 2024 --- Financial Report for Q1.xlsx`
-        *   **Chat Name**: "Finance 2024"
-        *   **Description**: "Financial Report for Q1"
-    *   **Fallback**: If you don't use `---`, the filename is used as the title and a default description is generated.
-        *   `HR-Policies.csv` -> **"Hr Policies"**
+1.  **Nomenclatura do Arquivo**: O nome do arquivo determina o título e a descrição do Chat Type.
+    *   **Formato**: `Titulo --- Descricao.xlsx`
+    *   **Exemplo**: `Finance 2024 --- Relatorio Financeiro Q1.xlsx`
+        *   **Nome do Chat**: "Finance 2024"
+        *   **Descrição**: "Relatorio Financeiro Q1"
+    *   **Fallback**: Se você não utilizar `---`, o nome do arquivo será o título e uma descrição padrão será gerada.
+        *   `RH-Politicas.csv` -> **"Rh Politicas"**
 
-2.  **Automatic Creation**:  
-    *   If a Chat Type with that name doesn't exist, it is created automatically.
-    *   The collection in Qdrant is created.
-    *   The file content is ingested.
+2.  **Criação Automática**:  
+    *   Se um Chat Type com este nome não existir, ele é criado automaticamente no banco de dados.
+    *   A coleção vetorial no **Qdrant** é criada e dimensionada corretamente.
+    *   O conteúdo do arquivo é ingerido (linhas viram chunks e geram embeddings).
 
-3.  **Updates**:
-    *   If the Chat Type already exists and has data, the file is skipped (to avoid duplicates).
-    *   To update a knowledge base: Delete the Chat Type via the API/Frontend, then restart the API. It will re-read the file and re-ingest.
+3.  **Atualizações**:
+    *   Se o Chat Type já existir, o arquivo é ignorado para evitar duplicação de dados.
+    *   Para forçar atualização de uma base: Delete o Chat Type pela API ou Dashboard Frontend e reinicie a API. O sistema irá reler e ingerir o arquivo do zero.
 
-## Supported Formats
+## Formatos Suportados
 
 *   `.xlsx` (Excel)
-*   `.xls` (Legacy Excel)
-*   `.csv` (Comma Separated Values)
+*   `.xls` (Excel Legado)
+*   `.csv` (Valores Separados por Vírgula)
 
-**Required Columns:** `question`, `answer`
+**Colunas Obrigatórias:** O script espera essencialmente a primeira coluna como `question` (pergunta/título) e a segunda como `answer` (resposta/conteúdo).
+
+---
+
+## 🧹 Ferramenta de Análise e Limpeza (analyze_spreadsheet.py)
+
+Muitas vezes, bases de conhecimento extraídas de PDFs ou fontes sujas podem conter caracteres inválidos, lixos de formatação, "cid:" ou letras soltas no final das alternativas. Para garantir a qualidade do RAG, utilize o script `analyze_spreadsheet.py` **antes** de subir a API para ingestão.
+
+### Como usar
+
+O script analisa a planilha e gera um relatório Markdown detalhando todos os problemas encontrados em cada linha.
+
+**Uso básico (Apenas Análise):**
+```bash
+python data/analyze_spreadsheet.py "data/NOME_DO_ARQUIVO.xlsx"
+```
+Isso criará (ou substituirá) um arquivo chamado `relatorio_planilha.md` na pasta `data/` com o diagnóstico completo.
+
+**Uso com Correção Automática:**
+Se você quiser que o script tente limpar problemas conhecidos automaticamente (como letras soltas " A.", " B." perdidas no fim das respostas devido a erros de extração OCR), adicione a flag `--clean`:
+
+```bash
+python data/analyze_spreadsheet.py "data/NOME_DO_ARQUIVO.xlsx" --clean
+```
+Neste modo, além de gerar o relatório `relatorio_planilha.md`, o script **sobrescreverá** a planilha original com as linhas corrigidas. Após isso, você pode iniciar o Backend com segurança para uma ingestão de alta qualidade.
