@@ -6,6 +6,7 @@ import asyncio
 import json
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -32,7 +33,6 @@ from src.api.schemas.chat import (
     SendMessageRequest,
     SendMessageResponse,
 )
-from src.rag.pipeline import RAGPipeline
 from src.repositories.chat import ChatRepository
 from src.repositories.chat_type import ChatTypeRepository
 from src.services.background import schedule_title_generation
@@ -411,17 +411,27 @@ async def send_message(
                 detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)",
             )
 
-        # Run RAG pipeline in a thread to avoid blocking the event loop
-        rag_pipeline = RAGPipeline()
-
-        result = await asyncio.to_thread(
-            rag_pipeline.run,
-            chat_type_id=chat.chat_type_id,
-            query=message_data.content,
-            chat_history=chat_history if chat_history else None,
-            llm_model=chat.llm_model,
-            llm_provider=chat.llm_provider,
-        )
+        try:
+            # timeout=None is used because if the worker is busy, the request will wait in the worker's queue.
+            async with httpx.AsyncClient(timeout=None) as client:
+                response = await client.post(
+                    f"{settings.AI_WORKER_URL}/internal/generate",
+                    json={
+                        "chat_type_id": str(chat.chat_type_id),
+                        "query": message_data.content,
+                        "chat_history": chat_history if chat_history else None,
+                        "llm_model": chat.llm_model,
+                        "llm_provider": chat.llm_provider,
+                    },
+                )
+                response.raise_for_status()
+                result = response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"Error calling AI worker: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Ocorreu um erro no processamento da inteligência artificial. Tente novamente.",
+            )
 
         assistant_content = result["answer"]
         retrieved_chunks = result["chunks"]
@@ -573,9 +583,6 @@ async def send_message_stream(
             detail=f"Insufficient token budget. Remaining: {current_user.token_budget}, Required: {actual_input_tokens + settings.TOKEN_BUDGET_MINIMUM_RESERVE} (input*{input_multiplier} + reserve)",
         )
 
-    # Initialize pipeline
-    rag_pipeline = RAGPipeline()
-
     def generate_response():
         # Create a new session for the stream duration
         session = SessionLocal()
@@ -603,30 +610,61 @@ async def send_message_stream(
                 # No sources for instant responses
                 yield json.dumps({"type": "sources", "content": []}) + "\n"
             else:
-                # Stream generator with chat-specific model if configured
-                for chunk in rag_pipeline.run_stream(
-                    chat_type_id=chat.chat_type_id,
-                    query=message_data.content,
-                    chat_history=chat_history,
-                    llm_model=chat.llm_model,
-                    llm_provider=chat.llm_provider,
-                ):
-                    # Collect data for DB save (regardless of client connection)
-                    if chunk["type"] == "token":
-                        full_response.append(chunk["content"])
-                    elif chunk["type"] == "sources":
-                        retrieved_chunks = chunk["content"]
+                payload = {
+                    "chat_type_id": str(chat.chat_type_id),
+                    "query": message_data.content,
+                    "chat_history": chat_history if chat_history else None,
+                    "llm_model": chat.llm_model,
+                    "llm_provider": chat.llm_provider,
+                }
 
-                    # Try to send chunk to client
+                try:
+                    # timeout=None is used because if the worker is busy, the request will wait in the worker's queue.
+                    with httpx.stream(
+                        "POST",
+                        f"{settings.AI_WORKER_URL}/internal/generate_stream",
+                        json=payload,
+                        timeout=None,
+                    ) as response:
+                        response.raise_for_status()
+                        for line in response.iter_lines():
+                            if not line or not line.startswith("data: "):
+                                continue
+
+                            chunk_data = line[6:]
+                            try:
+                                chunk = json.loads(chunk_data)
+                            except json.JSONDecodeError:
+                                continue
+
+                            # Collect data for DB save (regardless of client connection)
+                            if chunk["type"] == "token":
+                                full_response.append(chunk["content"])
+                            elif chunk["type"] == "sources":
+                                retrieved_chunks = chunk["content"]
+                            elif chunk["type"] == "error":
+                                logger.error(
+                                    f"Worker returned error: {chunk.get('content')}"
+                                )
+
+                            # Try to send chunk to client
+                            if client_connected:
+                                try:
+                                    yield json.dumps(chunk) + "\n"
+                                except GeneratorExit:
+                                    # Client disconnected, but continue generating
+                                    client_connected = False
+                                    logger.info(
+                                        f"Client disconnected from stream for chat {chat_id}, continuing generation..."
+                                    )
+                except httpx.HTTPError as e:
+                    logger.error(f"Error streaming from AI worker: {e}")
+                    error_chunk = {
+                        "type": "error",
+                        "content": "Ocorreu um erro no processamento da inteligência artificial. Tente novamente.",
+                    }
                     if client_connected:
-                        try:
-                            yield json.dumps(chunk) + "\n"
-                        except GeneratorExit:
-                            # Client disconnected, but continue generating
-                            client_connected = False
-                            logger.info(
-                                f"Client disconnected from stream for chat {chat_id}, continuing generation..."
-                            )
+                        yield json.dumps(error_chunk) + "\n"
 
             # Save Assistant Message after streaming completes (even if client disconnected)
             assistant_content = "".join(full_response)

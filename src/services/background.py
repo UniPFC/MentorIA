@@ -91,10 +91,6 @@ def process_ingestion_job(
 
     except Exception as e:
         logger.error(f"Ingestion job {job_id} failed: {e}")
-        job.status = IngestionStatus.FAILED
-        job.error_message = str(e)
-        job.completed_at = datetime.now(UTC)
-        db.commit()
 
         # Cleanup: Delete ChatType and Qdrant collection if ingestion failed
         try:
@@ -121,6 +117,16 @@ def process_ingestion_job(
         except Exception as cleanup_err:
             logger.error(
                 f"Failed to cleanup ChatType {chat_type_id} after ingestion failure: {cleanup_err}"
+            )
+
+        # Delete the job record so it doesn't become an orphan
+        try:
+            db.delete(job)
+            db.commit()
+            logger.info(f"Deleted failed ingestion job {job_id}")
+        except Exception as delete_err:
+            logger.error(
+                f"Failed to delete failed ingestion job {job_id}: {delete_err}"
             )
 
 

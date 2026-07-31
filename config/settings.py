@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     EMBEDDING_DIMENSION: int = 1024
     EMBEDDING_REMOTE_MODEL: str = "text-embedding-3-small"
     EMBEDDING_REMOTE_PROVIDER: str = "openai"
-    RERANKER_MODEL_ID: str = "BAAI/bge-reranker-v2-m3"
+    RERANKER_MODEL_ID: str = "cross-encoder/mmarco-mMiniLMv2-L6-H384-v1"
 
     # Speech-to-Text Configuration
     STT_ENABLED: bool = False
@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = ""
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # Services
+    AI_WORKER_URL: str = "http://ai_worker:8001"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
     # Rate Limiting Configuration (simples, em memória)

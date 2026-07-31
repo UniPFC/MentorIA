@@ -7,6 +7,8 @@ import { Badge, EmptyState } from '@/components/ui';
 import { PageSpinner } from '@/components/ui/Spinner';
 import Toast from '@/components/Toast';
 import api from '@/lib/api';
+import { authService } from '@/lib/auth';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 interface IngestionJob {
   id: string;
@@ -38,14 +40,19 @@ export default function JobsPage() {
     }
   }, []);
 
-  useEffect(() => { loadJobs(); }, [loadJobs]);
+  // Use WebSocket for real-time jobs updates
+  useWebSocket('/api/v1/ws/jobs', {
+    onMessage: (message) => {
+      if (Array.isArray(message)) {
+        setJobs(message);
+        setLoading(false);
+      }
+    }
+  }, true);
 
   useEffect(() => {
-    const hasActive = jobs.some((j) => j.status === 'pending' || j.status === 'processing');
-    if (!hasActive) return;
-    const interval = setInterval(loadJobs, 5000);
-    return () => clearInterval(interval);
-  }, [jobs, loadJobs]);
+    loadJobs();
+  }, [loadJobs]);
 
   const handleDelete = async (jobId: string) => {
     try {

@@ -1,11 +1,16 @@
 from datetime import UTC
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import HTTPException, status
 
-from src.api.routes.chats import verify_chat_ownership
+from src.api.routes.chats import (
+    send_message,
+    send_message_stream,
+    verify_chat_ownership,
+)
 
 
 @pytest.mark.unit
@@ -596,19 +601,25 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.AsyncClient") as mock_httpx,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
             mock_chat_service.return_value = chat_service
 
-            rag = Mock()
-            rag.run.return_value = {
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
+
+            mock_response = Mock()
+            mock_response.json.return_value = {
                 "answer": "Hello back",
                 "chunks": [{"question": "Q", "answer": "A", "score": 0.9}],
             }
-            mock_rag.return_value = rag
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
             with patch("src.api.routes.chats.schedule_title_generation"):
                 result = await send_message(
@@ -620,7 +631,7 @@ class TestChatsRoutes:
                 )
 
                 assert result.chat is not None
-                rag.run.assert_called_once()
+                mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_send_message_exception(self):
@@ -708,12 +719,10 @@ class TestChatsRoutes:
             chat_service.save_message.return_value = Mock()
             mock_chat_service.return_value = chat_service
 
-            with patch("src.api.routes.chats.RAGPipeline") as mock_rag:
-                rag = Mock()
-                rag.run.side_effect = HTTPException(
-                    status_code=400, detail="Bad request"
+            with patch("src.api.routes.chats.UserService") as mock_user_service_class:
+                mock_user_service_class.return_value.can_afford_tokens.side_effect = (
+                    HTTPException(status_code=400, detail="Bad request")
                 )
-                mock_rag.return_value = rag
 
                 with pytest.raises(HTTPException) as exc_info:
                     await send_message(
@@ -749,19 +758,19 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
             mock_chat_service.return_value = chat_service
 
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
+
             # Return an instant response so it doesn't need to call run_stream
             mock_instant.get_instant_response.return_value = "Instant answer"
-
-            rag = Mock()
-            mock_rag.return_value = rag
 
             with patch("src.api.routes.chats.schedule_title_generation"):
                 response = await send_message_stream(
@@ -802,9 +811,11 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
@@ -812,13 +823,14 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            rag = Mock()
-            rag.run_stream.return_value = [
-                {"type": "token", "content": "Hello"},
-                {"type": "sources", "content": [{"question": "Q", "answer": "A"}]},
+            mock_response = MagicMock()
+            mock_response.iter_lines.return_value = [
+                'data: {"type": "token", "content": "Hello"}',
+                'data: {"type": "sources", "content": [{"question": "Q", "answer": "A"}]}',
             ]
-            mock_rag.return_value = rag
+            mock_httpx_stream.return_value.__enter__.return_value = mock_response
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -832,16 +844,18 @@ class TestChatsRoutes:
                     chat_repo=chat_repo,
                 )
 
-                # Consume the generator to trigger run_stream
+                # Consume the generator to trigger the stream
                 body = []
                 async for chunk in response.body_iterator:
                     body.append(chunk)
 
-                rag.run_stream.assert_called_once()
+                mock_httpx_stream.assert_called_once()
+                # Verify we got the chunks + final message
+                assert len(body) == 3
 
     @pytest.mark.asyncio
     async def test_send_message_stream_run_stream_error(self):
-        """Testa envio de mensagem em streaming com erro no run_stream"""
+        """Testa envio de mensagem em streaming com erro no stream"""
         from src.api.routes.chats import send_message_stream
 
         chat_repo = Mock()
@@ -862,9 +876,11 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
@@ -872,10 +888,9 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            rag = Mock()
-            rag.run_stream.side_effect = Exception("RAG error")
-            mock_rag.return_value = rag
+            mock_httpx_stream.side_effect = Exception("HTTPX error")
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -920,9 +935,11 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
@@ -930,11 +947,14 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            rag = Mock()
+            mock_response = MagicMock()
             # Only sources, no tokens - triggers empty content fallback
-            rag.run_stream.return_value = [{"type": "sources", "content": []}]
-            mock_rag.return_value = rag
+            mock_response.iter_lines.return_value = [
+                'data: {"type": "sources", "content": []}'
+            ]
+            mock_httpx_stream.return_value.__enter__.return_value = mock_response
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1103,18 +1123,13 @@ class TestChatsRoutes:
         message_data = Mock()
         message_data.content = "Hello"
 
-        def mock_run_stream(*args, **kwargs):
-            chunks = [
-                {"type": "token", "content": "Hello"},
-                {"type": "sources", "content": []},
-            ]
-            yield from chunks
-
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
             patch("src.api.routes.chats.schedule_title_generation"),
         ):
             chat_service = Mock()
@@ -1123,10 +1138,14 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            rag = Mock()
-            rag.run_stream = mock_run_stream
-            mock_rag.return_value = rag
+            mock_response = MagicMock()
+            mock_response.iter_lines.return_value = [
+                'data: {"type": "token", "content": "Hello"}',
+                'data: {"type": "sources", "content": []}',
+            ]
+            mock_httpx_stream.return_value.__enter__.return_value = mock_response
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1173,22 +1192,23 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
             patch("src.api.routes.chats.schedule_title_generation"),
             patch("src.api.routes.chats.UserService") as mock_user_service,
             patch("src.api.routes.chats.settings") as mock_settings,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
+            from shared.database.models.message import Message, MessageRole
+
             chat_service = Mock()
-            saved_message = Mock()
-            saved_message.id = uuid4()
-            saved_message.chat_id = chat.id
-            saved_message.role = "assistant"
-            saved_message.content = "Response"
-            saved_message.created_at = datetime.now(UTC)
-            saved_message.model_dump_json.return_value = (
-                '{"id": "123", "role": "assistant", "content": "Response"}'
+            saved_message = Message(
+                id=uuid4(),
+                chat_id=chat.id,
+                role=MessageRole.ASSISTANT,
+                content="Response",
+                created_at=datetime.now(UTC),
             )
             chat_service.save_message.return_value = saved_message
             chat_service.get_chat_history.return_value = []
@@ -1207,15 +1227,16 @@ class TestChatsRoutes:
                 }
             ]
             mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
+            mock_settings.AI_WORKER_URL = "http://worker"
 
             mock_instant.get_instant_response.return_value = None
 
-            rag = Mock()
-            rag.run_stream.return_value = [
-                {"type": "token", "content": "Response"},
-                {"type": "sources", "content": []},
+            mock_response = MagicMock()
+            mock_response.iter_lines.return_value = [
+                'data: {"type": "token", "content": "Response"}',
+                'data: {"type": "sources", "content": []}',
             ]
-            mock_rag.return_value = rag
+            mock_httpx_stream.return_value.__enter__.return_value = mock_response
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1260,12 +1281,13 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
             patch("src.api.routes.chats.schedule_title_generation"),
             patch("src.api.routes.chats.UserService") as mock_user_service,
             patch("src.api.routes.chats.settings") as mock_settings,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
             patch("src.services.chat.ChatService") as mock_chat_service_class,
         ):
             chat_service = Mock()
@@ -1297,15 +1319,16 @@ class TestChatsRoutes:
                 }
             ]
             mock_settings.TOKEN_BUDGET_MINIMUM_RESERVE = 100
+            mock_settings.AI_WORKER_URL = "http://worker"
 
             mock_instant.get_instant_response.return_value = None
 
-            rag = Mock()
-            rag.run_stream.return_value = [
-                {"type": "token", "content": "Response"},
-                {"type": "sources", "content": []},
+            mock_response = MagicMock()
+            mock_response.iter_lines.return_value = [
+                'data: {"type": "token", "content": "Response"}',
+                'data: {"type": "sources", "content": []}',
             ]
-            mock_rag.return_value = rag
+            mock_httpx_stream.return_value.__enter__.return_value = mock_response
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1349,9 +1372,11 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
             patch("src.api.routes.chats.schedule_title_generation"),
         ):
             chat_service = Mock()
@@ -1360,10 +1385,9 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            rag = Mock()
-            rag.run_stream.side_effect = Exception("RAG error")
-            mock_rag.return_value = rag
+            mock_httpx_stream.side_effect = httpx.HTTPError("worker error")
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1410,21 +1434,24 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
 
-            # Create a proper mock message that can be validated
-            mock_message = Mock()
-            mock_message.id = uuid4()
-            mock_message.chat_id = chat.id
-            mock_message.role = MessageRole.ASSISTANT
-            mock_message.content = "Hello back"
-            mock_message.created_at = Mock()
-            mock_message.model_dump_json.return_value = (
-                '{"id": "test", "content": "Hello back"}'
+            from datetime import datetime
+
+            from shared.database.models.message import Message, MessageRole
+
+            mock_message = Message(
+                id=uuid4(),
+                chat_id=chat.id,
+                role=MessageRole.ASSISTANT,
+                content="Hello back",
+                created_at=datetime.now(),
             )
 
             chat_service.save_message.return_value = mock_message
@@ -1432,13 +1459,14 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            rag = Mock()
-            rag.run_stream.return_value = [
-                {"type": "token", "content": "Hello"},
-                {"type": "sources", "content": []},
+            mock_response = MagicMock()
+            mock_response.iter_lines.return_value = [
+                'data: {"type": "token", "content": "Hello"}',
+                'data: {"type": "sources", "content": []}',
             ]
-            mock_rag.return_value = rag
+            mock_httpx_stream.return_value.__enter__.return_value = mock_response
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1482,20 +1510,20 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             chat_service.save_message.return_value = Mock()
             chat_service.get_chat_history.return_value = []
             mock_chat_service.return_value = chat_service
 
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
+
             # Use instant_response so GeneratorExit propagates to outer handler
             mock_instant.get_instant_response.return_value = "Hi"
-
-            rag = Mock()
-            mock_rag.return_value = rag
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1537,9 +1565,11 @@ class TestChatsRoutes:
 
         with (
             patch("src.api.routes.chats.ChatService") as mock_chat_service,
-            patch("src.api.routes.chats.RAGPipeline") as mock_rag,
+            patch("src.api.routes.chats.httpx.stream") as mock_httpx_stream,
             patch("src.api.routes.chats.InstantResponseService") as mock_instant,
             patch("src.api.routes.chats.SessionLocal") as mock_session_local,
+            patch("src.api.routes.chats.UserService") as mock_user_service_class,
+            patch("src.api.routes.chats.count_tokens", return_value=10),
         ):
             chat_service = Mock()
             # Fail on calls inside the except block
@@ -1556,14 +1586,10 @@ class TestChatsRoutes:
             mock_chat_service.return_value = chat_service
 
             mock_instant.get_instant_response.return_value = None
+            mock_user_service_class.return_value.can_afford_tokens.return_value = True
 
-            def bad_generator():
-                yield {"type": "token", "content": "H"}
-                raise Exception("RAG error")
-
-            rag = Mock()
-            rag.run_stream.return_value = bad_generator()
-            mock_rag.return_value = rag
+            # Simulate worker failure to trigger save-after-error path
+            mock_httpx_stream.side_effect = httpx.HTTPError("worker error")
 
             mock_session = Mock()
             mock_session_local.return_value = mock_session
@@ -1583,3 +1609,370 @@ class TestChatsRoutes:
 
                 # Should have token and error chunks
                 assert len(body) > 0
+
+
+@pytest.mark.asyncio
+async def test_send_message_email_not_verified():
+    current_user = Mock(email_verified=False)
+    with pytest.raises(HTTPException) as exc:
+        await send_message(
+            chat_id=uuid4(),
+            message_data=Mock(),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=Mock(),
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_send_message_read_only():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = Mock(user_id=current_user.id, is_read_only=True)
+    with pytest.raises(HTTPException) as exc:
+        await send_message(
+            chat_id=uuid4(),
+            message_data=Mock(),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_send_message_httperror():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        is_read_only=False,
+        llm_provider="openai",
+        llm_model="gpt-4",
+        chat_type_id=uuid4(),
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = chat
+
+    with (
+        patch("src.api.routes.chats.ChatService"),
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.httpx.AsyncClient") as mock_client,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+
+        import httpx
+
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            side_effect=httpx.HTTPError("error")
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await send_message(
+                chat_id=uuid4(),
+                message_data=Mock(content="h"),
+                db=Mock(),
+                current_user=current_user,
+                chat_repo=chat_repo,
+            )
+        assert exc.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_send_message_chat_not_found_at_end():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        is_read_only=False,
+        llm_provider="openai",
+        llm_model="gpt-4",
+        chat_type_id=uuid4(),
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.side_effect = [chat, None]  # Found at start, not found at end
+
+    with (
+        patch("src.api.routes.chats.ChatService"),
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.schedule_title_generation"),
+        patch("src.api.routes.chats.httpx.AsyncClient") as mock_client,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = {"answer": "A", "chunks": []}
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            return_value=mock_resp
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await send_message(
+                chat_id=uuid4(),
+                message_data=Mock(content="hi"),
+                db=Mock(),
+                current_user=current_user,
+                chat_repo=chat_repo,
+            )
+        assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_email_not_verified():
+    current_user = Mock(email_verified=False)
+    with pytest.raises(HTTPException) as exc:
+        await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=Mock(),
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_chat_type_none():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = Mock(user_id=current_user.id, chat_type_id=None)
+    with pytest.raises(HTTPException) as exc:
+        await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_generator_edges():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        chat_type_id=uuid4(),
+        llm_provider="openai",
+        llm_model="gpt-4",
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = chat
+
+    with (
+        patch("src.api.routes.chats.ChatService"),
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+        patch("src.api.routes.chats.SessionLocal"),
+        patch("src.api.routes.chats.httpx.stream") as mock_stream,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+        mock_instant.get_instant_response.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.iter_lines.return_value = [
+            "not data",
+            "data: invalid_json",
+            'data: {"type": "error", "content": "Err"}',
+        ]
+        mock_stream.return_value.__enter__.return_value = mock_response
+
+        response = await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(content="hi"),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+        async for chunk in response.body_iterator:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_generator_exit_in_yield():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        chat_type_id=uuid4(),
+        llm_provider="openai",
+        llm_model="gpt-4",
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = chat
+
+    with (
+        patch("src.api.routes.chats.ChatService"),
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+        patch("src.api.routes.chats.SessionLocal"),
+        patch("src.api.routes.chats.httpx.stream") as mock_stream,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+        mock_instant.get_instant_response.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.iter_lines.return_value = [
+            'data: {"type": "token", "content": "hi"}',
+        ]
+        mock_stream.return_value.__enter__.return_value = mock_response
+
+        response = await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(content="hi"),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+
+        iterator = response.body_iterator.__aiter__()
+        try:
+            await iterator.athrow(GeneratorExit)
+        except GeneratorExit:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_save_err_in_generator_exit():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        chat_type_id=uuid4(),
+        llm_provider="openai",
+        llm_model="gpt-4",
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = chat
+
+    with (
+        patch("src.api.routes.chats.ChatService") as mock_chat_service,
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+        patch("src.api.routes.chats.SessionLocal"),
+        patch("src.api.routes.chats.httpx.stream") as mock_stream,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+        mock_instant.get_instant_response.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.iter_lines.return_value = [
+            'data: {"type": "token", "content": "hi"}',
+        ]
+        mock_stream.return_value.__enter__.return_value = mock_response
+
+        inner_chat_service = Mock()
+        inner_chat_service.save_message.side_effect = [Mock(), Exception("Save err")]
+        mock_chat_service.return_value = inner_chat_service
+
+        response = await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(content="hi"),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+
+        iterator = response.body_iterator.__aiter__()
+        await iterator.__anext__()
+        try:
+            await iterator.athrow(GeneratorExit)
+        except BaseException:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_outer_exception_and_save_err():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        chat_type_id=uuid4(),
+        llm_provider="openai",
+        llm_model="gpt-4",
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = chat
+
+    with (
+        patch("src.api.routes.chats.ChatService") as mock_chat_service,
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+        patch("src.api.routes.chats.SessionLocal"),
+        patch("src.api.routes.chats.httpx.stream") as mock_stream,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+        mock_instant.get_instant_response.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.iter_lines.return_value = [
+            'data: {"type": "token", "content": "hi"}',
+        ]
+        mock_stream.return_value.__enter__.return_value = mock_response
+
+        inner_chat_service = Mock()
+        inner_chat_service.save_message.side_effect = [Mock(), Exception("Save err")]
+        mock_chat_service.return_value = inner_chat_service
+
+        response = await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(content="hi"),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+
+        iterator = response.body_iterator.__aiter__()
+        await iterator.__anext__()
+        try:
+            await iterator.athrow(Exception("Outer stream error"))
+        except BaseException:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_send_message_stream_generator_exit_in_error_chunk():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat = Mock(
+        user_id=current_user.id,
+        chat_type_id=uuid4(),
+        llm_provider="openai",
+        llm_model="gpt-4",
+    )
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = chat
+
+    with (
+        patch("src.api.routes.chats.ChatService"),
+        patch("src.api.routes.chats.UserService") as mock_user_service,
+        patch("src.api.routes.chats.count_tokens", return_value=10),
+        patch("src.api.routes.chats.InstantResponseService") as mock_instant,
+        patch("src.api.routes.chats.SessionLocal"),
+        patch("src.api.routes.chats.httpx.stream") as mock_stream,
+    ):
+        mock_user_service.return_value.can_afford_tokens.return_value = True
+        mock_instant.get_instant_response.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.iter_lines.return_value = []
+        mock_stream.return_value.__enter__.return_value = mock_response
+
+        response = await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(content="hi"),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+
+        iterator = response.body_iterator.__aiter__()
+
+        try:
+            await iterator.athrow(Exception("Outer error"))
+            await iterator.athrow(GeneratorExit)
+        except GeneratorExit:
+            pass
+        except Exception:
+            pass

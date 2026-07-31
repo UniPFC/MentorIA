@@ -267,11 +267,9 @@ def client(db_session):
         get_current_active_user_no_terms_check
     )
 
-    # Patch lifespan hooks (run_migrations and seed_default_knowledge) while starting the client
-    with (
-        patch("src.api.main.run_migrations"),
-        patch("src.api.main.seed_default_knowledge"),
-    ):
+    # Patch lifespan hooks (run_migrations) while starting the client
+    with patch("src.api.main.run_migrations") as mock_migrations:
+        # Prevent actually running migrations during tests_client:
         with TestClient(app) as test_client:
             yield test_client
 

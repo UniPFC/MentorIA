@@ -13,6 +13,23 @@ const api: AxiosInstance = axios.create({
 // Token is sent automatically via HttpOnly cookie (withCredentials: true)
 
 // Handle errors with automatic token refresh
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -24,18 +41,35 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       
+      if (isRefreshing) {
+        return new Promise(function (resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => {
+            return api(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         // O navegador enviará o cookie 'refreshToken' automaticamente
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
           withCredentials: true
         });
 
-        // O backend vai retornar novos cookies HttpOnly (authToken e refreshToken)
+        isRefreshing = false;
+        processQueue(null);
+
         // Retry original request with credentials
         return api(originalRequest);
       } catch (refreshError) {
+        processQueue(refreshError, null);
+        isRefreshing = false;
         // Refresh failed, logout user
         localStorage.removeItem('user');
         window.location.href = '/login';

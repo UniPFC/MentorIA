@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -24,20 +23,12 @@ from src.middleware.https_security import (
     SecureCookieMiddleware,
     SecurityHeadersMiddleware,
 )
-from src.services.seeder import seed_default_knowledge
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting API...")
     run_migrations()
-
-    try:
-        if settings.AUTO_RUN_SEEDER:
-            logger.info("Running background seeder...")
-            await asyncio.to_thread(seed_default_knowledge)
-    except Exception as e:
-        logger.error(f"Seeder failed: {e}")
 
     yield
     logger.info("Shutting down API...")

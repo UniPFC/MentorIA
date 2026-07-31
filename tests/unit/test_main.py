@@ -1,10 +1,10 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 
-from src.api.main import app, lifespan
+from src.api.main import app
 
 
 @pytest.mark.unit
@@ -27,20 +27,6 @@ class TestMain:
         client = TestClient(app)
         response = client.get("/")
         assert "x-stt-enabled" in response.headers
-
-    @pytest.mark.asyncio
-    async def test_lifespan_seeder_exception(self):
-        with patch("src.api.main.run_migrations"):
-            with patch(
-                "src.api.main.settings"
-            ) as mock_settings:  # Mock AUTO_RUN_SEEDER para rodar o seeder
-                mock_settings.AUTO_RUN_SEEDER = True
-                with patch(
-                    "src.api.main.seed_default_knowledge",
-                    side_effect=Exception("Seeder failed"),
-                ):
-                    async with lifespan(app):
-                        pass
 
     @pytest.mark.asyncio
     async def test_validation_exception_handler_password_string_should_have(self):

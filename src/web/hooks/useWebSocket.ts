@@ -8,23 +8,26 @@ interface WebSocketMessage {
 }
 
 interface UseWebSocketOptions {
-  onMessage?: (message: WebSocketMessage) => void;
+  onMessage?: (message: any) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Event) => void;
 }
 
 export function useWebSocket(
-  chatId: string,
-  options: UseWebSocketOptions = {}
+  pathOrId: string,
+  options: UseWebSocketOptions = {},
+  isFullPath: boolean = false
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const optionsRef = useRef(options);
-  const chatIdRef = useRef(chatId);
+  
+  // Use state or ref for path to ensure we reconnect to the right place
+  const pathRef = useRef(pathOrId);
 
   optionsRef.current = options;
-  chatIdRef.current = chatId;
+  pathRef.current = pathOrId;
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -39,8 +42,8 @@ export function useWebSocket(
   }, []);
 
   const connect = useCallback(() => {
-    const id = chatIdRef.current;
-    if (!id) return;
+    const path = pathRef.current;
+    if (!path) return;
 
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return;
@@ -51,7 +54,7 @@ export function useWebSocket(
       ? (window as any).__API_URL__.replace(/^https?:/, protocol)
       : `${protocol}//localhost:8000`;
 
-    const wsUrl = `${host}/api/v1/ws/chats/${id}`;
+    const wsUrl = isFullPath ? `${host}${path}` : `${host}/api/v1/ws/chats/${path}`;
 
     try {
       const ws = new WebSocket(wsUrl);
@@ -88,7 +91,7 @@ export function useWebSocket(
     return () => {
       disconnect();
     };
-  }, [chatId]);
+  }, [pathOrId]);
 
   return { connect, disconnect };
 }

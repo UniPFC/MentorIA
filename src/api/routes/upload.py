@@ -4,6 +4,7 @@ Upload endpoints for creating chat types from spreadsheets.
 
 from uuid import UUID
 
+import httpx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -21,7 +22,7 @@ from config.settings import settings
 from shared.database.models.chat_type import ChatType
 from shared.database.models.ingestion_job import IngestionJob, IngestionStatus
 from shared.database.models.user import User
-from shared.database.session import get_db
+from shared.database.session import SessionLocal, get_db
 from shared.qdrant.client import QdrantManager
 from src.ai.embedding import EmbeddingEngine
 from src.ai.loader import ModelLoader
@@ -35,7 +36,6 @@ from src.api.schemas.ingestion import UploadResponseAsync
 from src.api.schemas.upload import UploadResponse
 from src.repositories.chat_type import ChatTypeRepository
 from src.repositories.ingestion_job import IngestionJobRepository
-from src.services.background import process_ingestion_job
 from src.services.ingestion import ChunkIngestionService
 
 router = APIRouter(prefix="/upload", tags=["upload"])
@@ -157,18 +157,53 @@ async def create_chat_type_from_file(
 
         logger.info(f"Created ingestion job {job.id} for ChatType {chat_type.id}")
 
-        # Schedule background task
-        background_tasks.add_task(
-            process_ingestion_job,
-            job_id=job.id,
-            chat_type_id=chat_type.id,
-            file_content=file_content,
-            filename=file.filename,
-            question_col=question_column,
-            answer_col=answer_column,
-            ingestion_service=ingestion_service,
-            db=db,
-        )
+        # Forward file to worker for background processing
+        # We can fire and forget, or wait for the worker to accept the job
+        async def trigger_worker_ingestion():
+            try:
+                logger.info(
+                    f"Triggering background ingestion on worker for job {job.id}"
+                )
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    files = {
+                        "file": (
+                            file.filename or "upload.xlsx",
+                            file_content,
+                            "application/octet-stream",
+                        )
+                    }
+                    data = {
+                        "job_id": str(job.id),
+                        "chat_type_id": str(chat_type.id),
+                        "question_col": question_column,
+                        "answer_col": answer_column,
+                    }
+                    response = await client.post(
+                        f"{settings.AI_WORKER_URL}/internal/ingest",
+                        data=data,
+                        files=files,
+                    )
+                    response.raise_for_status()
+            except Exception as e:
+                logger.error(
+                    f"Failed to trigger worker ingestion for job {job.id}: {e}"
+                )
+                # Update job status to error
+                db_session = SessionLocal()
+                try:
+                    failed_job = (
+                        db_session.query(IngestionJob).filter_by(id=job.id).first()
+                    )
+                    if failed_job:
+                        failed_job.status = IngestionStatus.FAILED
+                        db_session.commit()
+                except Exception as inner_e:
+                    logger.error(f"Failed to mark job as failed: {inner_e}")
+                finally:
+                    db_session.close()
+
+        # Schedule the HTTP request in the background
+        background_tasks.add_task(trigger_worker_ingestion)
 
         return UploadResponseAsync(
             job_id=job.id,

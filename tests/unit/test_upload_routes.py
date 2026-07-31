@@ -2,6 +2,9 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
+
+from src.api.routes.upload import add_chunks_to_chat_type, create_chat_type_from_file
 
 
 @pytest.mark.unit
@@ -455,3 +458,189 @@ class TestUploadAddChunks:
                 )
 
             assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_create_chat_type_email_not_verified():
+    current_user = Mock()
+    current_user.email_verified = False
+
+    with pytest.raises(HTTPException) as exc:
+        await create_chat_type_from_file(
+            background_tasks=Mock(),
+            file=Mock(),
+            name="Test",
+            description="",
+            is_public=False,
+            question_column="q",
+            answer_column="a",
+            db=Mock(),
+            current_user=current_user,
+            ingestion_service=Mock(),
+            chat_type_repo=Mock(),
+            job_repo=Mock(),
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_add_chunks_email_not_verified():
+    current_user = Mock()
+    current_user.email_verified = False
+
+    with pytest.raises(HTTPException) as exc:
+        await add_chunks_to_chat_type(
+            chat_type_id=uuid4(),
+            file=Mock(),
+            question_column="q",
+            answer_column="a",
+            db=Mock(),
+            current_user=current_user,
+            ingestion_service=Mock(),
+            chat_type_repo=Mock(),
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_create_chat_type_qdrant_exception():
+    chat_type_repo = Mock()
+    chat_type_repo.get_by_name.return_value = None
+    chat_type_repo.create.return_value.id = uuid4()
+
+    current_user = Mock()
+    current_user.email_verified = True
+
+    mock_file = Mock()
+    mock_file.filename = "test.xlsx"
+    mock_file.read = AsyncMock(return_value=b"data")
+
+    with patch("src.api.routes.upload.QdrantManager") as mock_qdrant:
+        mock_qdrant.return_value.create_collection.side_effect = Exception(
+            "Qdrant error"
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_chat_type_from_file(
+                background_tasks=Mock(),
+                file=mock_file,
+                name="Test",
+                description="",
+                is_public=False,
+                question_column="q",
+                answer_column="a",
+                db=Mock(),
+                current_user=current_user,
+                ingestion_service=Mock(),
+                chat_type_repo=chat_type_repo,
+                job_repo=Mock(),
+            )
+        assert exc.value.status_code == 500
+        chat_type_repo.delete.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_chat_type_trigger_worker_ingestion_error():
+    chat_type_repo = Mock()
+    chat_type_repo.get_by_name.return_value = None
+    chat_type_repo.create.return_value.id = uuid4()
+
+    job_repo = Mock()
+    job_repo.create.return_value.id = uuid4()
+
+    current_user = Mock()
+    current_user.email_verified = True
+    current_user.id = uuid4()
+
+    mock_file = Mock()
+    mock_file.filename = "test.xlsx"
+    mock_file.read = AsyncMock(return_value=b"data")
+
+    background_tasks = Mock()
+
+    with patch("src.api.routes.upload.QdrantManager"):
+        await create_chat_type_from_file(
+            background_tasks=background_tasks,
+            file=mock_file,
+            name="Test",
+            description="",
+            is_public=False,
+            question_column="q",
+            answer_column="a",
+            db=Mock(),
+            current_user=current_user,
+            ingestion_service=Mock(),
+            chat_type_repo=chat_type_repo,
+            job_repo=job_repo,
+        )
+
+    trigger_func = background_tasks.add_task.call_args[0][0]
+
+    with patch("src.api.routes.upload.httpx.AsyncClient") as mock_client:
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            side_effect=Exception("Network error")
+        )
+
+        with patch("src.api.routes.upload.SessionLocal") as mock_session_local:
+            mock_session = Mock()
+            mock_session_local.return_value = mock_session
+
+            mock_job = Mock()
+            mock_session.query.return_value.filter_by.return_value.first.return_value = mock_job
+
+            await trigger_func()
+
+            from shared.database.models.ingestion_job import IngestionStatus
+
+            assert mock_job.status == IngestionStatus.FAILED
+            mock_session.commit.assert_called_once()
+            mock_session.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_chat_type_trigger_worker_ingestion_error_inner_exception():
+    chat_type_repo = Mock()
+    chat_type_repo.get_by_name.return_value = None
+    chat_type_repo.create.return_value.id = uuid4()
+
+    job_repo = Mock()
+    job_repo.create.return_value.id = uuid4()
+
+    current_user = Mock()
+    current_user.email_verified = True
+
+    mock_file = Mock()
+    mock_file.filename = "test.xlsx"
+    mock_file.read = AsyncMock(return_value=b"data")
+
+    background_tasks = Mock()
+
+    with patch("src.api.routes.upload.QdrantManager"):
+        await create_chat_type_from_file(
+            background_tasks=background_tasks,
+            file=mock_file,
+            name="Test",
+            description="",
+            is_public=False,
+            question_column="q",
+            answer_column="a",
+            db=Mock(),
+            current_user=current_user,
+            ingestion_service=Mock(),
+            chat_type_repo=chat_type_repo,
+            job_repo=job_repo,
+        )
+
+    trigger_func = background_tasks.add_task.call_args[0][0]
+
+    with patch("src.api.routes.upload.httpx.AsyncClient") as mock_client:
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            side_effect=Exception("Network error")
+        )
+
+        with patch("src.api.routes.upload.SessionLocal") as mock_session_local:
+            mock_session = Mock()
+            mock_session_local.return_value = mock_session
+            mock_session.query.side_effect = Exception("DB error")
+
+            await trigger_func()
+            mock_session.close.assert_called_once()

@@ -8,6 +8,7 @@ import { PageSpinner } from '@/components/ui/Spinner';
 import Toast from '@/components/Toast';
 import api from '@/lib/api';
 import { authService } from '@/lib/auth';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 interface IngestionJob {
   id: string;
@@ -55,31 +56,30 @@ export default function UploadPage() {
     }
   }, []);
 
-  useEffect(() => {
-    loadJobs();
-  }, [loadJobs]);
-
-  // Poll active jobs and show toast on failure
-  useEffect(() => {
-    const hasActive = jobs.some((j) => j.status === 'pending' || j.status === 'processing');
-    if (!hasActive) return;
-    
-    const interval = setInterval(() => {
-      loadJobs().then(() => {
-        // Check for newly failed jobs
-        jobs.forEach((job) => {
-          if (job.status === 'failed' && job.error_message) {
-            setToast({ 
-              message: `Upload falhou: ${job.error_message}`, 
-              type: 'error' 
-            });
-          }
+  // Use WebSocket for real-time jobs updates
+  useWebSocket('/api/v1/ws/jobs', {
+    onMessage: (message) => {
+      if (Array.isArray(message)) {
+        setJobs((prevJobs) => {
+          // Check for newly failed jobs to show toast
+          message.forEach((newJob) => {
+            if (newJob.status === 'failed' && newJob.error_message) {
+              const oldJob = prevJobs.find(j => j.id === newJob.id);
+              if (oldJob && oldJob.status !== 'failed') {
+                setToast({ 
+                  message: `Upload falhou: ${newJob.error_message}`, 
+                  type: 'error' 
+                });
+              }
+            }
+          });
+          return message;
         });
-      });
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, [jobs, loadJobs]);
+        setLoadingJobs(false);
+      }
+    },
+    onError: (e) => console.error("Failed to parse jobs websocket data", e)
+  }, true);
 
   const handleUpload = async () => {
     if (!file || !chatTypeName.trim()) {

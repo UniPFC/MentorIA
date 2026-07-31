@@ -3,15 +3,13 @@ Audio endpoints for speech-to-text transcription.
 """
 
 import os
-import tempfile
-import uuid
 
+import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from config.logger import logger
 from config.settings import settings
-from src.ai.stt_loader import get_stt_loader
 
 router = APIRouter(prefix="/audio", tags=["audio"])
 
@@ -57,24 +55,22 @@ async def transcribe_audio(audio: UploadFile = File(...), language: str | None =
             detail=f"Unsupported file format. Allowed: {', '.join(allowed_extensions)}",
         )
 
-    # Save to temporary file
-    temp_filename = f"{uuid.uuid4()}{file_ext}"
-    temp_path = None
-
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
-            temp_path = temp_file.name
-            content = await audio.read()
-            temp_file.write(content)
-            temp_file.flush()
+        content = await audio.read()
 
-        logger.info(f"Transcribing audio: {audio.filename} -> {temp_path}")
+        logger.info(f"Forwarding audio {audio.filename} to worker for transcription")
 
-        # Get STT provider and transcribe
-        stt_loader = get_stt_loader()
-        provider = stt_loader.get_provider()
+        async with httpx.AsyncClient(timeout=None) as client:
+            files = {
+                "audio": (audio.filename or "audio.webm", content, audio.content_type)
+            }
+            data = {"language": language} if language else {}
 
-        result = provider.transcribe(temp_path, language=language, beam_size=5)
+            response = await client.post(
+                f"{settings.AI_WORKER_URL}/internal/transcribe", data=data, files=files
+            )
+            response.raise_for_status()
+            result = response.json()
 
         transcribed_text = result["text"]
         detected_language = result["detected_language"]
@@ -92,16 +88,11 @@ async def transcribe_audio(audio: UploadFile = File(...), language: str | None =
             language_probability=language_probability,
         )
 
-    except TimeoutError as e:
-        logger.error(f"STT timeout: {e}")
+    except httpx.HTTPError as e:
+        logger.error(f"Error calling AI worker for STT: {e}")
         raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Failed to load STT model: insufficient memory or timeout",
-        )
-    except RuntimeError as e:
-        logger.error(f"STT runtime error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ocorreu um erro ao processar o áudio. Tente novamente.",
         )
     except Exception as e:
         logger.error(f"Transcription error: {e}")
@@ -109,11 +100,3 @@ async def transcribe_audio(audio: UploadFile = File(...), language: str | None =
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Transcription failed: {str(e)}",
         )
-    finally:
-        # Clean up temporary file
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-                logger.debug(f"Cleaned up temporary file: {temp_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temp file {temp_path}: {e}")

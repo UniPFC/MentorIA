@@ -10,7 +10,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from shared.database.session import get_db
+from src.api.schemas.ingestion import IngestionJobResponse
 from src.repositories.chat import ChatRepository
+from src.repositories.ingestion_job import IngestionJobRepository
 from src.repositories.user import UserRepository
 from src.services.auth import auth_service
 
@@ -156,3 +158,64 @@ def broadcast_chat_update(chat_id: str, update_type: str, data: dict):
             logger.error(f"Failed to broadcast WebSocket message: {e}")
     except Exception as e:
         logger.error(f"Failed to broadcast WebSocket message: {e}")
+
+
+@router.websocket("/ws/jobs")
+async def websocket_jobs_endpoint(websocket: WebSocket, token: str | None = None):
+    """WebSocket endpoint for real-time job progress polling."""
+    logger.info("Incoming WebSocket connection for /ws/jobs")
+
+    # Authenticate via token query param or cookie
+    if not token:
+        token = websocket.cookies.get("authToken")
+
+    if not token:
+        logger.warning("WebSocket jobs connection rejected: Missing token")
+        await websocket.close(code=4001, reason="Missing token")
+        return
+
+    db = None
+    try:
+        db = next(get_db())
+        user_repo = UserRepository(db)
+        user = auth_service.get_current_user_from_token(token, user_repo)
+        if user is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+
+        await websocket.accept()
+        logger.info(f"WebSocket jobs connected for user {user.id}")
+
+        job_repo = IngestionJobRepository(db)
+
+        # Poll jobs for this user every 2 seconds
+        while True:
+            try:
+                # Refresh session to see updates from worker
+                db.expire_all()
+                db.rollback()
+
+                # We limit to 50 active jobs, which is plenty for frontend UI
+                jobs = job_repo.get_by_user(user_id=user.id, skip=0, limit=50)
+
+                # Serialize using Pydantic model
+                jobs_data = [
+                    IngestionJobResponse.model_validate(job).model_dump(mode="json")
+                    for job in jobs
+                ]
+
+                await websocket.send_json(jobs_data)
+                await asyncio.sleep(2.0)
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket jobs disconnected for user {user.id}")
+                break
+            except Exception as e:
+                logger.error(f"WebSocket jobs error during polling: {e}")
+                await asyncio.sleep(2.0)  # avoid tight loop on DB error
+
+    except Exception as e:
+        logger.warning(f"WebSocket jobs auth error: {e}")
+        await websocket.close(code=4001, reason="Authentication failed")
+    finally:
+        if db:
+            db.close()

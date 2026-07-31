@@ -94,8 +94,10 @@ class QueryEngine:
         ]
 
         try:
+            # Safely log without breaking the terminal formatting
+            safe_query = query_text.replace("\n", " ").replace("\r", "")
             logger.info(
-                f"Contextualizing query '{query_text}' using provider ({active_provider.model_name})..."
+                f"Contextualizing query '{safe_query}' using provider ({active_provider.model_name})..."
             )
 
             # We use a simple string response here, not structured
@@ -104,7 +106,16 @@ class QueryEngine:
             )
 
             cleaned_response = response.strip().replace("Rewritten:", "").strip()
-            logger.info(f"Contextualized query: '{cleaned_response}'")
+
+            # Safety check: if the model hallucinates and returns a giant answer instead of a rewritten query
+            if len(cleaned_response) > len(query_text) + 200:
+                logger.warning(
+                    "Contextualized query is too long (hallucination). Using original query."
+                )
+                return query_text
+
+            safe_cleaned = cleaned_response.replace("\n", " ").replace("\r", "")
+            logger.info(f"Contextualized query: '{safe_cleaned}'")
             return cleaned_response
 
         except Exception as e:
@@ -135,8 +146,10 @@ class QueryEngine:
         ]
 
         try:
+            # Safely log without breaking the terminal formatting
+            safe_query = query_text.replace("\n", " ").replace("\r", "")
             logger.info(
-                f"Expanding query '{query_text}' using provider ({active_provider.model_name})."
+                f"Expanding query '{safe_query}' using provider ({active_provider.model_name})."
             )
 
             if hasattr(active_provider, "generate_structured"):

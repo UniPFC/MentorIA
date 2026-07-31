@@ -19,7 +19,10 @@ class SourceFilter(logging.Filter):
         elif logger_name.startswith("alembic"):
             record.source = "DBA"
         elif logger_name.startswith(settings.PROJECT_NAME):
-            record.source = "APP"
+            if os.getenv("SERVICE_NAME") == "WORKER":
+                record.source = "WRK"
+            else:
+                record.source = "APP"
         elif logger_name.startswith("sqlalchemy"):
             record.source = "SQL"
         else:
@@ -44,6 +47,7 @@ class ColoredFormatter(logging.Formatter):
     web_color = "\x1b[36;20m"  # Cyan
     dba_color = "\x1b[33;20m"  # Yellow
     app_color = "\x1b[32;20m"  # Green
+    wrk_color = "\x1b[95;20m"  # Bright Pink / Light Magenta
     sql_color = "\x1b[35;20m"  # Magenta (Purple)
     sys_color = "\x1b[37;20m"  # White
 
@@ -51,6 +55,7 @@ class ColoredFormatter(logging.Formatter):
         "WEB": web_color,
         "DBA": dba_color,
         "APP": app_color,
+        "WRK": wrk_color,
         "SQL": sql_color,
         "SYS": sys_color,
     }
@@ -131,8 +136,15 @@ class UTCOffsetFormatter(logging.Formatter):
 
 
 def setup_logger():
-    if not os.path.exists(settings.LOG_DIR):
-        os.makedirs(settings.LOG_DIR)
+    # Override log directory based on service name
+    service_name = os.getenv("SERVICE_NAME", "API")
+    if service_name == "WORKER":
+        log_dir = os.path.join(settings.BASE_DIR, "logs", "worker")
+    else:
+        log_dir = settings.LOG_DIR
+
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
@@ -140,7 +152,7 @@ def setup_logger():
     console_handler.setFormatter(ColoredFormatter())
     console_handler.addFilter(SourceFilter())
 
-    log_file_path = os.path.join(settings.LOG_DIR, "app.log")
+    log_file_path = os.path.join(log_dir, "app.log")
     file_handler = RotatingFileHandler(
         log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
@@ -159,6 +171,11 @@ def setup_logger():
     root_logger.addHandler(file_handler)
 
     logger_name = getattr(settings, "PROJECT_NAME", "GitGudGuide")
+
+    # Suppress verbose third-party loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     return logging.getLogger(logger_name)
 
 

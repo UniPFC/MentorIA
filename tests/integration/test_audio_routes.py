@@ -44,20 +44,22 @@ class TestAudioRoutes:
         """Testa transcrição bem-sucedida"""
         with (
             patch("src.api.routes.audio.settings") as mock_settings,
-            patch("src.api.routes.audio.get_stt_loader") as mock_get_loader,
+            patch("src.api.routes.audio.httpx.AsyncClient") as mock_httpx,
         ):
             mock_settings.STT_ENABLED = True
+            mock_settings.AI_WORKER_URL = "http://fake-worker"
 
-            mock_provider = Mock()
-            mock_provider.transcribe.return_value = {
+            mock_response = Mock()
+            mock_response.json.return_value = {
                 "text": "Olá, mundo!",
                 "detected_language": "pt",
                 "language_probability": 0.95,
             }
-
-            mock_loader = Mock()
-            mock_loader.get_provider.return_value = mock_provider
-            mock_get_loader.return_value = mock_loader
+            mock_client = Mock()
+            mock_client.post = pytest.importorskip("unittest.mock").AsyncMock(
+                return_value=mock_response
+            )
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
             audio_file = BytesIO(b"fake audio content")
             audio_file.name = "test.wav"
@@ -77,22 +79,25 @@ class TestAudioRoutes:
 
     def test_transcribe_audio_with_language_param(self, client):
         """Testa transcrição com parâmetro de linguagem"""
+        from unittest.mock import AsyncMock
+
         with (
             patch("src.api.routes.audio.settings") as mock_settings,
-            patch("src.api.routes.audio.get_stt_loader") as mock_get_loader,
+            patch("src.api.routes.audio.httpx.AsyncClient") as mock_httpx,
         ):
             mock_settings.STT_ENABLED = True
+            mock_settings.AI_WORKER_URL = "http://fake-worker"
 
-            mock_provider = Mock()
-            mock_provider.transcribe.return_value = {
+            mock_response = Mock()
+            mock_response.json.return_value = {
                 "text": "Hello world",
                 "detected_language": "en",
                 "language_probability": 0.85,
             }
 
-            mock_loader = Mock()
-            mock_loader.get_provider.return_value = mock_provider
-            mock_get_loader.return_value = mock_loader
+            mock_client = Mock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
             audio_file = BytesIO(b"fake audio content")
             audio_file.name = "test.mp3"
@@ -106,49 +111,25 @@ class TestAudioRoutes:
             assert response.status_code == 200
             data = response.json()
             assert data["text"] == "Hello world"
-            # Com probabilidade baixa (< 0.8), usa o language do request
+            # Com probabilidade alta (> 0.8), usa a language detectada
             assert data["language"] == "en"
 
     def test_transcribe_audio_timeout_error(self, client):
-        """Testa transcrição com erro de timeout"""
+        """Testa transcrição com erro de rede ou timeout (HTTPError)"""
+        from unittest.mock import AsyncMock
+
+        import httpx
+
         with (
             patch("src.api.routes.audio.settings") as mock_settings,
-            patch("src.api.routes.audio.get_stt_loader") as mock_get_loader,
+            patch("src.api.routes.audio.httpx.AsyncClient") as mock_httpx,
         ):
             mock_settings.STT_ENABLED = True
+            mock_settings.AI_WORKER_URL = "http://fake-worker"
 
-            mock_provider = Mock()
-            mock_provider.transcribe.side_effect = TimeoutError("STT timeout")
-
-            mock_loader = Mock()
-            mock_loader.get_provider.return_value = mock_provider
-            mock_get_loader.return_value = mock_loader
-
-            audio_file = BytesIO(b"fake audio content")
-            audio_file.name = "test.wav"
-
-            response = client.post(
-                "/api/v1/audio/transcribe",
-                files={"audio": ("test.wav", audio_file, "audio/wav")},
-            )
-
-            assert response.status_code == 504
-            assert "Failed to load STT model" in response.json()["detail"]
-
-    def test_transcribe_audio_runtime_error(self, client):
-        """Testa transcrição com erro de runtime"""
-        with (
-            patch("src.api.routes.audio.settings") as mock_settings,
-            patch("src.api.routes.audio.get_stt_loader") as mock_get_loader,
-        ):
-            mock_settings.STT_ENABLED = True
-
-            mock_provider = Mock()
-            mock_provider.transcribe.side_effect = RuntimeError("Model not loaded")
-
-            mock_loader = Mock()
-            mock_loader.get_provider.return_value = mock_provider
-            mock_get_loader.return_value = mock_loader
+            mock_client = Mock()
+            mock_client.post = AsyncMock(side_effect=httpx.HTTPError("Timeout"))
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
             audio_file = BytesIO(b"fake audio content")
             audio_file.name = "test.wav"
@@ -159,22 +140,55 @@ class TestAudioRoutes:
             )
 
             assert response.status_code == 503
-            assert "Model not loaded" in response.json()["detail"]
+            assert "Ocorreu um erro ao processar o áudio" in response.json()["detail"]
 
-    def test_transcribe_audio_generic_error(self, client):
-        """Testa transcrição com erro genérico"""
+    def test_transcribe_audio_runtime_error(self, client):
+        """Testa transcrição com erro de runtime 500 do worker"""
+        from unittest.mock import AsyncMock
+
+        import httpx
+
         with (
             patch("src.api.routes.audio.settings") as mock_settings,
-            patch("src.api.routes.audio.get_stt_loader") as mock_get_loader,
+            patch("src.api.routes.audio.httpx.AsyncClient") as mock_httpx,
         ):
             mock_settings.STT_ENABLED = True
+            mock_settings.AI_WORKER_URL = "http://fake-worker"
 
-            mock_provider = Mock()
-            mock_provider.transcribe.side_effect = Exception("Unexpected error")
+            mock_response = Mock()
+            mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "500 Server Error", request=Mock(), response=Mock()
+            )
+            mock_client = Mock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
-            mock_loader = Mock()
-            mock_loader.get_provider.return_value = mock_provider
-            mock_get_loader.return_value = mock_loader
+            audio_file = BytesIO(b"fake audio content")
+            audio_file.name = "test.wav"
+
+            response = client.post(
+                "/api/v1/audio/transcribe",
+                files={"audio": ("test.wav", audio_file, "audio/wav")},
+            )
+
+            # HTTPStatusError from worker translates to 503 from our API
+            assert response.status_code == 503
+            assert "Ocorreu um erro ao processar o áudio" in response.json()["detail"]
+
+    def test_transcribe_audio_generic_error(self, client):
+        """Testa transcrição com erro genérico interno (Exception)"""
+        from unittest.mock import AsyncMock
+
+        with (
+            patch("src.api.routes.audio.settings") as mock_settings,
+            patch("src.api.routes.audio.httpx.AsyncClient") as mock_httpx,
+        ):
+            mock_settings.STT_ENABLED = True
+            mock_settings.AI_WORKER_URL = "http://fake-worker"
+
+            mock_client = Mock()
+            mock_client.post = AsyncMock(side_effect=Exception("Unexpected error"))
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
             audio_file = BytesIO(b"fake audio content")
             audio_file.name = "test.wav"
@@ -189,22 +203,24 @@ class TestAudioRoutes:
 
     def test_transcribe_audio_supported_formats(self, client):
         """Testa que formatos suportados são aceitos"""
+        from unittest.mock import AsyncMock
+
         with (
             patch("src.api.routes.audio.settings") as mock_settings,
-            patch("src.api.routes.audio.get_stt_loader") as mock_get_loader,
+            patch("src.api.routes.audio.httpx.AsyncClient") as mock_httpx,
         ):
             mock_settings.STT_ENABLED = True
+            mock_settings.AI_WORKER_URL = "http://fake-worker"
 
-            mock_provider = Mock()
-            mock_provider.transcribe.return_value = {
+            mock_response = Mock()
+            mock_response.json.return_value = {
                 "text": "Test",
                 "detected_language": "en",
                 "language_probability": 0.9,
             }
-
-            mock_loader = Mock()
-            mock_loader.get_provider.return_value = mock_provider
-            mock_get_loader.return_value = mock_loader
+            mock_client = Mock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_httpx.return_value.__aenter__.return_value = mock_client
 
             supported_formats = [".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"]
 

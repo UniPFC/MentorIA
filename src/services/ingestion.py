@@ -195,12 +195,21 @@ class ChunkIngestionService:
                     f"[EMBEDDING] Batch {current_batch}/{total_batches} ({len(all_embeddings)}/{len(texts)} chunks embedded)"
                 )
 
+                # Report progress during embedding generation
+                if on_progress:
+                    try:
+                        on_progress(len(all_embeddings))
+                    except Exception as e:
+                        logger.warning(
+                            f"Progress callback failed during embedding: {e}"
+                        )
+
             # Insert into Qdrant
             point_ids = self.qdrant_manager.insert_chunks(
                 chat_type_id=chat_type_id, chunks=chunks, embeddings=all_embeddings
             )
 
-            # Save metadata to database with progress tracking
+            # Save metadata to database
             for i, point_id in enumerate(point_ids):
                 chunk_data = chunks[i]
                 metadata = chunk_data.get("metadata", {})
@@ -214,16 +223,7 @@ class ChunkIngestionService:
                 )
                 db_session.add(knowledge_chunk)
 
-                # Update progress every batch_size chunks or at the end
-                if (i + 1) % batch_size == 0 or (i + 1) == len(point_ids):
-                    db_session.commit()
-                    if on_progress:
-                        try:
-                            on_progress(i + 1)
-                        except Exception as e:
-                            logger.warning(f"Progress callback failed: {e}")
-
-            # Final commit if not already done
+            # Final commit
             db_session.commit()
 
             logger.info(

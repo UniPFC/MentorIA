@@ -112,9 +112,8 @@ class TestBackgroundService:
             db=mock_db,
         )
 
-        assert mock_job.status == IngestionStatus.FAILED
-        assert mock_job.error_message == "Parse error"
-        assert mock_job.completed_at is not None
+        mock_db.delete.assert_any_call(mock_job)
+        mock_db.commit.assert_called()
 
     def test_process_ingestion_job_ingest_error(
         self, mock_db, mock_ingestion_service, mock_job
@@ -136,9 +135,8 @@ class TestBackgroundService:
             db=mock_db,
         )
 
-        assert mock_job.status == IngestionStatus.FAILED
-        assert mock_job.error_message == "Ingest error"
-        assert mock_job.completed_at is not None
+        mock_db.delete.assert_any_call(mock_job)
+        mock_db.commit.assert_called()
 
     def test_process_ingestion_job_sets_processing_status(
         self, mock_db, mock_ingestion_service, mock_job
@@ -238,7 +236,7 @@ class TestBackgroundService:
             db=mock_db,
         )
 
-        assert mock_job.status == IngestionStatus.FAILED
+        mock_db.delete.assert_any_call(mock_job)
         mock_qdrant.delete_collection.assert_called_once()
         mock_repo.delete.assert_called_once_with(mock_chat_type)
 
@@ -278,7 +276,7 @@ class TestBackgroundService:
             db=mock_db,
         )
 
-        assert mock_job.status == IngestionStatus.FAILED
+        mock_db.delete.assert_any_call(mock_job)
         mock_repo.delete.assert_called_once_with(mock_chat_type)
 
     def test_load_title_generation_prompt_system(self):
