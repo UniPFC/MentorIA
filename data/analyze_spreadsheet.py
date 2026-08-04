@@ -24,7 +24,7 @@ def analyze_and_clean(file_path, clean_loose_letters=False):
     bad_rows = []
 
     # Cleaning counts
-    cleaned_loose_letters = 0
+    cleaned_count = 0
 
     # Iterar copiando dados caso vá limpar
     for idx, row in df.iterrows():
@@ -43,10 +43,22 @@ def analyze_and_clean(file_path, clean_loose_letters=False):
         # 2. "(cid:"
         if "(cid:" in answer_text.lower() or "(cid:" in question_text.lower():
             issues.append("Contém caracteres (cid:...)")
+            if clean_loose_letters:
+                answer_text = re.sub(r"\(cid:\d+\)", "", answer_text)
+                question_text = re.sub(r"\(cid:\d+\)", "", question_text)
+                df.at[idx, a_col] = answer_text
+                df.at[idx, q_col] = question_text
+                cleaned_count += 1
 
         # 3. Espaçamento anormal ou lixo de OCR (múltiplos espaços)
         if re.search(r" {5,}", answer_text) or re.search(r" {5,}", question_text):
             issues.append("Espaçamento anormal (possível lixo de extração PDF)")
+            if clean_loose_letters:
+                answer_text = re.sub(r" {5,}", " ", answer_text)
+                question_text = re.sub(r" {5,}", " ", question_text)
+                df.at[idx, a_col] = answer_text
+                df.at[idx, q_col] = question_text
+                cleaned_count += 1
 
         # 4. Caracteres estranhos ("quadrados", unprintable, replacement character, PUA, ou caracteres de controle do Excel _x0000_)
         weird_chars_pattern = (
@@ -58,15 +70,21 @@ def analyze_and_clean(file_path, clean_loose_letters=False):
             issues.append(
                 "Contém caracteres inválidos/estranhos (quadrados ou lixo de codificação)"
             )
+            if clean_loose_letters:
+                answer_text = re.sub(weird_chars_pattern, "", answer_text)
+                question_text = re.sub(weird_chars_pattern, "", question_text)
+                df.at[idx, a_col] = answer_text
+                df.at[idx, q_col] = question_text
+                cleaned_count += 1
 
         # 6. Letra solta no final da resposta
-        if re.search(r"\s[A-Ea-e]\.?\s*$", answer_text):
+        if re.search(r"\n\s*[A-Ea-e]\.?\s*$", answer_text):
             issues.append("Letra de alternativa solta no final da resposta")
             if clean_loose_letters:
                 # Efetuar a limpeza
-                new_answer = re.sub(r"\s+[A-Ea-e]\.?\s*$", "", answer_text)
-                df.at[idx, a_col] = new_answer
-                cleaned_loose_letters += 1
+                answer_text = re.sub(r"\n\s*[A-Ea-e]\.?\s*$", "", answer_text)
+                df.at[idx, a_col] = answer_text
+                cleaned_count += 1
 
         if issues:
             bad_rows.append(
@@ -83,11 +101,13 @@ def analyze_and_clean(file_path, clean_loose_letters=False):
             )
 
     # Save cleaned file if requested
-    if clean_loose_letters and cleaned_loose_letters > 0:
+    if clean_loose_letters and cleaned_count > 0:
         out_path = file_path
         try:
             df.to_excel(out_path, index=False)
-            print(f"[*] Limpeza concluída. {cleaned_loose_letters} linhas corrigidas.")
+            print(
+                f"[*] Limpeza concluída. Problemas corrigidos em {cleaned_count} locais."
+            )
             print(f"[*] Arquivo original sobrescrito com as correções: {out_path}\n")
         except Exception as e:
             print(f"Erro ao salvar arquivo corrigido: {e}")
@@ -104,7 +124,7 @@ def analyze_and_clean(file_path, clean_loose_letters=False):
 
         if clean_loose_letters:
             f.write(
-                f"**Limpeza Automática:** Foram corrigidas `{cleaned_loose_letters}` alternativas soltas.\n\n"
+                f"**Limpeza Automática:** Foram corrigidos defeitos em `{cleaned_count}` lugares.\n\n"
             )
 
         if bad_rows:
