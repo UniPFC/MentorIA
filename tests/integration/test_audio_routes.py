@@ -8,6 +8,34 @@ import pytest
 class TestAudioRoutes:
     """Testes de integração para rotas de audio"""
 
+    @pytest.fixture(autouse=True)
+    def setup_auth(self, client, sample_user):
+        from src.api.dependencies import get_current_active_user
+        from src.api.main import app
+
+        app.dependency_overrides[get_current_active_user] = lambda: sample_user
+        yield
+        app.dependency_overrides.pop(get_current_active_user, None)
+
+    def test_transcribe_audio_unauthenticated(self, client):
+        """Testa que transcrição sem autenticação retorna 401 Unauthorized (SEC-01)"""
+        from src.api.dependencies import get_current_active_user
+        from src.api.main import app
+
+        # Remove override para simular cliente não autenticado
+        app.dependency_overrides.pop(get_current_active_user, None)
+
+        audio_file = BytesIO(b"fake audio content")
+        audio_file.name = "test.wav"
+
+        response = client.post(
+            "/api/v1/audio/transcribe",
+            files={"audio": ("test.wav", audio_file, "audio/wav")},
+        )
+
+        assert response.status_code == 401
+        assert "Não foi possível validar as credenciais" in response.json()["detail"]
+
     def test_transcribe_audio_stt_disabled(self, client):
         """Testa transcrição quando STT está desabilitado"""
         with patch("src.api.routes.audio.settings") as mock_settings:
