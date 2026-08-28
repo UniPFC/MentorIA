@@ -423,6 +423,7 @@ async def send_message(
                         "llm_model": chat.llm_model,
                         "llm_provider": chat.llm_provider,
                     },
+                    headers={"X-Internal-Token": settings.INTERNAL_API_KEY},
                 )
                 response.raise_for_status()
                 result = response.json()
@@ -624,6 +625,7 @@ async def send_message_stream(
                         "POST",
                         f"{settings.AI_WORKER_URL}/internal/generate_stream",
                         json=payload,
+                        headers={"X-Internal-Token": settings.INTERNAL_API_KEY},
                         timeout=None,
                     ) as response:
                         response.raise_for_status()

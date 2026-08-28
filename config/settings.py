@@ -101,6 +101,7 @@ class Settings(BaseSettings):
 
     # Services
     AI_WORKER_URL: str = "http://ai_worker:8001"
+    INTERNAL_API_KEY: str = "mentoria-internal-secret-token-2026"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
     # Rate Limiting Configuration (simples, em memória)
