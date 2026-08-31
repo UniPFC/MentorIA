@@ -182,6 +182,7 @@ async def create_chat_type_from_file(
                         f"{settings.AI_WORKER_URL}/internal/ingest",
                         data=data,
                         files=files,
+                        headers={"X-Internal-Token": settings.INTERNAL_API_KEY},
                     )
                     response.raise_for_status()
             except Exception as e:
