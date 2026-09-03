@@ -46,6 +46,20 @@ class TestPagarmeService:
         assert customer_id == "cus_existing"
 
     @pytest.mark.asyncio
+    async def test_create_customer_without_api_key(self):
+        """Não chama a API quando a chave do Pagar.me não está configurada."""
+        service = PagarmeService()
+        service.api_key = ""
+        user = Mock(spec=User)
+        user.pagarme_customer_id = None
+
+        with patch("httpx.AsyncClient") as mock_client:
+            customer_id = await service.create_customer(user)
+
+        assert customer_id is None
+        mock_client.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_create_customer_success(self):
         """Testa criação de cliente com sucesso na API"""
         service = PagarmeService()
