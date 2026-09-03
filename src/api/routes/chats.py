@@ -67,7 +67,7 @@ def get_user_available_models(current_user: User) -> list[dict]:
     """Return only models available for the user's current plan."""
     available_models = settings.get_available_models()
 
-    if current_user.has_unlimited_budget:
+    if current_user.has_unlimited_budget is True:
         return available_models
 
     user_level = getattr(current_user.level, "value", str(current_user.level))
@@ -103,11 +103,11 @@ def ensure_chat_model_allowed(chat: Chat, current_user: User) -> None:
         ),
         None,
     )
-    minimum_level = (
-        configured_model.get("minimum_level", "LEVEL_01")
-        if configured_model
-        else "LEVEL_01"
-    )
+
+    if configured_model is None:
+        return
+
+    minimum_level = configured_model.get("minimum_level", "LEVEL_01")
     minimum_level_label = LEVEL_LABELS.get(minimum_level, minimum_level)
 
     raise HTTPException(
