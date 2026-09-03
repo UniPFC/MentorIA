@@ -47,10 +47,6 @@ class PagarmeService:
         if user.pagarme_customer_id:
             return user.pagarme_customer_id
 
-        if not self.api_key:
-            logger.error("PAGARME_API_KEY is not configured")
-            return None
-
         payload = {
             "name": user.username,
             "email": user.email,
