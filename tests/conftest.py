@@ -243,6 +243,27 @@ def mock_llm_provider():
     return mock_provider
 
 
+@pytest.fixture(autouse=True)
+def mock_pagarme_for_integration_tests(request):
+    """Prevent integration tests from calling the real payment gateway."""
+    if request.node.get_closest_marker("integration") is None:
+        yield
+        return
+
+    mock_pagarme = MagicMock()
+    mock_pagarme.create_customer = AsyncMock(return_value="test_customer")
+    mock_pagarme.create_subscription_checkout = AsyncMock(
+        return_value="https://checkout.pagar.me/test"
+    )
+    mock_pagarme.create_refill_checkout = AsyncMock(
+        return_value="https://checkout.pagar.me/test"
+    )
+    mock_pagarme.cancel_subscription = AsyncMock(return_value=True)
+
+    with patch("src.api.routes.payments.pagarme_service", mock_pagarme):
+        yield
+
+
 @pytest.fixture
 def client(db_session):
     """Create a test client for FastAPI app."""
