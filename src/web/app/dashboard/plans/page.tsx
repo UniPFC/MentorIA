@@ -11,45 +11,45 @@ const PLANS = [
   {
     level: 'LEVEL_02',
     name: 'Lite',
-    price: 'R$ 29',
+    price: 'R$ 39',
     period: '/mês',
-    tokens: 50000,
-    tokensLabel: '50.000',
-    description: 'Para estudos regulares',
+    tokens: 1000000,
+    tokensLabel: '1.000.000',
+    description: 'Para uma rotina leve de estudos',
     color: 'brand',
     gradient: 'from-brand-500 to-brand-600',
     bgGradient: 'from-brand-50 to-brand-100/50 dark:from-brand-900/20 dark:to-brand-900/10',
     borderColor: 'border-brand-200/60 dark:border-brand-700/30',
-    features: ['50.000 créditos por mês', 'Acesso a todos os modelos de IA'],
+    features: ['1.000.000 créditos por mês', 'Modelos essenciais de IA', 'Bom para dúvidas e revisões pontuais'],
   },
   {
     level: 'LEVEL_03',
     name: 'Plus',
     price: 'R$ 79',
     period: '/mês',
-    tokens: 200000,
-    tokensLabel: '200.000',
-    description: 'Para uso intenso',
+    tokens: 8000000,
+    tokensLabel: '8.000.000',
+    description: 'Para estudar com mais constância',
     color: 'brand',
     gradient: 'from-brand-600 to-brand-700',
     bgGradient: 'from-brand-50 to-indigo-50 dark:from-brand-900/30 dark:to-indigo-900/10',
     borderColor: 'border-brand-300/60 dark:border-brand-600/30',
     popular: true,
-    features: ['200.000 créditos por mês', 'Acesso a todos os modelos de IA', 'Suporte prioritário'],
+    features: ['8.000.000 créditos por mês', 'Acesso a todos os modelos de IA', 'Mais flexibilidade para estudos diários', 'Suporte prioritário'],
   },
   {
     level: 'LEVEL_04',
     name: 'Max',
     price: 'R$ 199',
     period: '/mês',
-    tokens: 1000000,
-    tokensLabel: '1.000.000',
-    description: 'Para uso quase ilimitado',
+    tokens: 18000000,
+    tokensLabel: '18.000.000',
+    description: 'Para quem usa com frequência alta',
     color: 'brand',
     gradient: 'from-brand-700 to-brand-800',
     bgGradient: 'from-indigo-50 to-purple-50 dark:from-brand-900/40 dark:to-purple-900/10',
     borderColor: 'border-brand-400/60 dark:border-brand-500/30',
-    features: ['1.000.000 créditos por mês', 'Acesso a todos os modelos de IA', 'Suporte prioritário', 'Melhor Custo-Benefício'],
+    features: ['18.000.000 créditos por mês', 'Acesso a todos os modelos de IA', 'Suporte prioritário', 'Mais espaço para uso avançado'],
   },
 ];
 
@@ -323,7 +323,7 @@ export default function PlansPage() {
                   {plan.popular && !isCurrent && (
                     <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 bg-brand-500 text-white text-[10px] font-bold rounded-full">
                       <Sparkles className="w-2.5 h-2.5" />
-                      Popular
+                      Mais escolhido
                     </div>
                   )}
 

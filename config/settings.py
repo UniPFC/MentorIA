@@ -111,9 +111,9 @@ class Settings(BaseSettings):
 
     # Token Budget Configuration per User Level
     TOKEN_BUDGET_LEVEL_01: int = 10000  # Free
-    TOKEN_BUDGET_LEVEL_02: int = 50000  # Lite
-    TOKEN_BUDGET_LEVEL_03: int = 200000  # Plus
-    TOKEN_BUDGET_LEVEL_04: int = 1000000  # Max
+    TOKEN_BUDGET_LEVEL_02: int = 1000000  # Lite
+    TOKEN_BUDGET_LEVEL_03: int = 8000000  # Plus
+    TOKEN_BUDGET_LEVEL_04: int = 18000000  # Max
     TOKEN_BUDGET_MINIMUM_RESERVE: int = 200
 
     # Cost Tier Configuration
@@ -171,31 +171,59 @@ class Settings(BaseSettings):
         - 1.0 = custo base
         - >1.0 = modelo mais caro (deduz mais tokens do budget)
         - <1.0 = modelo mais barato (deduz menos tokens do budget)
+        minimum_level: nível mínimo necessário para selecionar o modelo
         """
         additional_models = [
             {
-                "model": "llama3.2:3b",
-                "provider": "ollama",
-                "description": "Llama 3.2 3B model via Ollama (local)",
-                "input_token_multiplier": 1.1,
-                "output_token_multiplier": 1.1,
+                "model": "gpt-5-nano",
+                "provider": "openai",
+                "description": "Modelo rápido e econômico para perguntas do dia a dia",
+                "input_token_multiplier": 0.5,
+                "output_token_multiplier": 0.5,
+                "minimum_level": "LEVEL_01",
             },
             {
-                "model": "llama3.1:8b",
-                "provider": "ollama",
-                "description": "Llama 3.1 8B model via Ollama (local)",
-                "input_token_multiplier": 1.5,
-                "output_token_multiplier": 1.5,
+                "model": "gpt-4o-mini",
+                "provider": "openai",
+                "description": "Modelo equilibrado para estudos e respostas rápidas",
+                "input_token_multiplier": 1.0,
+                "output_token_multiplier": 1.0,
+                "minimum_level": "LEVEL_01",
+            },
+            {
+                "model": "gpt-5.6-luna",
+                "provider": "openai",
+                "description": "Modelo GPT-5.6 eficiente para respostas mais completas",
+                "input_token_multiplier": 2.0,
+                "output_token_multiplier": 2.0,
+                "minimum_level": "LEVEL_03",
+            },
+            {
+                "model": "gpt-4.1-mini",
+                "provider": "openai",
+                "description": "Modelo avançado para instruções mais detalhadas",
+                "input_token_multiplier": 3.0,
+                "output_token_multiplier": 3.0,
+                "minimum_level": "LEVEL_03",
             },
         ]
 
-        default_model = {
-            "model": self.LLM_MODEL,
-            "provider": self.LLM_PROVIDER,
-            "description": f"Default model ({self.LLM_MODEL} via {self.LLM_PROVIDER})",
-            "input_token_multiplier": 1.0,
-            "output_token_multiplier": 1.0,
-        }
+        default_model = next(
+            (
+                model.copy()
+                for model in additional_models
+                if model["model"] == self.LLM_MODEL
+                and model["provider"] == self.LLM_PROVIDER
+            ),
+            {
+                "model": self.LLM_MODEL,
+                "provider": self.LLM_PROVIDER,
+                "description": f"Default model ({self.LLM_MODEL} via {self.LLM_PROVIDER})",
+                "input_token_multiplier": 1.0,
+                "output_token_multiplier": 1.0,
+                "minimum_level": "LEVEL_01",
+            },
+        )
 
         models = [default_model]
         seen: set[tuple[str, str]] = {(str(self.LLM_MODEL), str(self.LLM_PROVIDER))}

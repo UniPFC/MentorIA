@@ -46,6 +46,77 @@ from src.services.user import UserService
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
+LEVEL_ORDER = {
+    "LEVEL_01": 1,
+    "LEVEL_02": 2,
+    "LEVEL_03": 3,
+    "LEVEL_04": 4,
+    "LEVEL_05": 5,
+}
+
+LEVEL_LABELS = {
+    "LEVEL_01": "Gratuito",
+    "LEVEL_02": "Lite",
+    "LEVEL_03": "Plus",
+    "LEVEL_04": "Max",
+    "LEVEL_05": "Admin",
+}
+
+
+def get_user_available_models(current_user: User) -> list[dict]:
+    """Return only models available for the user's current plan."""
+    available_models = settings.get_available_models()
+
+    if current_user.has_unlimited_budget:
+        return available_models
+
+    user_level = getattr(current_user.level, "value", str(current_user.level))
+    user_level_order = LEVEL_ORDER.get(user_level, LEVEL_ORDER["LEVEL_01"])
+
+    return [
+        model
+        for model in available_models
+        if user_level_order >= LEVEL_ORDER.get(
+            model.get("minimum_level", "LEVEL_01"), LEVEL_ORDER["LEVEL_01"]
+        )
+    ]
+
+
+def ensure_chat_model_allowed(chat: Chat, current_user: User) -> None:
+    """Block sending messages with a model outside the user's current plan."""
+    if not chat.llm_model or not chat.llm_provider:
+        return
+
+    allowed_models = get_user_available_models(current_user)
+    allowed_model_pairs = {(m["model"], m["provider"]) for m in allowed_models}
+
+    if (chat.llm_model, chat.llm_provider) in allowed_model_pairs:
+        return
+
+    configured_model = next(
+        (
+            model
+            for model in settings.get_available_models()
+            if model["model"] == chat.llm_model
+            and model["provider"] == chat.llm_provider
+        ),
+        None,
+    )
+    minimum_level = (
+        configured_model.get("minimum_level", "LEVEL_01")
+        if configured_model
+        else "LEVEL_01"
+    )
+    minimum_level_label = LEVEL_LABELS.get(minimum_level, minimum_level)
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            f"O modelo {chat.llm_model} está disponível a partir do plano "
+            f"{minimum_level_label}. Escolha outro modelo ou atualize seu plano."
+        ),
+    )
+
 
 @router.get("/models/available", response_model=AvailableModelsResponse)
 def get_available_models(current_user: User = Depends(get_current_active_user)):
@@ -54,7 +125,7 @@ def get_available_models(current_user: User = Depends(get_current_active_user)):
     Returns configured models that can be used in chats.
     """
     try:
-        available_models_data = settings.get_available_models()
+        available_models_data = get_user_available_models(current_user)
         available_models = []
 
         for m in available_models_data:
@@ -255,7 +326,7 @@ def update_chat_model(
         chat = verify_chat_ownership(chat_id, current_user.id, chat_repo)
 
         # Get available models for validation
-        available_models = settings.get_available_models()
+        available_models = get_user_available_models(current_user)
         available_model_pairs = {(m["model"], m["provider"]) for m in available_models}
 
         # Determine the new model and provider
@@ -358,6 +429,8 @@ async def send_message(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Esta base de conhecimento tornou-se privada ou foi excluída. Este chat agora é Somente Leitura.",
             )
+
+        ensure_chat_model_allowed(chat, current_user)
 
         # Initialize Service
         chat_service = ChatService(db)
@@ -534,6 +607,8 @@ async def send_message_stream(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta base de conhecimento foi excluída pelo criador original. Este chat agora é Somente Leitura.",
         )
+
+    ensure_chat_model_allowed(chat, current_user)
 
     # Initialize Service
     chat_service = ChatService(db)
