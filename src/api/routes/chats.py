@@ -76,7 +76,8 @@ def get_user_available_models(current_user: User) -> list[dict]:
     return [
         model
         for model in available_models
-        if user_level_order >= LEVEL_ORDER.get(
+        if user_level_order
+        >= LEVEL_ORDER.get(
             model.get("minimum_level", "LEVEL_01"), LEVEL_ORDER["LEVEL_01"]
         )
     ]
