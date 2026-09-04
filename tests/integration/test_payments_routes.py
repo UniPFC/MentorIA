@@ -205,10 +205,14 @@ class TestPaymentsRoutes:
         self, client, sample_user, sample_jwt_token, db_session
     ):
         """Testa refill quando já está no máximo"""
+        from config.settings import settings
         from shared.database.models.user import UserLevel
 
         db_session.query(User).filter(User.id == sample_user.id).update(
-            {"level": UserLevel.LEVEL_02, "token_budget": 50000}
+            {
+                "level": UserLevel.LEVEL_02,
+                "token_budget": settings.TOKEN_BUDGET_LEVEL_02,
+            }
         )
         db_session.commit()
 
@@ -232,9 +236,12 @@ class TestPaymentsRoutes:
         )
         db_session.commit()
 
-        with patch("src.api.routes.payments.settings") as mock_settings:
+        with (
+            patch("src.api.routes.payments.settings") as mock_settings,
+            patch("shared.database.models.user.settings") as mock_model_settings,
+        ):
             mock_settings.SKIP_PAYMENT = True
-            mock_settings.TOKEN_BUDGET_LEVEL_02 = 50000
+            mock_model_settings.TOKEN_BUDGET_LEVEL_02 = 50000
 
             response = client.post(
                 "/api/v1/payments/refill",
