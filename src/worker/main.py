@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from config.logger import logger
+from config.settings import settings
 from shared.database.models.chat_type import ChatType
 from shared.database.models.ingestion_job import IngestionJob, IngestionStatus
 from shared.database.session import SessionLocal
@@ -28,12 +29,17 @@ async def lifespan(app: FastAPI):
         pipeline = RAGPipeline()
         logger.info("RAG Pipeline initialized in worker.")
 
-        from src.ai.stt_loader import get_stt_loader
+        if settings.STT_ENABLED:
+            from src.ai.stt_loader import get_stt_loader
 
-        stt_loader = get_stt_loader()
-        # Force initialization/loading
-        stt_loader.get_provider()
-        logger.info("STT Pipeline initialized in worker.")
+            stt_loader = get_stt_loader()
+            # Force initialization/loading
+            stt_loader.get_provider()
+            logger.info("STT Pipeline initialized in worker.")
+        else:
+            logger.info(
+                "STT is disabled in settings. Skipping STT Pipeline initialization."
+            )
 
         # Cleanup zombie jobs
 
@@ -83,7 +89,6 @@ async def lifespan(app: FastAPI):
         finally:
             db_session.close()
 
-        from config.settings import settings
         from src.services.seeder import ensure_system_user, seed_default_knowledge
 
         # Always ensure the admin account exists so they can login to the admin panel

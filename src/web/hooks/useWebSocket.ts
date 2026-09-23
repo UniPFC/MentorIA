@@ -52,7 +52,7 @@ export function useWebSocket(
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = typeof window !== 'undefined' && (window as any).__API_URL__
       ? (window as any).__API_URL__.replace(/^https?:/, protocol)
-      : `${protocol}//localhost:8000`;
+      : `${protocol}//${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8000`;
 
     const wsUrl = isFullPath ? `${host}${path}` : `${host}/api/v1/ws/chats/${path}`;
 

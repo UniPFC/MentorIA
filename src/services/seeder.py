@@ -161,7 +161,7 @@ def seed_default_knowledge():
                     logger.info("Loading embedding models for seeding...")
                     provider_type = settings.EMBEDDING_PROVIDER.lower()
 
-                    if provider_type == "remote":
+                    if provider_type in ["remote", "openai"]:
                         emb_provider = RemoteEmbeddingProvider(
                             model_name=settings.EMBEDDING_REMOTE_MODEL,
                             provider_alias=settings.EMBEDDING_REMOTE_PROVIDER,

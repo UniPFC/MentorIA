@@ -2,6 +2,10 @@ name: Code Quality & Tests
 
 on:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
   pull_request:
 
 jobs:
@@ -10,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+
     
     - name: Set up Python 3.12
       uses: actions/setup-python@v4
@@ -36,6 +41,7 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
+
     
     - name: Set up Python 3.12
       uses: actions/setup-python@v4
@@ -133,3 +139,62 @@ jobs:
             print('ERROR: Coverage below 90% threshold')
             exit(1)
         "
+
+
+  deploy_aws:
+    name: Deploy Ephemeral AWS EC2
+    needs: [test]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Ensure Tag is on Main Branch
+      run: |
+        # Busca a branch main para garantir que a temos no historico local
+        git fetch origin main
+        # Verifica se o commit que disparou a tag pertence ao historico da main
+        if ! git merge-base --is-ancestor ${{ github.sha }}^{commit} origin/main; then
+          echo "ERROR: Esta Tag nao foi criada a partir da branch 'main'. Abortando o Deploy!"
+          exit 1
+        fi
+
+
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
+    - name: Make deploy script executable
+      run: chmod +x .github/workflows/scripts/deploy-ec2.sh
+      
+    - name: Run Deploy Script
+      env:
+        APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+        APP_SYSTEM_EMAIL: ${{ secrets.APP_SYSTEM_EMAIL }}
+        APP_SYSTEM_PASSWORD: ${{ secrets.APP_SYSTEM_PASSWORD }}
+        APP_ADMIN_SLUG: ${{ secrets.APP_ADMIN_SLUG }}
+        APP_BACKUP_PASSPHRASE: ${{ secrets.APP_BACKUP_PASSPHRASE }}
+        APP_PASSWORD_PEPPER: ${{ secrets.APP_PASSWORD_PEPPER }}
+        APP_ENCRYPTION_SALT: ${{ secrets.APP_ENCRYPTION_SALT }}
+        APP_LLM_PROVIDER: ${{ secrets.APP_LLM_PROVIDER }}
+        APP_LLM_MODEL: ${{ secrets.APP_LLM_MODEL }}
+        APP_OPENAI_API_KEY: ${{ secrets.APP_OPENAI_API_KEY }}
+        APP_GEMINI_API_KEY: ${{ secrets.APP_GEMINI_API_KEY }}
+        APP_EMBEDDING_PROVIDER: ${{ secrets.APP_EMBEDDING_PROVIDER || 'remote' }}
+        APP_EMBEDDING_REMOTE_MODEL: ${{ secrets.APP_EMBEDDING_REMOTE_MODEL || 'text-embedding-3-small' }}
+        APP_EMBEDDING_DIMENSION: ${{ secrets.APP_EMBEDDING_DIMENSION || '1536' }}
+        APP_SMTP_SERVER: ${{ secrets.APP_SMTP_SERVER }}
+        APP_SMTP_PORT: ${{ secrets.APP_SMTP_PORT }}
+        APP_SMTP_USERNAME: ${{ secrets.APP_SMTP_USERNAME }}
+        APP_SMTP_PASSWORD: ${{ secrets.APP_SMTP_PASSWORD }}
+        APP_FROM_EMAIL: ${{ secrets.APP_FROM_EMAIL }}
+      run: .github/workflows/scripts/deploy-ec2.sh

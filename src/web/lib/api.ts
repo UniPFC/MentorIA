@@ -1,6 +1,23 @@
 import axios, { AxiosInstance } from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    if (
+      process.env.NEXT_PUBLIC_API_BASE_URL &&
+      !process.env.NEXT_PUBLIC_API_BASE_URL.includes('localhost')
+    ) {
+      return process.env.NEXT_PUBLIC_API_BASE_URL;
+    }
+    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  }
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+if (typeof window !== 'undefined') {
+  (window as any).__API_URL__ = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+}
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

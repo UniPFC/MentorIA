@@ -117,7 +117,7 @@ class RAGPipeline:
         """
         provider_type = settings.EMBEDDING_PROVIDER.lower()
 
-        if provider_type == "remote":
+        if provider_type in ["remote", "openai"]:
             logger.info(
                 f"Using remote embedding: model={settings.EMBEDDING_REMOTE_MODEL}, provider={settings.EMBEDDING_REMOTE_PROVIDER}"
             )

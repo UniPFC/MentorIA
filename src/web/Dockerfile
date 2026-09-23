@@ -16,6 +16,8 @@ COPY src/web .
 RUN mkdir -p public
 
 # Build Next.js
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 RUN npm run build
 
 # Production stage
@@ -30,6 +32,7 @@ RUN npm install --legacy-peer-deps --production
 # Copy built app from builder
 COPY --from=builder /app/.next /app/.next
 COPY --from=builder /app/public /app/public
+COPY --from=builder /app/next.config.js ./
 
 # Expose port
 EXPOSE 3000

@@ -37,7 +37,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Headers de segurança
         security_headers = {
             # HSTS - Força HTTPS por 1 ano
-            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
             # Prevenção de clickjacking
             "X-Frame-Options": "DENY",
             # Prevenção de MIME type sniffing
@@ -64,6 +63,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         for header, value in security_headers.items():
             response.headers[header] = value
 
+        if settings.FORCE_HTTPS:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
+
         return response
 
 
@@ -84,12 +88,13 @@ class SecureCookieMiddleware(BaseHTTPMiddleware):
                 cookie_str = value.decode("latin-1")
                 c_lower = cookie_str.lower()
 
-                if (
-                    "; secure" not in c_lower
-                    and ";secure" not in c_lower
-                    and not c_lower.endswith("secure")
-                ):
-                    cookie_str += "; Secure"
+                if settings.SECURE_COOKIES:
+                    if (
+                        "; secure" not in c_lower
+                        and ";secure" not in c_lower
+                        and not c_lower.endswith("secure")
+                    ):
+                        cookie_str += "; Secure"
                 if (
                     "; httponly" not in c_lower
                     and ";httponly" not in c_lower

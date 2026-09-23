@@ -45,7 +45,7 @@ def get_ingestion_service() -> ChunkIngestionService:
     """Dependency to get ingestion service with loaded models."""
     provider_type = settings.EMBEDDING_PROVIDER.lower()
 
-    if provider_type == "remote":
+    if provider_type in ["remote", "openai"]:
         emb_provider = RemoteEmbeddingProvider(
             model_name=settings.EMBEDDING_REMOTE_MODEL,
             provider_alias=settings.EMBEDDING_REMOTE_PROVIDER,
@@ -142,7 +142,9 @@ async def create_chat_type_from_file(
         # Create Qdrant collection
         try:
             qdrant = QdrantManager()
-            qdrant.create_collection(chat_type.id, vector_size=1024)
+            qdrant.create_collection(
+                chat_type.id, vector_size=settings.EMBEDDING_DIMENSION
+            )
         except Exception as e:
             logger.error(
                 f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}"

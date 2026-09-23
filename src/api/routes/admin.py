@@ -2,8 +2,6 @@ import datetime
 import os
 import re
 import shutil
-import tempfile
-import zipfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from pydantic import BaseModel
@@ -249,67 +247,99 @@ async def upload_backup(
     current_user: User = Depends(verify_admin_user),
 ):
     """Upload a ZIP containing a backup"""
-    if not file.filename.endswith(".zip"):
+    if not file.filename or not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+
+    # 1. Limit file size (OOM DoS Prevention)
+    if isinstance(file.size, int) and file.size > 100 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413, detail="Backup file too large (max 100MB)."
+        )
 
     try:
         backup_base_dir = get_backup_dir(date_folder=False)
+        tmp_zip_path = None
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_zip:
-            tmp_zip_path = tmp_zip.name
-            content = await file.read()
-            tmp_zip.write(content)
-            tmp_zip.flush()
+        try:
+            import tempfile
+            import zipfile
 
-        with tempfile.TemporaryDirectory() as extract_dir:
-            with zipfile.ZipFile(tmp_zip_path, "r") as zip_ref:
-                zip_ref.extractall(extract_dir)
-            os.remove(tmp_zip_path)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_zip:
+                tmp_zip_path = tmp_zip.name
+                content = await file.read()
+                if len(content) > 100 * 1024 * 1024:
+                    raise HTTPException(
+                        status_code=413, detail="Backup file too large (max 100MB)."
+                    )
+                tmp_zip.write(content)
+                tmp_zip.flush()
 
-            date_folders_found = []
-            files_found = []
+            with tempfile.TemporaryDirectory() as extract_dir:
+                with zipfile.ZipFile(tmp_zip_path, "r") as zip_ref:
+                    # Basic zip slip protection
+                    import os
 
-            for root, dirs, files in os.walk(extract_dir):
-                for d in dirs:
-                    if len(d) == 8 and d.isdigit():
-                        date_folders_found.append(os.path.join(root, d))
-                for f in files:
-                    if f.endswith(".gpg"):
-                        files_found.append(os.path.join(root, f))
+                    for member in zip_ref.namelist():
+                        if (
+                            ".." in member
+                            or member.startswith("/")
+                            or member.startswith("\\")
+                            or os.path.isabs(member)
+                        ):
+                            raise HTTPException(
+                                status_code=400, detail="Invalid zip file structure."
+                            )
+                    zip_ref.extractall(extract_dir)
 
-            if not files_found:
-                raise HTTPException(
-                    status_code=400, detail="No backup files (.gpg) found in ZIP"
+                date_folders_found = []
+                files_found = []
+
+                for root, dirs, files in os.walk(extract_dir):
+                    for d in dirs:
+                        if len(d) == 8 and d.isdigit():
+                            date_folders_found.append(os.path.join(root, d))
+                    for f in files:
+                        if f.endswith(".gpg"):
+                            files_found.append(os.path.join(root, f))
+
+                if not files_found:
+                    raise HTTPException(
+                        status_code=400, detail="No backup files (.gpg) found in ZIP"
+                    )
+
+                if date_folders_found:
+                    src_folder = date_folders_found[0]
+                    folder_name = os.path.basename(src_folder)
+                    target_folder = os.path.join(backup_base_dir, folder_name)
+
+                    if os.path.exists(target_folder):
+                        shutil.rmtree(target_folder)
+                    shutil.copytree(src_folder, target_folder)
+                    message = f"Backup uploaded and extracted to {folder_name}"
+                else:
+                    date_str = datetime.datetime.now().strftime("%d%m%Y")
+                    target_folder = os.path.join(backup_base_dir, date_str)
+                    if not os.path.exists(target_folder):
+                        os.makedirs(target_folder)
+
+                    for gpg_file in files_found:
+                        shutil.copy2(
+                            gpg_file,
+                            os.path.join(target_folder, os.path.basename(gpg_file)),
+                        )
+
+                    message = f"Backup uploaded and extracted to {date_str}"
+
+                return BackupResponse(
+                    success=True,
+                    message=message,
                 )
-
-            if date_folders_found:
-                src_folder = date_folders_found[0]
-                folder_name = os.path.basename(src_folder)
-                target_folder = os.path.join(backup_base_dir, folder_name)
-
-                if os.path.exists(target_folder):
-                    shutil.rmtree(target_folder)
-
-                shutil.copytree(src_folder, target_folder)
-                message = f"Backup uploaded and extracted to {folder_name}"
-            else:
-                import datetime
-
-                date_str = datetime.datetime.now().strftime("%d%m%Y")
-                target_folder = os.path.join(backup_base_dir, date_str)
-                os.makedirs(target_folder, exist_ok=True)
-
-                for f in files_found:
-                    shutil.copy2(f, os.path.join(target_folder, os.path.basename(f)))
-
-                message = f"Backup uploaded and extracted to {date_str}"
-
-        return BackupResponse(success=True, message=message)
+        finally:
+            if tmp_zip_path and os.path.exists(tmp_zip_path):
+                os.remove(tmp_zip_path)
     except HTTPException:
         raise
     except Exception as e:
-        from config.logger import logger
-
         logger.error(f"Failed to upload backup: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to upload backup: {str(e)}"

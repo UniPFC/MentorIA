@@ -30,6 +30,19 @@ async def lifespan(app: FastAPI):
     logger.info("Starting API...")
     run_migrations()
 
+    # Ensure admin user exists (fallback if worker fails/delays)
+    from shared.database.session import SessionLocal
+    from src.services.seeder import ensure_system_user
+
+    db_session = SessionLocal()
+    try:
+        ensure_system_user(db_session)
+        db_session.commit()
+    except Exception as e:
+        logger.error(f"Error seeding admin user in API startup: {e}")
+    finally:
+        db_session.close()
+
     yield
     logger.info("Shutting down API...")
 

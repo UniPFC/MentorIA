@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from config.logger import logger
+from config.settings import settings
 from shared.database.models.chat_type import ChatType
 from shared.database.models.user import User
 from shared.qdrant.client import QdrantManager
@@ -105,7 +106,9 @@ def create_chat_type(
         # Create Qdrant collection
         try:
             qdrant = QdrantManager()
-            qdrant.create_collection(chat_type.id, vector_size=1024)
+            qdrant.create_collection(
+                chat_type.id, vector_size=settings.EMBEDDING_DIMENSION
+            )
         except Exception as e:
             logger.error(
                 f"Failed to create Qdrant collection for ChatType {chat_type.id}: {e}"

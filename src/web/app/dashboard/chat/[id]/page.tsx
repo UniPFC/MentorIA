@@ -205,7 +205,14 @@ export default function ChatPage() {
     setCurrentSources([]);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL ? process.env.NEXT_PUBLIC_API_BASE_URL.replace('/api/v1', '') : 'http://localhost:8000';
+      const apiUrl =
+        typeof window !== 'undefined' && (window as any).__API_URL__
+          ? (window as any).__API_URL__
+          : process.env.NEXT_PUBLIC_API_BASE_URL
+            ? process.env.NEXT_PUBLIC_API_BASE_URL.replace('/api/v1', '')
+            : typeof window !== 'undefined'
+              ? `${window.location.protocol}//${window.location.hostname}:8000`
+              : 'http://localhost:8000';
       
       const response = await fetch(`${apiUrl}/api/v1/chats/${chatId}/messages/stream`, {
         method: 'POST',
