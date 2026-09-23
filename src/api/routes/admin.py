@@ -1,7 +1,10 @@
 import datetime
 import os
+import shutil
+import tempfile
+import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from pydantic import BaseModel
 
 from config.logger import logger
@@ -228,4 +231,79 @@ async def delete_backup(
         logger.error(f"Failed to delete backup: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to delete backup: {str(e)}"
+        )
+
+
+@router.post("/admin/{admin_slug}/backup/upload", response_model=BackupResponse)
+async def upload_backup(
+    admin_slug: str,
+    file: UploadFile = File(...),
+    _: bool = Depends(verify_admin_slug),
+    current_user: User = Depends(verify_admin_user),
+):
+    """Upload a ZIP containing a backup"""
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+
+    try:
+        backup_base_dir = get_backup_dir(date_folder=False)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_zip:
+            tmp_zip_path = tmp_zip.name
+            content = await file.read()
+            tmp_zip.write(content)
+            tmp_zip.flush()
+
+        with tempfile.TemporaryDirectory() as extract_dir:
+            with zipfile.ZipFile(tmp_zip_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+            os.remove(tmp_zip_path)
+
+            date_folders_found = []
+            files_found = []
+
+            for root, dirs, files in os.walk(extract_dir):
+                for d in dirs:
+                    if len(d) == 8 and d.isdigit():
+                        date_folders_found.append(os.path.join(root, d))
+                for f in files:
+                    if f.endswith(".gpg"):
+                        files_found.append(os.path.join(root, f))
+
+            if not files_found:
+                raise HTTPException(
+                    status_code=400, detail="No backup files (.gpg) found in ZIP"
+                )
+
+            if date_folders_found:
+                src_folder = date_folders_found[0]
+                folder_name = os.path.basename(src_folder)
+                target_folder = os.path.join(backup_base_dir, folder_name)
+
+                if os.path.exists(target_folder):
+                    shutil.rmtree(target_folder)
+
+                shutil.copytree(src_folder, target_folder)
+                message = f"Backup uploaded and extracted to {folder_name}"
+            else:
+                import datetime
+
+                date_str = datetime.datetime.now().strftime("%d%m%Y")
+                target_folder = os.path.join(backup_base_dir, date_str)
+                os.makedirs(target_folder, exist_ok=True)
+
+                for f in files_found:
+                    shutil.copy2(f, os.path.join(target_folder, os.path.basename(f)))
+
+                message = f"Backup uploaded and extracted to {date_str}"
+
+        return BackupResponse(success=True, message=message)
+    except HTTPException:
+        raise
+    except Exception as e:
+        from config.logger import logger
+
+        logger.error(f"Failed to upload backup: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upload backup: {str(e)}"
         )

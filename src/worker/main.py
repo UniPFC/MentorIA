@@ -84,11 +84,14 @@ async def lifespan(app: FastAPI):
             db_session.close()
 
         from config.settings import settings
+        from src.services.seeder import ensure_system_user, seed_default_knowledge
+
+        # Always ensure the admin account exists so they can login to the admin panel
+        logger.info("Ensuring system admin account exists...")
+        await asyncio.to_thread(ensure_system_user)
 
         if settings.AUTO_RUN_SEEDER:
             logger.info("Running background seeder in worker...")
-            from src.services.seeder import seed_default_knowledge
-
             await asyncio.to_thread(seed_default_knowledge)
 
     except Exception as e:

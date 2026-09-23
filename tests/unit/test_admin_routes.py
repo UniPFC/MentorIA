@@ -10,6 +10,7 @@ from src.api.routes.admin import (
     list_backups,
     restore_backup,
     trigger_backup,
+    upload_backup,
     verify_admin_slug,
     verify_admin_user,
     verify_slug,
@@ -347,3 +348,125 @@ class TestAdminRoutes:
 
         assert exc_info.value.status_code == 500
         assert "Failed to delete backup" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_upload_backup_not_zip(self):
+        """Testa upload de backup com arquivo não ZIP (400)"""
+        current_user = Mock()
+        file_mock = Mock()
+        file_mock.filename = "backup.tar.gz"
+
+        with pytest.raises(HTTPException) as exc_info:
+            await upload_backup("slug", file_mock, True, current_user)
+
+        assert exc_info.value.status_code == 400
+        assert "Only ZIP files are allowed" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_upload_backup_no_gpg_files(self, monkeypatch, tmp_path):
+        """Testa upload de backup de um ZIP sem arquivos .gpg (400)"""
+        from unittest.mock import AsyncMock
+
+        current_user = Mock()
+        file_mock = MagicMock()
+        file_mock.filename = "backup.zip"
+
+        import io
+        import zipfile
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("test.txt", "content")
+
+        file_mock.read = AsyncMock(return_value=zip_buffer.getvalue())
+
+        get_backup_dir_mock = Mock(return_value=str(tmp_path))
+        monkeypatch.setattr(admin, "get_backup_dir", get_backup_dir_mock)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await upload_backup("slug", file_mock, True, current_user)
+
+        assert exc_info.value.status_code == 400
+        assert "No backup files (.gpg) found in ZIP" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_upload_backup_success_with_date_folder(self, monkeypatch, tmp_path):
+        """Testa upload de backup com sucesso (com pasta de data)"""
+        from unittest.mock import AsyncMock
+
+        current_user = Mock()
+        file_mock = MagicMock()
+        file_mock.filename = "backup.zip"
+
+        import io
+        import zipfile
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("01012026/db.sql.gpg", "content")
+
+        file_mock.read = AsyncMock(return_value=zip_buffer.getvalue())
+
+        base_dir = tmp_path / "backups"
+        base_dir.mkdir()
+
+        get_backup_dir_mock = Mock(return_value=str(base_dir))
+        monkeypatch.setattr(admin, "get_backup_dir", get_backup_dir_mock)
+
+        response = await upload_backup("slug", file_mock, True, current_user)
+
+        assert response.success is True
+        assert "uploaded and extracted to 01012026" in response.message
+        assert (base_dir / "01012026" / "db.sql.gpg").exists()
+
+    @pytest.mark.asyncio
+    async def test_upload_backup_success_no_date_folder(self, monkeypatch, tmp_path):
+        """Testa upload de backup com sucesso (sem pasta de data)"""
+        from unittest.mock import AsyncMock
+
+        current_user = Mock()
+        file_mock = MagicMock()
+        file_mock.filename = "backup.zip"
+
+        import datetime
+        import io
+        import zipfile
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("db.sql.gpg", "content")
+
+        file_mock.read = AsyncMock(return_value=zip_buffer.getvalue())
+
+        base_dir = tmp_path / "backups"
+        base_dir.mkdir()
+
+        get_backup_dir_mock = Mock(return_value=str(base_dir))
+        monkeypatch.setattr(admin, "get_backup_dir", get_backup_dir_mock)
+
+        date_str = datetime.datetime.now().strftime("%d%m%Y")
+
+        response = await upload_backup("slug", file_mock, True, current_user)
+
+        assert response.success is True
+        assert f"uploaded and extracted to {date_str}" in response.message
+        assert (base_dir / date_str / "db.sql.gpg").exists()
+
+    @pytest.mark.asyncio
+    async def test_upload_backup_exception(self, monkeypatch):
+        """Testa falha no upload lidando com exceção genérica (500)"""
+        from unittest.mock import AsyncMock
+
+        current_user = Mock()
+        file_mock = MagicMock()
+        file_mock.filename = "backup.zip"
+        file_mock.read = AsyncMock(side_effect=Exception("Read error"))
+
+        get_backup_dir_mock = Mock(return_value="any_dir")
+        monkeypatch.setattr(admin, "get_backup_dir", get_backup_dir_mock)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await upload_backup("slug", file_mock, True, current_user)
+
+        assert exc_info.value.status_code == 500
+        assert "Failed to upload backup" in exc_info.value.detail

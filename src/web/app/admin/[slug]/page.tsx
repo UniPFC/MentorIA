@@ -33,6 +33,7 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Login form state
@@ -51,7 +52,7 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
 
   const verifySlug = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/verify`);
+      const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/verify`, { credentials: 'include' });
       setSlugVerified(true);
       if (response.ok) {
         // Check if user is already logged in
@@ -71,11 +72,8 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
 
   const loadBackups = async () => {
     try {
-      const token = authService.getToken();
       const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/backups`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include'
       });
       if (response.ok) {
         const data = await response.json();
@@ -123,12 +121,9 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
     setSuccess(null);
 
     try {
-      const token = authService.getToken();
       const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/backup`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include'
       });
 
       const data: BackupResponse = await response.json();
@@ -157,13 +152,12 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
     setSuccess(null);
 
     try {
-      const token = authService.getToken();
       const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/restore`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ date_str: selectedDate }),
       });
 
@@ -181,18 +175,56 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
     }
   };
 
+  
+  const uploadBackup = async (e: any) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.zip')) {
+        setError('Apenas arquivos ZIP sao permitidos');
+        return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+    setSuccess(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/backup/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message);
+        loadBackups();
+      } else {
+        setError(data.message || 'Upload failed');
+      }
+    } catch (e) {
+      setError('Failed to upload backup');
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      e.target.value = '';
+    }
+  };
+
   const deleteBackup = async (dateStr: string) => {
     if (!confirm(`Are you sure you want to delete backup from ${dateStr}?`)) {
       return;
     }
 
     try {
-      const token = authService.getToken();
       const response = await fetch(`${API_BASE}/api/v1/admin/${adminSlug}/backups/${dateStr}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include'
       });
 
       const data: BackupResponse = await response.json();
@@ -405,7 +437,7 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
         )}
 
         {/* Action cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <button
             onClick={triggerBackup}
             disabled={loading}
@@ -436,6 +468,21 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
             </div>
             <span className="font-semibold text-gray-900 dark:text-white">Backups: {backups?.date_folders.length || 0}</span>
           </div>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col items-center gap-3 group relative cursor-pointer">
+            <input
+              type="file"
+              accept=".zip"
+              onChange={uploadBackup}
+              disabled={isUploading}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+              <Database className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            </div>
+            <span className="font-semibold text-gray-900 dark:text-white">Upload ZIP</span>
+            {isUploading && <RefreshCw className="w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin" />}
+          </div>
+
         </div>
 
         {/* Backups list */}

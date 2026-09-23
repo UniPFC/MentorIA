@@ -22,28 +22,22 @@ logger = logging.getLogger(__name__)
 DATA_DIR = settings.DATA_DIR
 
 
-def seed_default_knowledge():
-    """
-    Scans the data directory and ingests all found spreadsheets as public ChatTypes.
-    The ChatType name is derived from the filename (e.g., 'Financial_Report.xlsx' -> 'Financial Report').
-    """
-    if not os.path.exists(DATA_DIR):
-        logger.warning(f"Data directory not found at {DATA_DIR}. Skipping seeding.")
-        return
+def ensure_system_user(db=None):
+    """Ensures the system admin user exists"""
+    close_db = False
+    if db is None:
+        db = SessionLocal()
+        close_db = True
 
-    db = SessionLocal()
     try:
-        logger.info(f"Scanning {DATA_DIR} for knowledge base initialization...")
-
-        # 1. Create/Get System User 'MentorIA' (Owner of default chats)
         system_email = settings.SYSTEM_USER_EMAIL
         system_username = "MentorIA"
 
-        # Try to find by email or username using repository
         from src.repositories.user import UserRepository
 
         user_repo = UserRepository(db)
         system_user = user_repo.get_by_email(system_email)
+
         if not system_user:
             system_user = (
                 db.query(User).filter(User.username == system_username).first()
@@ -59,27 +53,43 @@ def seed_default_knowledge():
                 username=system_username,
                 is_active=True,
                 level=UserLevel.LEVEL_05,
+                accepted_terms_version=settings.TERMS_VERSION,
             )
             db.add(system_user)
             db.commit()
             db.refresh(system_user)
-            logger.info(
-                f"MentorIA system user created with ID: {system_user.id} and level: {system_user.level}"
-            )
+            logger.info(f"MentorIA system user created with ID: {system_user.id}")
         else:
-            # Ensure username is 'MentorIA' and level is LEVEL_05
             if (
                 system_user.username != system_username
                 or system_user.level != UserLevel.LEVEL_05
+                or system_user.accepted_terms_version != settings.TERMS_VERSION
             ):
-                logger.info(
-                    f"Updating system user username to '{system_username}' and level to LEVEL_05..."
-                )
                 system_user.username = system_username
                 system_user.level = UserLevel.LEVEL_05
-                system_user.token_budget = None  # Admin has unlimited budget
+                system_user.token_budget = None
+                system_user.accepted_terms_version = settings.TERMS_VERSION
                 db.commit()
                 db.refresh(system_user)
+        return system_user
+    finally:
+        if close_db:
+            db.close()
+
+
+def seed_default_knowledge():
+    """
+    Scans the data directory and ingests all found spreadsheets as public ChatTypes.
+    The ChatType name is derived from the filename (e.g., 'Financial_Report.xlsx' -> 'Financial Report').
+    """
+    if not os.path.exists(DATA_DIR):
+        logger.warning(f"Data directory not found at {DATA_DIR}. Skipping seeding.")
+        return
+
+    db = SessionLocal()
+    try:
+        logger.info(f"Scanning {DATA_DIR} for knowledge base initialization...")
+        system_user = ensure_system_user(db)
 
         # Services initialization (lazy loading)
         models_loaded = False
