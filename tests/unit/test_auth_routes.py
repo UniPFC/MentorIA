@@ -130,3 +130,178 @@ class TestAuthRoutes:
 
         assert result["success"] is True
         user_repo.invalidate_token.assert_called_once_with("cookie_auth_token")
+
+    @pytest.mark.asyncio
+    async def test_delete_current_user_invalid_token(self):
+        """Testa exclusão com token inválido ou tipo incorreto (400)"""
+        from src.api.routes.auth import delete_current_user
+        from src.api.schemas.auth import AccountDeletionRequest
+
+        request_data = AccountDeletionRequest(token="invalid_token")
+        request = Mock()
+        response = Mock()
+        user_repo = Mock()
+        user_repo.get_token.return_value = None
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_current_user(request_data, request, response, user_repo)
+
+        assert exc.value.status_code == 400
+        assert "Token inválido ou expirado" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_current_user_expired_token(self):
+        """Testa exclusão com token expirado (400)"""
+        from datetime import UTC, datetime, timedelta
+
+        from src.api.routes.auth import delete_current_user
+        from src.api.schemas.auth import AccountDeletionRequest
+
+        request_data = AccountDeletionRequest(token="expired_token")
+        request = Mock()
+        response = Mock()
+        user_repo = Mock()
+
+        token_obj = Mock()
+        token_obj.token_type = "account_deletion"
+        token_obj.expires_at = datetime.now(UTC) - timedelta(hours=1)
+        user_repo.get_token.return_value = token_obj
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_current_user(request_data, request, response, user_repo)
+
+        assert exc.value.status_code == 400
+        assert "Token expirado" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_current_user_user_not_found(self):
+        """Testa exclusão onde o usuário não é encontrado (404)"""
+        from datetime import UTC, datetime, timedelta
+
+        from src.api.routes.auth import delete_current_user
+        from src.api.schemas.auth import AccountDeletionRequest
+
+        request_data = AccountDeletionRequest(token="valid_token")
+        request = Mock()
+        response = Mock()
+        user_repo = Mock()
+
+        token_obj = Mock()
+        token_obj.token_type = "account_deletion"
+        token_obj.expires_at = datetime.now(UTC) + timedelta(hours=1)
+        token_obj.user_id = "user_123"
+        user_repo.get_token.return_value = token_obj
+        user_repo.get_by_id.return_value = None
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_current_user(request_data, request, response, user_repo)
+
+        assert exc.value.status_code == 404
+        assert "User not found" in exc.value.detail
+        user_repo.invalidate_token.assert_called_once_with("valid_token")
+
+    @pytest.mark.asyncio
+    @patch("shared.database.session.SessionLocal")
+    @patch("src.api.routes.auth.QdrantManager")
+    async def test_delete_current_user_success(
+        self, mock_qdrant_cls, mock_session_local
+    ):
+        """Testa exclusão da conta com sucesso e limpeza do Qdrant"""
+        from datetime import UTC, datetime, timedelta
+
+        from src.api.routes.auth import delete_current_user
+        from src.api.schemas.auth import AccountDeletionRequest
+
+        request_data = AccountDeletionRequest(token="valid_token")
+        request = Mock()
+        response = Mock()
+        user_repo = Mock()
+
+        token_obj = Mock()
+        token_obj.token_type = "account_deletion"
+        token_obj.expires_at = datetime.now(UTC) + timedelta(hours=1)
+        token_obj.user_id = "user_123"
+        user_repo.get_token.return_value = token_obj
+
+        current_user = Mock()
+        current_user.id = "user_123"
+        current_user.username = "testuser"
+        user_repo.get_by_id.return_value = current_user
+
+        mock_db_session = Mock()
+        mock_session_local.return_value = mock_db_session
+
+        mock_chat_type = Mock()
+        mock_chat_type.id = "ct_123"
+        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+            mock_chat_type
+        ]
+
+        mock_qdrant_instance = Mock()
+        mock_qdrant_cls.return_value = mock_qdrant_instance
+
+        with patch("src.api.routes.auth.settings") as mock_settings:
+            mock_settings.SECURE_COOKIES = True
+            result = await delete_current_user(
+                request_data, request, response, user_repo
+            )
+
+            assert result["success"] is True
+
+            user_repo.invalidate_token.assert_called_once_with("valid_token")
+            user_repo.delete.assert_called_once_with(current_user)
+            response.delete_cookie.assert_any_call(
+                key="authToken", httponly=True, samesite="lax", secure=True
+            )
+            response.delete_cookie.assert_any_call(
+                key="refreshToken", httponly=True, samesite="lax", secure=True
+            )
+
+            mock_qdrant_instance.delete_collection.assert_called_once_with("ct_123")
+            mock_db_session.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("shared.database.session.SessionLocal")
+    @patch("src.api.routes.auth.QdrantManager")
+    async def test_delete_current_user_qdrant_error(
+        self, mock_qdrant_cls, mock_session_local
+    ):
+        """Testa exclusão da conta lidando com erro do Qdrant"""
+        from datetime import UTC, datetime, timedelta
+
+        from src.api.routes.auth import delete_current_user
+        from src.api.schemas.auth import AccountDeletionRequest
+
+        request_data = AccountDeletionRequest(token="valid_token")
+        request = Mock()
+        response = Mock()
+        user_repo = Mock()
+
+        token_obj = Mock()
+        token_obj.token_type = "account_deletion"
+        token_obj.expires_at = datetime.now(UTC) + timedelta(hours=1)
+        token_obj.user_id = "user_123"
+        user_repo.get_token.return_value = token_obj
+
+        current_user = Mock()
+        current_user.id = "user_123"
+        user_repo.get_by_id.return_value = current_user
+
+        mock_db_session = Mock()
+        mock_session_local.return_value = mock_db_session
+
+        mock_chat_type = Mock()
+        mock_chat_type.id = "ct_123"
+        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+            mock_chat_type
+        ]
+
+        mock_qdrant_instance = Mock()
+        mock_qdrant_cls.return_value = mock_qdrant_instance
+        mock_qdrant_instance.delete_collection.side_effect = Exception("Qdrant failure")
+
+        result = await delete_current_user(request_data, request, response, user_repo)
+
+        assert result["success"] is True
+        user_repo.delete.assert_called_once_with(current_user)
+        mock_qdrant_instance.delete_collection.assert_called_once_with("ct_123")

@@ -2,9 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import MarkdownModal from './MarkdownModal';
+
 
 export default function CookieBanner() {
   const [isVisible, setIsVisible] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalUrl, setModalUrl] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+
+  const openModal = (url: string, title: string, e: any) => {
+    e.preventDefault();
+    setModalUrl(url);
+    setModalTitle(title);
+    setModalOpen(true);
+  };
 
   useEffect(() => {
     // Verificar se o usuário já aceitou os cookies
@@ -22,6 +34,7 @@ export default function CookieBanner() {
   if (!isVisible) return null;
 
   return (
+    <>
     <div className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6 pointer-events-none">
       <div className="max-w-4xl mx-auto pointer-events-auto">
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl rounded-2xl p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 animate-slide-up">
@@ -33,13 +46,13 @@ export default function CookieBanner() {
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
               Utilizamos apenas cookies essenciais para manter sua sessão segura e permitir o funcionamento do sistema. Não usamos cookies de rastreamento ou marketing. 
               Ao continuar navegando, você concorda com a nossa{' '}
-              <Link href="/legal/privacy.md" className="text-brand-600 dark:text-brand-400 font-medium hover:underline">
+              <a href="#" onClick={(e) => openModal('/legal/privacy.md', 'Politica de Privacidade', e)} className="text-brand-600 dark:text-brand-400 font-medium hover:underline">
                 Política de Privacidade
-              </Link>{' '}
+              </a>{' '}
               e nossos{' '}
-              <Link href="/legal/terms.md" className="text-brand-600 dark:text-brand-400 font-medium hover:underline">
+              <a href="#" onClick={(e) => openModal('/legal/terms.md', 'Termos de Uso', e)} className="text-brand-600 dark:text-brand-400 font-medium hover:underline">
                 Termos de Uso
-              </Link>.
+              </a>.
             </p>
           </div>
           <div className="flex shrink-0 gap-3 w-full md:w-auto">
@@ -53,5 +66,14 @@ export default function CookieBanner() {
         </div>
       </div>
     </div>
+
+      {/* Markdown Modal */}
+      <MarkdownModal 
+        isOpen={modalOpen} 
+        onClose={() => setModalOpen(false)} 
+        title={modalTitle} 
+        markdownUrl={modalUrl} 
+      />
+    </>
   );
 }

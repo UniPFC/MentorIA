@@ -11,6 +11,7 @@ from config.logger import logger
 from config.settings import settings
 from shared.database.models.user import User, UserLevel
 from shared.database.session import get_db
+from shared.qdrant.client import QdrantManager
 from src.api.dependencies import (
     get_current_active_user,
     get_current_active_user_no_terms_check,
@@ -77,6 +78,7 @@ async def register_user(
         level=UserLevel.LEVEL_01,
         token_budget=settings.TOKEN_BUDGET_LEVEL_01,
         accepted_terms_version=settings.TERMS_VERSION,
+        accepted_terms_at=datetime.now(UTC),
     )
 
     user_repo.create(new_user)
@@ -433,6 +435,7 @@ async def accept_terms(
     Aceita a versão atual dos termos de uso.
     """
     current_user.accepted_terms_version = settings.TERMS_VERSION
+    current_user.accepted_terms_at = datetime.now(UTC)
     user_repo.db.commit()
     return {"success": True, "accepted_version": settings.TERMS_VERSION}
 
@@ -813,7 +816,6 @@ async def delete_current_user(
     request_data: AccountDeletionRequest,
     request: Request,
     response: Response,
-    current_user: User = Depends(get_current_active_user_no_terms_check),
     user_repo: UserRepository = Depends(get_user_repo),
 ):
     """
@@ -821,11 +823,7 @@ async def delete_current_user(
     """
     # 1. Validar token
     token_obj = user_repo.get_token(request_data.token)
-    if (
-        not token_obj
-        or token_obj.user_id != current_user.id
-        or token_obj.token_type != "account_deletion"
-    ):
+    if not token_obj or token_obj.token_type != "account_deletion":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado"
         )
@@ -836,6 +834,11 @@ async def delete_current_user(
 
     # 2. Invalidar token
     user_repo.invalidate_token(request_data.token)
+    current_user = user_repo.get_by_id(token_obj.user_id)
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     # 3. Limpar cookies de sessão
     response.delete_cookie(
@@ -849,6 +852,32 @@ async def delete_current_user(
     )
 
     # 2. Excluir usuário do banco
+    # Excluir dados residuais no Qdrant (LGPD)
+    try:
+        from shared.database.session import SessionLocal
+
+        db_session = SessionLocal()
+        try:
+            from shared.database.models.chat_type import ChatType
+
+            chat_types = (
+                db_session.query(ChatType)
+                .filter(ChatType.owner_id == current_user.id)
+                .all()
+            )
+            if chat_types:
+                qdrant = QdrantManager()
+                for ct in chat_types:
+                    try:
+                        qdrant.delete_collection(ct.id)
+                        logger.info(f"Deleted Qdrant collection for ChatType {ct.id}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete Qdrant collection {ct.id}: {e}")
+        finally:
+            db_session.close()
+    except Exception as e:
+        logger.error(f"Error during LGPD Qdrant cleanup: {e}")
+
     user_repo.delete(current_user)
 
     logger.info(f"User account deleted: {current_user.username}")

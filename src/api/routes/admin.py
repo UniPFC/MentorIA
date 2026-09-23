@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 import shutil
 import tempfile
 import zipfile
@@ -170,6 +171,9 @@ async def restore_backup(
     current_user: User = Depends(verify_admin_user),
 ):
     """Restore backups from a specific date"""
+    if not re.match(r"^\d{8}$", request.date_str):
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
     try:
         passphrase = request.passphrase or os.getenv("BACKUP_PASSPHRASE")
         if not passphrase:
@@ -207,6 +211,9 @@ async def delete_backup(
     current_user: User = Depends(verify_admin_user),
 ):
     """Delete a specific backup date folder"""
+    if not re.match(r"^\d{8}$", date_str):
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
     try:
         backup_base_dir = get_backup_dir(date_folder=False)
         backup_date_dir = os.path.join(backup_base_dir, date_str)

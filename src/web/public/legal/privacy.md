@@ -11,6 +11,11 @@ A sua privacidade é uma prioridade para o **MentorIA**. Esta política descreve
 - **Dados de Pagamento:** Se você assinar um plano premium, o processamento financeiro é feito integralmente pelo **Pagar.me**. O MentorIA não tem acesso nem armazena os dados do seu cartão de crédito.
 - **Dados de Uso e Dispositivo:** Endereço IP (coletado para fins de segurança, prevenção de fraudes e limitação de taxa).
 
+
+
+> [AVISO]
+> **Dados Sensiveis e LLMs:** Pedimos encarecidamente que os usuarios NAO insiram informacoes sensiveis (como CPFs, dados de saude, ou senhas) nos prompts de conversacao. Como processamos os textos via LLMs, nao garantimos o isolamento total de vazamento desses dados pontuais apos ingestao pelos modelos de terceiros.
+
 ## 2. Como Usamos as suas Informações
 
 - **Prestação do Serviço:** Para processar suas perguntas através de Modelos de Linguagem (LLMs) e fornecer respostas precisas com base nas suas Bases de Conhecimento (usando banco de dados vetorial).
@@ -36,4 +41,4 @@ Utilizamos apenas **cookies estritamente necessários** para manter você logado
 
 ## 6. Contato do Encarregado (DPO)
 
-Para exercer outros direitos ou tirar dúvidas sobre esta política, entre em contato com nosso Encarregado pelo Tratamento de Dados Pessoais pelo e-mail: **[SEU-EMAIL-AQUI]**
+Para exercer outros direitos ou tirar dúvidas sobre esta política, entre em contato com nosso Encarregado pelo Tratamento de Dados Pessoais pelo e-mail: **dpo@mentoria.com.br**

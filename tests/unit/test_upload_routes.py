@@ -217,6 +217,8 @@ class TestUploadAddChunks:
 
         mock_file = Mock()
         mock_file.filename = "test.xlsx"
+        mock_file.size = 1000
+        mock_file.size = 1000
         mock_file.read = AsyncMock(return_value=b"fake excel content")
 
         ingestion_service = Mock()
@@ -259,6 +261,7 @@ class TestUploadAddChunks:
 
         mock_file = Mock()
         mock_file.filename = "test.xlsx"
+        mock_file.size = 1000
 
         ingestion_service = Mock()
         ingestion_service.ingest_from_file.side_effect = Exception("Ingest error")
@@ -294,6 +297,7 @@ class TestUploadAddChunks:
 
         mock_file = Mock()
         mock_file.filename = "test.xlsx"
+        mock_file.size = 1000
 
         chat_type_repo.get_by_name.return_value = None
         chat_type_repo.create.side_effect = Exception("DB error")
@@ -335,6 +339,7 @@ class TestUploadAddChunks:
 
         mock_file = Mock()
         mock_file.filename = "test.xlsx"
+        mock_file.size = 1000
 
         chat_type_repo.get_by_name.side_effect = Exception("Unexpected error")
 
@@ -375,6 +380,7 @@ class TestUploadAddChunks:
 
         mock_file = Mock()
         mock_file.filename = "test.xlsx"
+        mock_file.size = 1000
         mock_file.read = AsyncMock(return_value=b"fake excel content")
 
         new_chat_type = ChatType(
@@ -513,6 +519,7 @@ async def test_create_chat_type_qdrant_exception():
 
     mock_file = Mock()
     mock_file.filename = "test.xlsx"
+    mock_file.size = 1000
     mock_file.read = AsyncMock(return_value=b"data")
 
     with patch("src.api.routes.upload.QdrantManager") as mock_qdrant:
@@ -553,6 +560,7 @@ async def test_create_chat_type_trigger_worker_ingestion_error():
 
     mock_file = Mock()
     mock_file.filename = "test.xlsx"
+    mock_file.size = 1000
     mock_file.read = AsyncMock(return_value=b"data")
 
     background_tasks = Mock()
@@ -610,6 +618,7 @@ async def test_create_chat_type_trigger_worker_ingestion_error_inner_exception()
 
     mock_file = Mock()
     mock_file.filename = "test.xlsx"
+    mock_file.size = 1000
     mock_file.read = AsyncMock(return_value=b"data")
 
     background_tasks = Mock()

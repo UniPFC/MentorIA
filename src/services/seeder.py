@@ -4,6 +4,7 @@ Seeder service to initialize default data and knowledge bases.
 
 import logging
 import os
+from datetime import UTC, datetime
 
 from config.settings import settings
 from shared.database.models.chat_type import ChatType
@@ -54,6 +55,7 @@ def ensure_system_user(db=None):
                 is_active=True,
                 level=UserLevel.LEVEL_05,
                 accepted_terms_version=settings.TERMS_VERSION,
+                accepted_terms_at=datetime.now(UTC),
             )
             db.add(system_user)
             db.commit()
@@ -69,6 +71,7 @@ def ensure_system_user(db=None):
                 system_user.level = UserLevel.LEVEL_05
                 system_user.token_budget = None
                 system_user.accepted_terms_version = settings.TERMS_VERSION
+                system_user.accepted_terms_at = datetime.now(UTC)
                 db.commit()
                 db.refresh(system_user)
         return system_user

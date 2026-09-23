@@ -102,7 +102,21 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down AI Worker...")
 
 
-app = FastAPI(title="MentorIA AI Worker", lifespan=lifespan)
+from fastapi import Depends, Header
+
+
+def verify_internal_token(x_internal_token: str | None = Header(None)):
+    from config.settings import settings
+
+    if not x_internal_token or x_internal_token != settings.INTERNAL_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid internal token")
+
+
+app = FastAPI(
+    title="MentorIA AI Worker",
+    lifespan=lifespan,
+    dependencies=[Depends(verify_internal_token)],
+)
 
 
 @app.post("/internal/generate", response_model=WorkerGenerateResponse)

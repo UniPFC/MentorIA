@@ -105,6 +105,13 @@ async def create_chat_type_from_file(
                 detail="File must be Excel (.xlsx, .xls) or CSV (.csv)",
             )
 
+        # Validate file size
+        if file.size and file.size > 50 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Tamanho do arquivo excede o limite máximo de 50MB",
+            )
+
         # Read file content
         file_content = await file.read()
 
@@ -266,6 +273,13 @@ async def add_chunks_to_chat_type(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File must be Excel (.xlsx, .xls) or CSV (.csv)",
+            )
+
+        # Validate file size
+        if file.size and file.size > 50 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Tamanho do arquivo excede o limite máximo de 50MB",
             )
 
         # Read file content

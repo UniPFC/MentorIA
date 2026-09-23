@@ -41,6 +41,7 @@ class User(Base):
 
     # Legal
     accepted_terms_version = Column(String(50), nullable=True)
+    accepted_terms_at = Column(DateTime(timezone=True), nullable=True)
 
     # Subscription fields (Pagar.me integration)
     pagarme_customer_id = Column(String(255), nullable=True, index=True)
