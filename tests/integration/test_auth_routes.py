@@ -66,7 +66,7 @@ class TestAuthRoutes:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Nome de usuário já existe" in response.json()["detail"]
+        assert "O nome de usuário ou email já estão em uso" in response.json()["detail"]
 
     def test_register_user_duplicate_email(self, client, sample_user):
         """Testa registro com email duplicado"""
@@ -80,7 +80,7 @@ class TestAuthRoutes:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Email já cadastrado" in response.json()["detail"]
+        assert "O nome de usuário ou email já estão em uso" in response.json()["detail"]
 
     def test_login_success(self, client, sample_user):
         """Testa login com sucesso"""

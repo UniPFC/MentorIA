@@ -55,18 +55,21 @@ async def register_user(
     Registra um novo usuário
     """
 
+    # Obfuscar enumeração retornando a mesma mensagem genérica
+    generic_error_msg = "Não foi possível realizar o cadastro. O nome de usuário ou email já estão em uso."
+
     # Verificar se username já existe
     existing_user = user_repo.get_by_username(user_data.username)
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Nome de usuário já existe"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=generic_error_msg
         )
 
     # Verificar se email já existe (usando busca criptografada)
     existing_email = user_repo.get_by_email(user_data.email)
     if existing_email:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email já cadastrado"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=generic_error_msg
         )
 
     # Criar novo usuário com email criptografado
