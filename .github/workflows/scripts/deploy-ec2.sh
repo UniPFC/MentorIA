@@ -97,17 +97,14 @@ INTERNAL_KEY=$(openssl rand -hex 16)
 # Copia o template original para garantir que NENHUMA variavel seja esquecida
 cp .env.example .env
 
-# Funcao helper para substituir valores no .env de forma segura
+# Funcao helper para substituir valores no .env de forma segura e limpa
 set_env() {
     local key=$1
     local val=$2
-    # Escapa barras para o sed
-    local escaped_val=$(echo "$val" | sed -e 's/\//\\\//g' -e 's/&/\&/g')
     if grep -q "^${key}=" .env; then
-        sed -i "s/^${key}=.*/${key}=${escaped_val}/" .env
-    else
-        echo "${key}=${escaped_val}" >> .env
+        sed -i "/^${key}=/d" .env
     fi
+    echo "${key}=${val}" >> .env
 }
 
 # 1. Substituicoes de Infra e Seguranca (Geradas localmente)
