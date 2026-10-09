@@ -73,7 +73,11 @@ def backup_data() -> str:
 
 
 def backup_qdrant() -> str:
-    """Backup Qdrant by creating snapshots and tarring storage"""
+    """Backup Qdrant by creating and downloading true collection snapshots"""
+    import shutil
+    import tempfile
+
+    import requests
     from qdrant_client import QdrantClient
 
     client = QdrantClient(url=settings.QDRANT_URL)
@@ -81,34 +85,55 @@ def backup_qdrant() -> str:
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = get_backup_dir()
     tar_file = os.path.join(backup_dir, f"qdrant_backup_{timestamp}.tar.gz")
-    storage_path = getattr(
-        settings,
-        "QDRANT_STORAGE_DIR",
-        os.getenv("QDRANT_STORAGE_DIR", "/qdrant/storage"),
-    )
+
+    # Create a temporary staging directory to assemble the snapshot tarball
+    staging_dir = tempfile.mkdtemp(prefix="qdrant_backup_")
 
     try:
         collections = client.get_collections().collections
+        collections_staging_dir = os.path.join(staging_dir, "collections")
+        os.makedirs(collections_staging_dir, exist_ok=True)
+
         for collection in collections:
             name = collection.name
-            snapshot = client.create_snapshot(collection_name=name)
-            logger.info(f"Snapshot created for collection {name}: {snapshot}")
+            logger.info(f"Creating snapshot for collection {name}...")
+            snapshot_desc = client.create_snapshot(collection_name=name)
+            snapshot_name = snapshot_desc.name
+            logger.info(f"Snapshot created on Qdrant server: {snapshot_name}")
 
-        if not os.path.isdir(storage_path):
-            raise FileNotFoundError(
-                f"Qdrant storage directory not found: {storage_path}"
+            # Download the snapshot file via REST API
+            snap_url = (
+                f"{settings.QDRANT_URL}/collections/{name}/snapshots/{snapshot_name}"
             )
 
+            # Setup local directory structure mimicking the expected restore layout
+            coll_snaps_dir = os.path.join(collections_staging_dir, name, "snapshots")
+            os.makedirs(coll_snaps_dir, exist_ok=True)
+            local_snap_path = os.path.join(coll_snaps_dir, snapshot_name)
+
+            logger.info(f"Downloading snapshot {snapshot_name} to backup archive...")
+            with requests.get(snap_url, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                with open(local_snap_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+        # Create the tarball from the downloaded snapshots
         with tarfile.open(tar_file, "w:gz") as tar:
-            for item in os.listdir(storage_path):
-                item_path = os.path.join(storage_path, item)
+            for item in os.listdir(staging_dir):
+                item_path = os.path.join(staging_dir, item)
                 tar.add(item_path, arcname=item)
 
-        logger.info(f"Qdrant backup created: {tar_file}")
+        logger.info(f"Qdrant snapshot backup created successfully: {tar_file}")
         return tar_file
     except Exception as e:
         logger.error(f"Failed to backup Qdrant: {e}")
         raise
+    finally:
+        try:
+            shutil.rmtree(staging_dir)
+        except Exception as e:
+            logger.warning(f"Could not remove temporary staging dir {staging_dir}: {e}")
 
 
 def encrypt_file(file_path: str, passphrase: str) -> str:
@@ -396,11 +421,105 @@ def restore_backups(
         if qdrant_files:
             latest_qdrant = qdrant_files[-1]
             logger.info(f"Restoring Qdrant from latest backup: {latest_qdrant}")
+
+            qdrant_storage_path = getattr(
+                settings,
+                "QDRANT_STORAGE_DIR",
+                os.getenv("QDRANT_STORAGE_DIR", "/qdrant/storage"),
+            )
+            temp_restore_path = os.path.join(qdrant_storage_path, "tmp_restore")
+
+            # Extract to a temporary folder in the shared volume
             restore_tar_in_memory(
                 os.path.join(backup_date_dir, latest_qdrant),
                 passphrase,
-                "/qdrant/storage",
+                temp_restore_path,
             )
+
+            # Determine if this is a legacy raw backup or a proper snapshot backup
+            import shutil
+
+            is_legacy_backup = True
+            collections_dir = os.path.join(temp_restore_path, "collections")
+
+            if os.path.exists(collections_dir):
+                for coll_name in os.listdir(collections_dir):
+                    snaps_dir = os.path.join(collections_dir, coll_name, "snapshots")
+                    if os.path.exists(snaps_dir) and any(
+                        f.endswith(".snapshot") for f in os.listdir(snaps_dir)
+                    ):
+                        is_legacy_backup = False
+                        break
+
+            if is_legacy_backup:
+                logger.warning(
+                    "Legacy raw backup detected (no .snapshot files). Extracting directly to storage. Qdrant MUST be restarted to apply changes."
+                )
+                # We need to extract directly to the storage path
+                try:
+                    shutil.rmtree(temp_restore_path)
+                except Exception:
+                    pass
+                restore_tar_in_memory(
+                    os.path.join(backup_date_dir, latest_qdrant),
+                    passphrase,
+                    qdrant_storage_path,
+                )
+            else:
+                # Proper snapshot backup, use the Qdrant REST API
+                from qdrant_client import QdrantClient
+
+                client = QdrantClient(url=settings.QDRANT_URL)
+
+                for coll_name in os.listdir(collections_dir):
+                    snaps_dir = os.path.join(collections_dir, coll_name, "snapshots")
+                    if os.path.exists(snaps_dir):
+                        snaps = [
+                            f for f in os.listdir(snaps_dir) if f.endswith(".snapshot")
+                        ]
+                        if snaps:
+                            snaps.sort()
+                            latest_snap = snaps[-1]
+
+                            snap_path = os.path.join(
+                                temp_restore_path,
+                                "collections",
+                                coll_name,
+                                "snapshots",
+                                latest_snap,
+                            )
+
+                            logger.info(
+                                f"Uploading Qdrant snapshot '{coll_name}' via API..."
+                            )
+                            try:
+                                upload_url = f"{settings.QDRANT_URL}/collections/{coll_name}/snapshots/upload?wait=true"
+                                with open(snap_path, "rb") as snap_file:
+                                    res = requests.post(
+                                        upload_url,
+                                        files={"snapshot": snap_file},
+                                        timeout=300,
+                                    )
+
+                                if res.ok:
+                                    logger.info(
+                                        f"Successfully recovered collection '{coll_name}' via snapshot upload"
+                                    )
+                                else:
+                                    logger.error(
+                                        f"Failed to recover '{coll_name}': {res.text}"
+                                    )
+                            except Exception as e:
+                                logger.error(
+                                    f"Error calling Qdrant recover API for '{coll_name}': {e}"
+                                )
+
+                try:
+                    shutil.rmtree(temp_restore_path)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not remove temporary Qdrant restore path: {e}"
+                    )
 
         logger.info(f"All backups restored successfully for date {date_str}")
     except Exception as e:

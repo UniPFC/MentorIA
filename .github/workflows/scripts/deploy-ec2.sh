@@ -1,13 +1,21 @@
 #!/bin/bash
 set -e
 
+DEPLOY_SUCCESS=false
+
 # Funcao para garantir a limpeza mesmo em caso de erro
 cleanup() {
+    local exit_code=$?
     echo "Executando limpeza de seguranca (trap)..."
     if [ -n "$KEY_NAME" ]; then
         aws ec2 delete-key-pair --key-name $KEY_NAME >/dev/null 2>&1 || true
     fi
     rm -f ephemeral_key ephemeral_key.pub .env >/dev/null 2>&1 || true
+
+    if [ "$DEPLOY_SUCCESS" != "true" ] && [ -n "$INSTANCE_ID" ]; then
+        echo "ALERTA: O deploy falhou! Destruindo a maquina $INSTANCE_ID para evitar custos..."
+        aws ec2 terminate-instances --instance-ids $INSTANCE_ID >/dev/null 2>&1 || true
+    fi
 }
 trap cleanup EXIT
 
@@ -166,3 +174,4 @@ echo "========================================================"
 echo "DEPLOY EFEMERO CONCLUIDO DE FORMA BLINDADA!"
 echo "URL: http://$PUBLIC_IP"
 echo "========================================================"
+DEPLOY_SUCCESS=true

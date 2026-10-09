@@ -103,7 +103,15 @@ class TestBackupService:
         client.get_collections.return_value = SimpleNamespace(
             collections=[SimpleNamespace(name="test_collection")]
         )
-        client.create_snapshot.return_value = "snapshot-id"
+        client.create_snapshot.return_value = SimpleNamespace(
+            name="snapshot-id.snapshot"
+        )
+
+        mock_requests = MagicMock()
+        mock_response = MagicMock()
+        mock_response.iter_content.return_value = [b"chunk1"]
+        mock_requests.get.return_value.__enter__.return_value = mock_response
+        monkeypatch.setattr("src.services.backup.requests.get", mock_requests.get)
 
         fake_module = MagicMock()
         fake_module.QdrantClient.return_value = client
@@ -234,6 +242,7 @@ class TestBackupService:
         mock_settings = MagicMock()
         mock_settings.BASE_DIR = str(tmp_path)
         mock_settings.DATA_DIR = str(tmp_path / "data" / "file.txt")
+        mock_settings.QDRANT_STORAGE_DIR = "/qdrant/storage"
         monkeypatch.setattr(backup, "settings", mock_settings)
         monkeypatch.setattr(backup, "wait_for_postgres_ready", MagicMock())
         monkeypatch.setattr(backup, "wait_for_qdrant_ready", MagicMock())
@@ -253,11 +262,18 @@ class TestBackupService:
         backup.restore_backups(date_str=date_str, passphrase="secret", second_pass=True)
 
         restore_postgres.assert_called_once()
-        assert restore_tar.call_count == 2
+        assert restore_tar.call_count == 3
         restore_tar.assert_any_call(
             str(backup_date_dir / "data_backup_1.tar.gz.gpg"),
             "secret",
-            str(tmp_path / "data"),
+            str(tmp_path / "data" / "file.txt").replace("\\file.txt", "")
+            if "\\file.txt" in str(tmp_path / "data" / "file.txt")
+            else str(tmp_path / "data"),
+        )
+        restore_tar.assert_any_call(
+            str(backup_date_dir / "qdrant_backup_1.tar.gz.gpg"),
+            "secret",
+            os.path.join("/qdrant/storage", "tmp_restore"),
         )
         restore_tar.assert_any_call(
             str(backup_date_dir / "qdrant_backup_1.tar.gz.gpg"),
@@ -346,29 +362,6 @@ class TestBackupService:
         # tarfile opening or adding non-existent directory will raise an error
         with pytest.raises(Exception):
             backup.backup_data()
-
-    def test_backup_qdrant_file_not_found(self, tmp_path, monkeypatch):
-        mock_settings = MagicMock()
-        mock_settings.QDRANT_URL = "http://localhost"
-        mock_settings.QDRANT_STORAGE_DIR = str(tmp_path / "non_existent_qdrant_storage")
-        mock_settings.BASE_DIR = str(tmp_path)
-        monkeypatch.setattr(backup, "settings", mock_settings)
-        monkeypatch.setattr(
-            backup, "get_backup_dir", lambda date_folder=True: str(tmp_path)
-        )
-
-        client = MagicMock()
-        client.get_collections.return_value = SimpleNamespace(
-            collections=[SimpleNamespace(name="test_collection")]
-        )
-        client.create_snapshot.return_value = "snapshot-id"
-
-        fake_module = MagicMock()
-        fake_module.QdrantClient.return_value = client
-        monkeypatch.setitem(sys.modules, "qdrant_client", fake_module)
-
-        with pytest.raises(FileNotFoundError):
-            backup.backup_qdrant()
 
     def test_backup_qdrant_generic_error(self, tmp_path, monkeypatch):
         mock_settings = MagicMock()
@@ -906,10 +899,16 @@ class TestBackupService:
         client.get_collections.return_value = SimpleNamespace(
             collections=[SimpleNamespace(name="col")]
         )
-        client.create_snapshot.return_value = "snap"
+        client.create_snapshot.return_value = SimpleNamespace(name="snap.snapshot")
         fake_module = MagicMock()
         fake_module.QdrantClient.return_value = client
         monkeypatch.setitem(sys.modules, "qdrant_client", fake_module)
+
+        mock_requests = MagicMock()
+        mock_response = MagicMock()
+        mock_response.iter_content.return_value = [b"chunk1"]
+        mock_requests.get.return_value.__enter__.return_value = mock_response
+        monkeypatch.setattr("src.services.backup.requests.get", mock_requests.get)
 
         # Mock gnupg.GPG
         gpg_instance = MagicMock()
