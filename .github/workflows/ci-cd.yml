@@ -178,6 +178,7 @@ jobs:
       
     - name: Run Deploy Script
       env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
         APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
         APP_SYSTEM_EMAIL: ${{ secrets.APP_SYSTEM_EMAIL }}
         APP_SYSTEM_PASSWORD: ${{ secrets.APP_SYSTEM_PASSWORD }}

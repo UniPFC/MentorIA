@@ -1,0 +1,54 @@
+name: Destroy Ephemeral EC2
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_id:
+        description: 'ID da Instância EC2 específica (opcional: deixe em branco para destruir todas com tag Name=MentorIA-Ephemeral)'
+        required: false
+        default: ''
+
+jobs:
+  destroy:
+    name: Destroy Ephemeral AWS EC2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terminate EC2 Instances and Cleanup Alarms
+        run: |
+          TARGET_INSTANCE="${{ github.event.inputs.instance_id }}"
+
+          if [ -n "$TARGET_INSTANCE" ]; then
+            echo "Destruindo instancia informada manualmente: $TARGET_INSTANCE"
+            aws ec2 terminate-instances --instance-ids "$TARGET_INSTANCE" || true
+            aws cloudwatch delete-alarms --alarm-names "mentoria-autodestruct-${TARGET_INSTANCE}" || true
+            echo "Comando de destruicao enviado para $TARGET_INSTANCE."
+          else
+            echo "Buscando todas as instancias efemeras ativas com a tag Name=MentorIA-Ephemeral..."
+            INSTANCES=$(aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=MentorIA-Ephemeral" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+              --query "Reservations[].Instances[].InstanceId" \
+              --output text)
+
+            if [ -z "$INSTANCES" ] || [ "$INSTANCES" == "None" ]; then
+              echo "Nenhuma instancia efemera encontrada para destruir."
+            else
+              echo "Instancias encontradas para destruicao: $INSTANCES"
+              aws ec2 terminate-instances --instance-ids $INSTANCES
+
+              for id in $INSTANCES; do
+                echo "Removendo alarme CloudWatch para $id..."
+                aws cloudwatch delete-alarms --alarm-names "mentoria-autodestruct-${id}" || true
+              done
+              echo "Todas as instancias efemeras foram enviadas para terminacao com sucesso!"
+            fi
+          fi

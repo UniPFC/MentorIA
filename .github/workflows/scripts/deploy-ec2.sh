@@ -15,6 +15,7 @@ cleanup() {
     if [ "$DEPLOY_SUCCESS" != "true" ] && [ -n "$INSTANCE_ID" ]; then
         echo "ALERTA: O deploy falhou! Destruindo a maquina $INSTANCE_ID para evitar custos..."
         aws ec2 terminate-instances --instance-ids $INSTANCE_ID >/dev/null 2>&1 || true
+        aws cloudwatch delete-alarms --alarm-names "mentoria-autodestruct-${INSTANCE_ID}" >/dev/null 2>&1 || true
     fi
 }
 trap cleanup EXIT
@@ -40,17 +41,71 @@ fi
 
 AMI_ID=$(aws ssm get-parameters --names /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id --query "Parameters[0].Value" --output text)
 
+# Limpeza de eventuais alarmes orfaos de deploys anteriores no CloudWatch
+echo "Verificando e limpando eventuais alarmes orfaos de deploys anteriores..."
+OLD_ALARMS=$(aws cloudwatch describe-alarms --alarm-name-prefix "mentoria-autodestruct-" --query "MetricAlarms[].AlarmName" --output text 2>/dev/null || true)
+if [ -n "$OLD_ALARMS" ] && [ "$OLD_ALARMS" != "None" ]; then
+    for alarm in $OLD_ALARMS; do
+        old_inst=${alarm#"mentoria-autodestruct-"}
+        state=$(aws ec2 describe-instances --instance-ids "$old_inst" --query "Reservations[0].Instances[0].State.Name" --output text 2>/dev/null || echo "terminated")
+        if [ "$state" == "terminated" ] || [ -z "$state" ] || [ "$state" == "None" ]; then
+            aws cloudwatch delete-alarms --alarm-names "$alarm" >/dev/null 2>&1 || true
+        fi
+    done
+fi
+
 # Gerar Chave SSH Temporaria com sufixo aleatorio para evitar colisao em re-runs
 KEY_NAME="mentoria-key-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT:-1}-$(openssl rand -hex 4)"
 ssh-keygen -t ed25519 -f ephemeral_key -N "" -q
 aws ec2 import-key-pair --key-name $KEY_NAME --public-key-material fileb://ephemeral_key.pub
 
-# Script simples e limpo (SEM SECRETS) apenas para instalar Docker e agendar desligamento
+# Script simples e limpo (SEM SECRETS) para instalar Docker e garantir auto-destruicao da maquina
 cat << 'EOF' > user-data.sh
 #!/bin/bash
 set -e
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
+# 1. Configurar servico e timer persistente do systemd para desligamento ACPI (12 horas)
+# O systemd-timer invoca explicitamente /sbin/poweroff -f, emitindo o sinal ACPI de Poweroff
+# que o hipervisor EC2 requer para acionar a terminacao (--instance-initiated-shutdown-behavior terminate).
+# Nota: NUNCA usar 'shutdown -h', pois resulta em CPU halt e deixa a VM ligada na AWS gerando custos.
+cat << 'EOF_SERVICE' > /etc/systemd/system/mentoria-autodestruct.service
+[Unit]
+Description=MentorIA Auto-Destruct Service (ACPI Poweroff to trigger EC2 termination)
+DefaultDependencies=no
+After=base.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/poweroff -f
+
+[Install]
+WantedBy=multi-user.target
+EOF_SERVICE
+
+cat << 'EOF_TIMER' > /etc/systemd/system/mentoria-autodestruct.timer
+[Unit]
+Description=Timer para auto-destruicao da maquina em 12 horas
+
+[Timer]
+OnBootSec=12h
+Unit=mentoria-autodestruct.service
+
+[Install]
+WantedBy=timers.target
+EOF_TIMER
+
+systemctl daemon-reload
+systemctl enable --now mentoria-autodestruct.timer
+
+# 2. Configurar fallback no Cron (caso o timer do systemd sofra interferencia)
+echo "@reboot root sleep 43200 && /sbin/poweroff -f" > /etc/cron.d/mentoria-autodestruct
+chmod 644 /etc/cron.d/mentoria-autodestruct
+
+# 3. Agendar via comando shutdown -P (Poweroff explicito, fallback adicional no SO)
+shutdown -P +720 "MentorIA Auto-Destruct in 12 hours" || true
+
+# 4. Instalar Docker e dependencias
 apt-get update
 apt-get install -y ca-certificates curl gnupg rsync
 install -m 0755 -d /etc/apt/keyrings
@@ -62,8 +117,6 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 
 mkdir -p /home/ubuntu/mentoria
 chown ubuntu:ubuntu /home/ubuntu/mentoria
-
-shutdown -h +720
 EOF
 
 echo "Lancando EC2 Instance (com volume gp3 de 30GB)..."
@@ -75,9 +128,25 @@ INSTANCE_ID=$(aws ec2 run-instances \
     --security-group-ids $SG_ID \
     --user-data file://user-data.sh \
     --instance-initiated-shutdown-behavior terminate \
-    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=MentorIA-Ephemeral}]' \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=MentorIA-Ephemeral},{Key=AutoTerminate,Value=true},{Key=Project,Value=MentorIA},{Key=CreatedAt,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)},{Key=ManagedBy,Value=GitHubActions}]" \
     --query "Instances[0].InstanceId" \
     --output text)
+
+AWS_REGION_NAME="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo "us-east-1")}"
+
+echo "Configurando alarme no AWS CloudWatch para auto-terminacao via hipervisor (12 horas)..."
+aws cloudwatch put-metric-alarm \
+    --alarm-name "mentoria-autodestruct-${INSTANCE_ID}" \
+    --alarm-description "Auto-destruir a instancia MentorIA apos 12 horas (garantia em nivel de hipervisor)" \
+    --metric-name CPUUtilization \
+    --namespace AWS/EC2 \
+    --statistic Maximum \
+    --period 3600 \
+    --evaluation-periods 12 \
+    --threshold 100 \
+    --comparison-operator LessThanOrEqualToThreshold \
+    --dimensions Name=InstanceId,Value=$INSTANCE_ID \
+    --alarm-actions "arn:aws:automate:${AWS_REGION_NAME}:ec2:terminate" >/dev/null 2>&1 || echo "Aviso: Nao foi possivel criar alarme no CloudWatch (prosseguindo com timers no SO)."
 
 echo "Aguardando maquina ligar..."
 aws ec2 wait instance-running --instance-ids $INSTANCE_ID
@@ -168,10 +237,27 @@ rsync -avz -e "ssh -i ephemeral_key -o StrictHostKeyChecking=no" --exclude '.git
 echo "Iniciando Docker na maquina..."
 ssh -i ephemeral_key -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP "cd /home/ubuntu/mentoria && sudo docker compose up -d"
 
-echo "Finalizando script (o trap fara a limpeza automatica)..."
+echo "Garantindo armamento do temporizador de auto-destruicao no sistema operacional (12h)..."
+ssh -i ephemeral_key -o StrictHostKeyChecking=no ubuntu@$PUBLIC_IP "
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now mentoria-autodestruct.timer
+    sudo shutdown -P +720 'MentorIA Auto-Destruct in 12 hours' || true
+    echo '=== STATUS DOS TIMERS ATIVOS NO SO ==='
+    sudo systemctl list-timers mentoria-autodestruct.timer || true
+"
+
+echo "Finalizando script (o trap fara a limpeza das chaves SSH locais e temporarias)..."
 
 echo "========================================================"
-echo "DEPLOY EFEMERO CONCLUIDO DE FORMA BLINDADA!"
-echo "URL: http://$PUBLIC_IP"
+echo "DEPLOY EFEMERO CONCLUIDO COM SUCESSO!"
+echo "URL da Aplicacao: http://$PUBLIC_IP"
+echo "ID da Instancia: $INSTANCE_ID"
+echo "Ciclo de vida maximo: 12 horas."
+echo "Mecanismos de auto-destruicao armados:"
+echo "  1. Alarme CloudWatch com acao de terminacao (Hipervisor AWS)"
+echo "  2. Systemd Timer (mentoria-autodestruct.timer -> poweroff -f)"
+echo "  3. Cron de seguranca (/etc/cron.d/mentoria-autodestruct)"
+echo "Para destruir a qualquer momento sem esperar as 12h:"
+echo "  Execute o workflow manual 'Destroy Ephemeral EC2' no GitHub Actions."
 echo "========================================================"
 DEPLOY_SUCCESS=true
