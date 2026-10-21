@@ -43,14 +43,42 @@ docker compose up -d
 ```
 *(Aguarde alguns segundos e confirme se a aplicação está acessível em `http://localhost:3000` no seu navegador)*.
 
-#### Passo 2: Executar o Cloudflare Tunnel
-O executável oficial portátil `cloudflared.exe` já está incluído na raiz do projeto (e protegido no `.gitignore`). Em uma janela do PowerShell ou terminal na pasta do projeto, execute:
+#### Passo 2: Baixar o executável do Cloudflare Tunnel (se necessário)
+O executável oficial portátil `cloudflared.exe` já pode ser baixado diretamente pelo terminal na raiz do projeto (e já está protegido no `.gitignore`). Caso você ou outro integrante do grupo esteja em uma máquina nova, basta executar o comando abaixo:
+
+**No Windows (PowerShell):**
+```powershell
+Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
+```
+
+*(Ou via Prompt de Comando / cmd com curl):*
+```cmd
+curl.exe -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+```
+
+**No Linux (Ubuntu/Debian):**
+```bash
+curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i cloudflared.deb
+```
+
+**No macOS:**
+```bash
+brew install cloudflared
+```
+
+---
+
+#### Passo 3: Executar o Cloudflare Tunnel
+Em uma janela do PowerShell ou terminal na pasta do projeto, execute:
 
 ```powershell
 .\cloudflared.exe tunnel --url http://localhost:3000
 ```
+*(No Linux ou macOS: `cloudflared tunnel --url http://localhost:3000`)*
 
-#### Passo 3: Obter o Link Público
+---
+
+#### Passo 4: Obter o Link Público
 Após alguns segundos, o Cloudflare exibirá no terminal um quadro com a URL pública segura:
 
 ```text
@@ -63,7 +91,9 @@ Após alguns segundos, o Cloudflare exibirá no terminal um quadro com a URL pú
 * Copie a URL `https://...trycloudflare.com`.
 * Envie para os membros da banca ou abra no seu próprio celular. O MentorIA estará completamente funcional (chat em tempo real, login, cadastro e validação de slug administrativo).
 
-#### Passo 4: Encerrar após a Apresentação
+---
+
+#### Passo 5: Encerrar após a Apresentação
 Ao finalizar a demonstração do TCC:
 1. Vá até a janela do terminal onde o `cloudflared` está rodando.
 2. Pressione `Ctrl + C`.
