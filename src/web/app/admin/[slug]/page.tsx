@@ -43,7 +43,7 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const API_BASE = typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    ? ((window as any).__API_URL__ || (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:8000`))
     : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '');
   const adminSlug = params.slug;
 

@@ -8,6 +8,11 @@ const getApiBaseUrl = () => {
     ) {
       return process.env.NEXT_PUBLIC_API_BASE_URL;
     }
+    // Em acessos externos/túneis (como *.trycloudflare.com), usa o mesmo host e protocolo.
+    // O Next.js fará o proxy reverso automático para o backend na porta 8000!
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return `${window.location.origin}/api/v1`;
+    }
     return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
   }
   return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
