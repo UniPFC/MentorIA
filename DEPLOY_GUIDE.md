@@ -1,63 +1,116 @@
-# Guia de Deploy Efemero Seguro (MentorIA)
+# Guia de Deploy e Apresentação do MentorIA
 
-Este guia documenta o funcionamento da pipeline de CI/CD para o TCC, que provisiona a infraestrutura do MentorIA na nuvem (AWS) de forma automatizada, segura e com **custo zero quando inativa**.
+Este documento orienta a equipe e os avaliadores sobre como disponibilizar o **MentorIA** para testes e para a banca avaliadora do TCC. O projeto oferece duas estratégias de execução:
 
-## Como funciona o Deploy Efemero?
+1. **Método 1: Cloudflare Tunnel (Recomendado para a Apresentação do TCC)** — Rápido, custo zero absoluto, sem necessidade de nuvem paga e com segurança reforçada.
+2. **Método 2: Deploy Efêmero Automatizado (CI/CD via GitHub Actions)** — Provisionamento sob demanda em nuvem com autodestruição.
 
-1. **Gatilho:** O deploy acontece quando voce cria uma **Tag** no GitHub comecando com `v` (ex: `v1.0.0`). O GitHub Actions roda todos os testes e, se passarem, chama a AWS. O Deploy so prossegue se a Tag pertencer a branch `main`.
-2. **Seguranca Zero-Knowledge:** Nenhuma variavel de ambiente ou segredo e exposta no script de inicializacao da AWS (`user-data`). O GitHub Actions cria uma chave SSH temporaria, abre uma conexao criptografada com a maquina, envia os arquivos via `rsync/scp` junto com o `.env` gerado dinamicamente e destroi a chave em seguida. Nada fica gravado em logs!
-3. **Criacao:** A pipeline pede para a AWS criar uma maquina virtual (`t3a.large` com Ubuntu 24.04), instala o Docker e sobe os containers do zero.
-4. **Kill Switch:** No instante do boot, um cronometro regressivo de 12 horas e acionado (`shutdown -h +720`).
-5. **Custo Zero:** A maquina e configurada na AWS com `--instance-initiated-shutdown-behavior terminate`. A AWS **destroi fisicamente a maquina virtual e apaga o disco**, zerando custos.
+---
 
-> **Importante:** Como a maquina e destruida, voce deve usar o painel Admin para enviar o seu `.zip` com o backup da planilha sempre que for apresentar o TCC.
+## 🚀 Método 1: Apresentação com Cloudflare Tunnel (Recomendado)
 
-## O que voce precisa configurar no GitHub (Secrets)
+O **Cloudflare Tunnel** permite expor a aplicação rodando localmente no seu computador para a internet através de um link público criptografado com **HTTPS** (ex: `https://palavras-aleatorias.trycloudflare.com`), permitindo que professores e membros da banca acessem o MentorIA em seus próprios celulares, tablets ou notebooks.
 
-Va no seu repositorio no GitHub: **Settings > Secrets and variables > Actions** e cadastre TODAS as variaveis abaixo. Elas serao automaticamente mapeadas para o seu `.env`.
+### 🛡️ Por que o Cloudflare Tunnel é 100% Seguro?
 
-### 1. Credenciais da AWS (Para criar a maquina)
-- `AWS_ACCESS_KEY_ID`: Sua chave de acesso da AWS (IAM User com permissao EC2 completa).
-- `AWS_SECRET_ACCESS_KEY`: O segredo da sua chave AWS.
-- `AWS_REGION`: A regiao onde a maquina vai nascer (ex: `us-east-1`).
+Uma dúvida comum ao rodar um servidor na máquina pessoal é o risco de invasão. O Cloudflare Tunnel foi projetado especificamente para eliminar todos os riscos dos métodos antigos:
 
-### 2. Segredos da Aplicacao (Cruciais no .env)
-- `APP_SECRET_KEY`: String longa para assinar tokens JWT (Minimo 32 caracteres).
-- `APP_SYSTEM_EMAIL`: O e-mail que voce usara para logar no sistema como Admin.
-- `APP_SYSTEM_PASSWORD`: A senha que voce usara para logar no sistema como Admin.
-- `APP_ADMIN_SLUG`: O caminho secreto do seu painel admin (ex: `meu-admin-secreto`).
-- `APP_BACKUP_PASSPHRASE`: A senha usada para criptografar/descriptografar os zips de backup do sistema.
+1. **Zero Port Forwarding (Sem abrir portas no modem):**
+   - Nos métodos tradicionais e perigosos, era necessário abrir portas no roteador de casa, expondo o IP residencial para a internet.
+   - O Cloudflare Tunnel **NÃO abre nenhuma porta no seu roteador**. O executável cria uma conexão segura de **dentro para fora** (*outbound*) diretamente para os servidores da Cloudflare, da mesma forma que seu navegador faz quando acessa um site seguro.
+   - O endereço IP da sua casa **nunca é divulgado**. Quem acessa o link só enxerga a infraestrutura da Cloudflare.
 
-### 3. Configuracoes de Inteligencia Artificial (LLM & Embeddings)
-- `APP_LLM_PROVIDER`: O provedor que voce usara na apresentacao para o chat (ex: `openai`, `gemini`).
-- `APP_LLM_MODEL`: O modelo do chat (ex: `gpt-4o-mini`, `gemini-1.5-flash`).
-- `APP_EMBEDDING_PROVIDER`: O provedor dos embeddings. O padrao e `remote` (para usar chaves da OpenAI/Gemini).
-- `APP_EMBEDDING_REMOTE_MODEL`: O modelo de embeddings. O padrao e `text-embedding-3-small`.
-- `APP_EMBEDDING_DIMENSION`: A dimensao vetorial. O padrao e `1536` para OpenAI.
-- `APP_OPENAI_API_KEY`: Sua chave da OpenAI (se usar `openai`).
-- `APP_GEMINI_API_KEY`: Sua chave do Google (se usar `gemini`).
+2. **Isolamento Total em Contêiner Docker:**
+   - O túnel encaminha requisições exclusivamente para a porta `3000` (`http://localhost:3000`).
+   - Nessa porta está rodando apenas o contêiner do Next.js do MentorIA, que é um ambiente totalmente isolado (*sandbox*) do sistema operacional.
+   - Visitantes **não têm acesso** aos seus arquivos pessoais, pastas do Windows, prompt de comando ou outros dispositivos da sua rede local.
 
-### 4. Configuracoes de Email (SMTP)
-Se quiser testar a recuperacao de senha e exclusao de conta na apresentacao, adicione:
-- `APP_SMTP_SERVER`: Servidor SMTP (ex: `smtp.gmail.com`).
-- `APP_SMTP_PORT`: Porta (ex: `587`).
-- `APP_SMTP_USERNAME`: Email de disparo.
-- `APP_SMTP_PASSWORD`: Senha do email (ou App Password).
-- `APP_FROM_EMAIL`: Remetente visivel.
+3. **Escudo de Proteção da Cloudflare (WAF & Anti-DDoS):**
+   - Todo o tráfego passa primeiro pela rede mundial da Cloudflare, que filtra varreduras maliciosas, ataques de negação de serviço (DDoS) e bots antes que qualquer requisição chegue ao seu computador.
 
-*Nota: Senhas de banco de dados (Postgres, Qdrant) e tokens internos sao gerados automaticamente e aleatoriamente pela pipeline a cada deploy para garantir seguranca maxima! Nao e preciso cadastra-las no Github.*
+4. **Controle Total e Desligamento Instantâneo:**
+   - O túnel só funciona **enquanto a janela do terminal estiver aberta**.
+   - No momento em que você apertar `Ctrl + C` no terminal, o túnel é destruído no mesmo segundo e o link deixa de existir imediatamente.
 
-## Observacao sobre Pagamentos
-O sistema esta configurado com `DEV_MODE=False` (Seguranca de producao) mas com `SKIP_PAYMENT=True`. Isso significa que, na apresentacao do TCC, **os usuarios podem dar upgrade de nivel livremente pela interface sem barra-los no gateway de pagamento (Pagar.me)**. A API aceitara o upgrade imediatamente.
+---
 
-## Como rodar
+### 📋 Passo a Passo para Apresentar via Cloudflare Tunnel
 
-1. Garanta que voce esta na branch `main` e cometa tudo.
-2. Crie uma Tag e envie para o GitHub:
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-3. Acompanhe a aba **Actions** no seu GitHub.
-4. Pegue o **IP Publico** nos logs finais do job de Deploy.
-5. Acesse `http://<IP>/admin/<SEU_ADMIN_SLUG>`, faca upload do backup e apresente seu TCC!
+#### Passo 1: Subir os Contêineres do MentorIA
+Na raiz do projeto, abra o terminal e inicialize os serviços:
+```bash
+docker compose up -d
+```
+*(Aguarde alguns segundos e confirme se a aplicação está acessível em `http://localhost:3000` no seu navegador)*.
+
+#### Passo 2: Executar o Cloudflare Tunnel
+O executável oficial portátil `cloudflared.exe` já está incluído na raiz do projeto (e protegido no `.gitignore`). Em uma janela do PowerShell ou terminal na pasta do projeto, execute:
+
+```powershell
+.\cloudflared.exe tunnel --url http://localhost:3000
+```
+
+#### Passo 3: Obter o Link Público
+Após alguns segundos, o Cloudflare exibirá no terminal um quadro com a URL pública segura:
+
+```text
++--------------------------------------------------------------------------------------------+
+|  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+|  https://seunome-aleatorio.trycloudflare.com                                               |
++--------------------------------------------------------------------------------------------+
+```
+
+* Copie a URL `https://...trycloudflare.com`.
+* Envie para os membros da banca ou abra no seu próprio celular. O MentorIA estará completamente funcional (chat em tempo real, login, cadastro e validação de slug administrativo).
+
+#### Passo 4: Encerrar após a Apresentação
+Ao finalizar a demonstração do TCC:
+1. Vá até a janela do terminal onde o `cloudflared` está rodando.
+2. Pressione `Ctrl + C`.
+3. O link é desativado imediatamente na Cloudflare.
+4. *(Opcional)* Para pausar os contêineres locais: `docker compose down`.
+
+---
+
+## ☁️ Método 2: Deploy Efêmero Automatizado em Nuvem (CI/CD)
+
+Caso a equipe prefira provisionar uma máquina virtual dedicada na nuvem via GitHub Actions:
+
+### Como funciona o Ciclo Efêmero:
+1. **Gatilho:** O deploy é acionado automaticamente ao criar e enviar uma **Tag** no Git começando com `v` (ex: `v1.0.4`) pertencente à branch `main`.
+2. **Pipeline de Testes:** O GitHub Actions executa toda a suíte de testes unitários e de integração antes de qualquer ação em nuvem.
+3. **Provisionamento e Autodestruição:** A pipeline provisiona uma máquina virtual com Docker, copia os arquivos via SSH seguro e agenda a autodestruição da máquina (12 horas limite) para **garantir custo zero quando inativa**.
+4. **Destruição Manual sob Demanda:** É possível acionar o workflow manual na aba **Actions** do GitHub a qualquer momento para destruir as instâncias imediatamente após os testes.
+
+---
+
+### 🔐 Variáveis de Ambiente e Segredos (GitHub Secrets)
+
+Para o deploy automatizado via CI/CD, os seguintes segredos devem ser configurados em **Settings > Secrets and variables > Actions**:
+
+#### 1. Segredos da Aplicação (Mapeados para o `.env`)
+* `APP_SECRET_KEY`: String aleatória para assinatura de tokens JWT (mínimo de 32 caracteres).
+* `APP_SYSTEM_EMAIL`: E-mail de login do Administrador do sistema.
+* `APP_SYSTEM_PASSWORD`: Senha de login do Administrador.
+* `APP_ADMIN_SLUG`: Slug secreto para o painel administrativo (ex: `meu-admin-secreto`).
+* `APP_BACKUP_PASSPHRASE`: Frase secreta para encriptar e desencriptar os backups do sistema.
+* `APP_PASSWORD_PEPPER`: String secreta utilizada como pepper adicional para hash de senhas.
+* `APP_ENCRYPTION_SALT`: String utilizada como salt de criptografia interna.
+
+#### 2. Provedores de Inteligência Artificial
+* `APP_LLM_PROVIDER`: Provedor do modelo de linguagem (`gemini` ou `openai`).
+* `APP_LLM_MODEL`: Modelo a ser utilizado (ex: `gemini-1.5-flash`, `gemini-1.5-pro` ou `gpt-4o-mini`).
+* `APP_GEMINI_API_KEY`: Chave de API do Google AI Studio (se utilizar `gemini`).
+* `APP_OPENAI_API_KEY`: Chave de API da OpenAI (se utilizar `openai`).
+* `APP_EMBEDDING_PROVIDER`: Provedor de embeddings (`remote`).
+* `APP_EMBEDDING_REMOTE_MODEL`: Modelo de embedding (padrão: `text-embedding-3-small`).
+* `APP_EMBEDDING_DIMENSION`: Dimensão vetorial (padrão: `1536`).
+
+#### 3. Notificações e E-mail (SMTP)
+* `APP_SMTP_SERVER`: Servidor SMTP (ex: `smtp.gmail.com`).
+* `APP_SMTP_PORT`: Porta (ex: `587`).
+* `APP_SMTP_USERNAME`: E-mail de envio.
+* `APP_SMTP_PASSWORD`: Senha de aplicativo da conta de e-mail.
+* `APP_FROM_EMAIL`: Nome e e-mail exibidos ao destinatário.
+
+> **Nota:** As senhas dos bancos de dados (PostgreSQL e Qdrant) e chaves internas são geradas aleatoriamente pela pipeline a cada novo deploy para assegurar isolamento e segurança máxima.
