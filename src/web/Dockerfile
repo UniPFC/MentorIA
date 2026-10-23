@@ -17,7 +17,9 @@ RUN mkdir -p public
 
 # Build Next.js
 ARG NEXT_PUBLIC_API_BASE_URL
+ARG INTERNAL_API_URL=http://api:8000/api/v1
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ENV INTERNAL_API_URL=$INTERNAL_API_URL
 RUN npm run build
 
 # Production stage

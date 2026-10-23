@@ -42,9 +42,9 @@ export default function AdminPage({ params }: { params: { slug: string } }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const API_BASE = typeof window !== 'undefined'
-    ? ((window as any).__API_URL__ || (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:8000`))
-    : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '');
+  // Use relative paths so Next.js rewrites route calls to the correct internal API container.
+  // This avoids 'localhost:8000' being used server-side where the api container is unreachable.
+  const API_BASE = '';
   const adminSlug = params.slug;
 
   useEffect(() => {
