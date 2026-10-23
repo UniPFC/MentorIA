@@ -65,7 +65,13 @@ def enrich_chat_type_with_owner(
     return data
 
 
-@router.post("/", response_model=ChatTypeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ChatTypeResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ChatTypeResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 def create_chat_type(
     chat_type_data: ChatTypeCreate,
     current_user: User = Depends(get_current_active_user),
@@ -187,7 +193,8 @@ def search_chat_types(
         )
 
 
-@router.get("/", response_model=ChatTypeListResponse)
+@router.get("", response_model=ChatTypeListResponse)
+@router.get("/", response_model=ChatTypeListResponse, include_in_schema=False)
 def list_chat_types(
     is_public: bool | None = Query(None, description="Filter by public/private"),
     owner_id: UUID | None = Query(None, description="Filter by owner"),

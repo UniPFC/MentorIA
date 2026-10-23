@@ -202,7 +202,13 @@ def verify_chat_ownership(
     return chat
 
 
-@router.post("/", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ChatResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 def create_chat(
     chat_data: ChatCreate,
     current_user: User = Depends(get_current_active_user),
@@ -267,7 +273,8 @@ def create_chat(
         )
 
 
-@router.get("/", response_model=list[ChatResponse])
+@router.get("", response_model=list[ChatResponse])
+@router.get("/", response_model=list[ChatResponse], include_in_schema=False)
 def list_chats(
     chat_type_id: UUID | None = None,
     skip: int = 0,

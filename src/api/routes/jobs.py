@@ -54,7 +54,8 @@ def get_job_status(
     return job
 
 
-@router.get("/", response_model=list[IngestionJobResponse])
+@router.get("", response_model=list[IngestionJobResponse])
+@router.get("/", response_model=list[IngestionJobResponse], include_in_schema=False)
 def list_jobs(
     chat_type_id: UUID | None = None,
     status_filter: str | None = None,
