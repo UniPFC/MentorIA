@@ -43,10 +43,41 @@ from src.services.security_cache import security_cache
 router = APIRouter()
 
 
+def get_frontend_url(request: Request | None) -> str:
+    """
+    Determina a URL base do frontend a partir da requisição HTTP.
+    Prioriza Origin e Referer (enviados pelo browser via tunnel/proxy),
+    depois X-Forwarded-Host, e como fallback usa settings.FRONTEND_URL.
+    """
+    if not request:
+        return getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+    origin = request.headers.get("origin")
+    if origin and origin != "null":
+        return origin.rstrip("/")
+
+    referer = request.headers.get("referer")
+    if referer:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(referer)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    x_forwarded_host = request.headers.get("x-forwarded-host")
+    if x_forwarded_host:
+        host = x_forwarded_host.split(",")[0].strip()
+        proto = request.headers.get("x-forwarded-proto", "https").split(",")[0].strip()
+        return f"{proto}://{host}".rstrip("/")
+
+    return getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 async def register_user(
+    request: Request,
     user_data: UserRegister,
     user_repo: UserRepository = Depends(get_user_repo),
     db: Session = Depends(get_db),
@@ -91,8 +122,9 @@ async def register_user(
     expires_at = datetime.now(UTC) + timedelta(hours=24)
     user_repo.create_email_verification_token(new_user.id, verify_token, expires_at)
 
+    frontend_url = get_frontend_url(request)
     email_sent = email_service.send_verification_email(
-        new_user.email, new_user.username, verify_token
+        new_user.email, new_user.username, verify_token, frontend_url=frontend_url
     )
     if not email_sent:
         logger.warning(f"Failed to send verification email to {new_user.email}")
@@ -445,7 +477,9 @@ async def accept_terms(
 
 @router.post("/forgot-password")
 async def forgot_password(
-    request: PasswordResetRequest, user_repo: UserRepository = Depends(get_user_repo)
+    http_request: Request,
+    request: PasswordResetRequest,
+    user_repo: UserRepository = Depends(get_user_repo),
 ):
     """
     Solicita reset de senha via email
@@ -479,8 +513,9 @@ async def forgot_password(
     user_repo.create_password_reset_token(user.id, reset_token, expires_at)
 
     # Enviar email
+    frontend_url = get_frontend_url(http_request)
     email_sent = email_service.send_password_reset_email(
-        user.email, user.username, reset_token
+        user.email, user.username, reset_token, frontend_url=frontend_url
     )
 
     if email_sent:
@@ -565,6 +600,7 @@ async def verify_email(
 
 @router.post("/send-verification-email")
 async def send_verification_email(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     user_repo: UserRepository = Depends(get_user_repo),
 ):
@@ -580,8 +616,12 @@ async def send_verification_email(
     expires_at = datetime.now(UTC) + timedelta(hours=24)
     user_repo.create_email_verification_token(current_user.id, verify_token, expires_at)
 
+    frontend_url = get_frontend_url(request)
     email_sent = email_service.send_verification_email(
-        current_user.email, current_user.username, verify_token
+        current_user.email,
+        current_user.username,
+        verify_token,
+        frontend_url=frontend_url,
     )
 
     if email_sent:
@@ -775,6 +815,7 @@ async def dismiss_2fa_reminder(
 
 @router.post("/request-account-deletion", status_code=status.HTTP_200_OK)
 async def request_account_deletion(
+    request: Request,
     current_user: User = Depends(get_current_active_user_no_terms_check),
     user_repo: UserRepository = Depends(get_user_repo),
 ):
@@ -794,8 +835,12 @@ async def request_account_deletion(
     )
 
     # Enviar e-mail
+    frontend_url = get_frontend_url(request)
     email_sent = email_service.send_account_deletion_email(
-        current_user.email, current_user.username, deletion_token
+        current_user.email,
+        current_user.username,
+        deletion_token,
+        frontend_url=frontend_url,
     )
 
     if email_sent:

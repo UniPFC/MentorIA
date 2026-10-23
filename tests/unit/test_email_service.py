@@ -157,3 +157,101 @@ class TestEmailService:
         )
         assert result is True
         mock_server.send_message.assert_called_once()
+
+    @patch("src.services.email_service.smtplib.SMTP")
+    def test_send_verification_email_custom_frontend_url(
+        self, mock_smtp, email_service
+    ):
+        mock_server = mock_smtp.return_value.__enter__.return_value
+        result = email_service.send_verification_email(
+            to_email="user@test.com",
+            username="testuser",
+            token="test_token",
+            frontend_url="https://custom-tunnel.trycloudflare.com",
+        )
+        assert result is True
+        mock_server.send_message.assert_called_once()
+        call_args = mock_server.send_message.call_args[0][0]
+        html_body = call_args.get_payload(0).get_payload(decode=True).decode("utf-8")
+        assert (
+            "https://custom-tunnel.trycloudflare.com/verify-email?token=test_token"
+            in html_body
+        )
+
+    @patch("src.services.email_service.smtplib.SMTP")
+    def test_send_password_reset_email_custom_frontend_url(
+        self, mock_smtp, email_service
+    ):
+        mock_server = mock_smtp.return_value.__enter__.return_value
+        result = email_service.send_password_reset_email(
+            to_email="user@test.com",
+            username="testuser",
+            reset_token="test_token",
+            frontend_url="https://custom-tunnel.trycloudflare.com/",
+        )
+        assert result is True
+        mock_server.send_message.assert_called_once()
+        call_args = mock_server.send_message.call_args[0][0]
+        html_body = call_args.get_payload(0).get_payload(decode=True).decode("utf-8")
+        assert (
+            "https://custom-tunnel.trycloudflare.com/reset-password?token=test_token"
+            in html_body
+        )
+
+    @patch("src.services.email_service.smtplib.SMTP")
+    def test_send_account_deletion_email_custom_frontend_url(
+        self, mock_smtp, email_service
+    ):
+        mock_server = mock_smtp.return_value.__enter__.return_value
+        result = email_service.send_account_deletion_email(
+            to_email="user@test.com",
+            username="testuser",
+            token="test_token",
+            frontend_url="https://custom-tunnel.trycloudflare.com",
+        )
+        assert result is True
+        mock_server.send_message.assert_called_once()
+        call_args = mock_server.send_message.call_args[0][0]
+        html_body = call_args.get_payload(0).get_payload(decode=True).decode("utf-8")
+        assert (
+            "https://custom-tunnel.trycloudflare.com/delete-account?token=test_token"
+            in html_body
+        )
+
+
+def test_get_frontend_url():
+    from unittest.mock import MagicMock
+
+    from src.api.routes.auth import get_frontend_url
+
+    # 1. None
+    assert get_frontend_url(None) == "http://localhost:3000"
+
+    # 2. Origin header
+    req_origin = MagicMock()
+    req_origin.headers.get.side_effect = lambda k, d=None: (
+        "https://foo.trycloudflare.com" if k == "origin" else d
+    )
+    assert get_frontend_url(req_origin) == "https://foo.trycloudflare.com"
+
+    # 3. Referer header
+    def mock_referer(k, d=None):
+        if k == "referer":
+            return "https://bar.trycloudflare.com/auth/login?redirect=1"
+        return d
+
+    req_ref = MagicMock()
+    req_ref.headers.get.side_effect = mock_referer
+    assert get_frontend_url(req_ref) == "https://bar.trycloudflare.com"
+
+    # 4. X-Forwarded-Host header
+    def mock_forwarded(k, d=None):
+        if k == "x-forwarded-host":
+            return "my-app.com, proxy.internal"
+        if k == "x-forwarded-proto":
+            return "https, http"
+        return d
+
+    req_fwd = MagicMock()
+    req_fwd.headers.get.side_effect = mock_forwarded
+    assert get_frontend_url(req_fwd) == "https://my-app.com"

@@ -70,10 +70,15 @@ class EmailService:
         return secrets.token_urlsafe(32)
 
     def send_password_reset_email(
-        self, to_email: str, username: str, reset_token: str
+        self,
+        to_email: str,
+        username: str,
+        reset_token: str,
+        frontend_url: str | None = None,
     ) -> bool:
         """Envia email de reset de senha apontando para o frontend"""
-        reset_link = f"{self.frontend_url}/reset-password?token={reset_token}"
+        base_url = (frontend_url or self.frontend_url).rstrip("/")
+        reset_link = f"{base_url}/reset-password?token={reset_token}"
 
         content = f"""
         <h2>Olá, {username}!</h2>
@@ -141,9 +146,16 @@ class EmailService:
             )
             return False
 
-    def send_verification_email(self, to_email: str, username: str, token: str) -> bool:
+    def send_verification_email(
+        self,
+        to_email: str,
+        username: str,
+        token: str,
+        frontend_url: str | None = None,
+    ) -> bool:
         """Envia email de verificação de conta"""
-        verify_link = f"{self.frontend_url}/verify-email?token={token}"
+        base_url = (frontend_url or self.frontend_url).rstrip("/")
+        verify_link = f"{base_url}/verify-email?token={token}"
 
         content = f"""
         <h2>Bem-vindo(a) ao MentorIA!</h2>
@@ -162,10 +174,15 @@ class EmailService:
         )
 
     def send_account_deletion_email(
-        self, to_email: str, username: str, token: str
+        self,
+        to_email: str,
+        username: str,
+        token: str,
+        frontend_url: str | None = None,
     ) -> bool:
         """Envia email com o token para exclusão de conta"""
-        delete_link = f"{self.frontend_url}/delete-account?token={token}"
+        base_url = (frontend_url or self.frontend_url).rstrip("/")
+        delete_link = f"{base_url}/delete-account?token={token}"
 
         content = f"""
         <h2>Solicitação de Exclusão de Conta</h2>
