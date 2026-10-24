@@ -213,6 +213,59 @@ class TestProvider:
         with pytest.raises(Exception, match="Stream error"):
             list(provider.generate_stream([{"role": "user", "content": "Hello"}]))
 
+    @patch("src.ai.provider.llm.resolve_api_key")
+    @patch("src.ai.provider.llm.OpenAI")
+    def test_generate_with_max_completion_tokens_model(
+        self, mock_openai, mock_resolve_key
+    ):
+        mock_resolve_key.return_value = "test-key"
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Luna response"
+        mock_client.chat.completions.create.return_value = mock_response
+
+        provider = Provider("gpt-5.6-luna")
+        result = provider.generate(
+            [{"role": "user", "content": "Hello"}], max_new_tokens=2048
+        )
+
+        assert result == "Luna response"
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert "max_completion_tokens" in call_kwargs
+        assert call_kwargs["max_completion_tokens"] == 2048
+        assert "max_tokens" not in call_kwargs
+
+    @patch("src.ai.provider.llm.resolve_api_key")
+    @patch("src.ai.provider.llm.OpenAI")
+    def test_generate_fallback_on_unsupported_max_tokens(
+        self, mock_openai, mock_resolve_key
+    ):
+        mock_resolve_key.return_value = "test-key"
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+
+        err = Exception(
+            "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."
+        )
+        mock_success = MagicMock()
+        mock_success.choices = [MagicMock()]
+        mock_success.choices[0].message.content = "Success after fallback"
+
+        mock_client.chat.completions.create.side_effect = [err, mock_success]
+
+        provider = Provider("my-custom-model")
+        result = provider.generate(
+            [{"role": "user", "content": "Hello"}], max_new_tokens=1024
+        )
+
+        assert result == "Success after fallback"
+        assert mock_client.chat.completions.create.call_count == 2
+        second_call_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
+        assert second_call_kwargs.get("max_completion_tokens") == 1024
+        assert "max_tokens" not in second_call_kwargs
+
 
 @pytest.mark.unit
 class TestHFProvider:

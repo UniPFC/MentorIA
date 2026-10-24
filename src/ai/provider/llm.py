@@ -45,6 +45,86 @@ class Provider(LLMProvider):
             f"Provider configured: model={model_name}, alias={provider_alias}, endpoint={self.target_url}"
         )
 
+    def _is_completion_tokens_model(self) -> bool:
+        name = (self.model_name or "").lower()
+        return (
+            name.startswith("o1")
+            or name.startswith("o3")
+            or name.startswith("o4")
+            or name.startswith("gpt-5")
+            or "luna" in name
+            or "reasoning" in name
+        )
+
+    def _build_params(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        top_p: float,
+        stream: bool = False,
+        **kwargs,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": stream,
+            **kwargs,
+        }
+        is_reasoning = (
+            getattr(self, "_use_max_completion_tokens", False)
+            or self._is_completion_tokens_model()
+        )
+        if is_reasoning:
+            params["max_completion_tokens"] = max_tokens
+        else:
+            params["max_tokens"] = max_tokens
+
+        # Reasoning models (like o1, o3, gpt-5, luna) do not support custom temperature/top_p (default=1 only)
+        if not (is_reasoning or getattr(self, "_unsupported_temperature", False)):
+            params["temperature"] = temperature
+            params["top_p"] = top_p
+
+        return params
+
+    def _handle_api_error(
+        self, e: Exception, params: dict[str, Any], max_tokens: int
+    ) -> bool:
+        """Adjusts params if OpenAI rejected max_tokens or temperature. Returns True if retry can be attempted."""
+        err_msg = str(e)
+        changed = False
+
+        if (
+            "max_tokens" in err_msg
+            and "max_completion_tokens" in err_msg
+            and "max_tokens" in params
+        ):
+            logger.warning(
+                f"Model {self.model_name} does not support max_tokens. Retrying with max_completion_tokens."
+            )
+            self._use_max_completion_tokens = True
+            params.pop("max_tokens", None)
+            params["max_completion_tokens"] = max_tokens
+            changed = True
+
+        if "temperature" in err_msg and (
+            "unsupported_value" in err_msg
+            or "unsupported_parameter" in err_msg
+            or "default (1)" in err_msg
+        ):
+            logger.warning(
+                f"Model {self.model_name} does not support custom temperature/top_p. Removing them."
+            )
+            self._unsupported_temperature = True
+            if "temperature" in params:
+                params.pop("temperature", None)
+                changed = True
+            if "top_p" in params:
+                params.pop("top_p", None)
+                changed = True
+
+        return changed
+
     def generate(self, messages: list[dict[str, str]], **kwargs) -> str:
         """
         Generate text completion.
@@ -60,20 +140,25 @@ class Provider(LLMProvider):
         temperature = kwargs.pop("temperature", 0.7)
         top_p = kwargs.pop("top_p", 1.0)
 
+        params = self._build_params(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            stream=False,
+            **kwargs,
+        )
+
         try:
             logger.debug(
                 f"Generating: model={self.model_name}, max_tokens={max_tokens}, temp={temperature}"
             )
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                stream=False,
-            )
+            response = self.client.chat.completions.create(**params)
             return response.choices[0].message.content
         except Exception as e:
+            if self._handle_api_error(e, params, max_tokens):
+                response = self.client.chat.completions.create(**params)
+                return response.choices[0].message.content
             logger.error(f"Provider error ({self.target_url}): {e}")
             raise
 
@@ -95,21 +180,21 @@ class Provider(LLMProvider):
         temperature = kwargs.pop("temperature", 0.0)
         top_p = kwargs.pop("top_p", 1.0)
 
+        params = self._build_params(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            response_format=response_format,
+            **kwargs,
+        )
+        params.pop("stream", None)
+
         try:
             logger.debug(
                 f"Structured generation: model={self.model_name}, format={response_format.__name__}"
             )
-
-            completion = self.client.beta.chat.completions.parse(
-                model=self.model_name,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                response_format=response_format,
-                **kwargs,
-            )
-
+            completion = self.client.beta.chat.completions.parse(**params)
             message = completion.choices[0].message
             parsed = getattr(message, "parsed", None)
             if parsed is not None:
@@ -119,6 +204,13 @@ class Provider(LLMProvider):
             logger.debug("Structured generation completed (raw content)")
             return message.content
         except Exception as e:
+            if self._handle_api_error(e, params, max_tokens):
+                completion = self.client.beta.chat.completions.parse(**params)
+                message = completion.choices[0].message
+                parsed = getattr(message, "parsed", None)
+                if parsed is not None:
+                    return parsed
+                return message.content
             logger.error(f"Structured provider error ({self.target_url}): {e}")
             raise
 
@@ -137,21 +229,33 @@ class Provider(LLMProvider):
         temperature = kwargs.pop("temperature", 0.7)
         top_p = kwargs.pop("top_p", 1.0)
 
+        params = self._build_params(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            stream=True,
+            **kwargs,
+        )
+
         try:
             logger.debug(f"Streaming generation: model={self.model_name}")
-            stream = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                stream=True,
-            )
+            stream = self.client.chat.completions.create(**params)
+        except Exception as e:
+            if self._handle_api_error(e, params, max_tokens):
+                stream = self.client.chat.completions.create(**params)
+            else:
+                logger.error(f"Streaming error ({self.target_url}): {e}")
+                raise
 
+        try:
             for chunk in stream:
-                if chunk.choices[0].delta.content:
+                if (
+                    chunk.choices
+                    and chunk.choices[0].delta
+                    and chunk.choices[0].delta.content
+                ):
                     yield chunk.choices[0].delta.content
-
         except Exception as e:
             logger.error(f"Streaming error ({self.target_url}): {e}")
             raise
