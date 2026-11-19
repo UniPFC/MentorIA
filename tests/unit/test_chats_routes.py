@@ -1749,6 +1749,22 @@ async def test_send_message_stream_chat_type_none():
 
 
 @pytest.mark.asyncio
+async def test_send_message_stream_read_only():
+    current_user = Mock(email_verified=True, id=uuid4())
+    chat_repo = Mock()
+    chat_repo.get_by_id.return_value = Mock(user_id=current_user.id, is_read_only=True)
+    with pytest.raises(HTTPException) as exc:
+        await send_message_stream(
+            chat_id=uuid4(),
+            message_data=Mock(),
+            db=Mock(),
+            current_user=current_user,
+            chat_repo=chat_repo,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_send_message_stream_generator_edges():
     current_user = Mock(email_verified=True, id=uuid4())
     chat = Mock(

@@ -610,10 +610,11 @@ async def send_message_stream(
         verify_chat_ownership, chat_id, current_user.id, chat_repo
     )
 
-    if chat.chat_type_id is None:
+    is_read_only = getattr(chat, "is_read_only", False)
+    if is_read_only is True or chat.chat_type_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Esta base de conhecimento foi excluída pelo criador original. Este chat agora é Somente Leitura.",
+            detail="Esta base de conhecimento tornou-se privada ou foi excluída. Este chat agora é Somente Leitura.",
         )
 
     ensure_chat_model_allowed(chat, current_user)
